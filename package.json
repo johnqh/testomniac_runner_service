@@ -1,6 +1,6 @@
 {
   "name": "@sudobility/testomniac_scanning_service",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Shared scanning logic for Testomniac scanner and Chrome extension",
   "type": "module",
   "main": "./dist/index.js",

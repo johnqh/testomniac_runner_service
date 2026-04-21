@@ -8,7 +8,7 @@ export const MAX_E2E_PATHS = 20;
 export const MAX_E2E_DEPTH = 6;
 export const SCREENSHOT_QUALITY = 72;
 export const HOVER_DELAY_MS = 500;
-export const POST_ACTION_SETTLE_MS = 500;
+export const POST_ACTION_SETTLE_MS = 2000;
 
 export const AUTH_URL_PATTERNS = [
   "/login",
