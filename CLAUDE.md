@@ -1,8 +1,8 @@
 # Testomniac Scanning Service
 
-Shared TypeScript library containing core scanning logic, browser abstraction, detectors, and API client for the Testomniac testing platform.
+Shared TypeScript library containing all core scanning business logic, browser abstraction, extractors, planners, detectors, AI analysis, test generation, scan orchestration, and API client for the Testomniac testing platform.
 
-**Package**: `@sudobility/testomniac_scanning_service` v0.0.3 (published to npm, public)
+**Package**: `@sudobility/testomniac_scanning_service` v0.1.1 (published to npm, public)
 
 ## Tech Stack
 
@@ -17,38 +17,82 @@ Shared TypeScript library containing core scanning logic, browser abstraction, d
 
 ```
 src/
-├── index.ts                    # Public API exports
-├── adapter.ts                  # BrowserAdapter interface definition
+├── index.ts                        # Public API exports (all modules below)
+├── adapter.ts                      # BrowserAdapter interface definition
 ├── api/
-│   └── client.ts               # ApiClient — HTTP client for testomniac_api (55+ methods)
+│   └── client.ts                   # ApiClient — HTTP client for testomniac_api (55+ methods)
 ├── browser/
-│   ├── page-utils.ts           # normalizeHtml, computeHashes (4-hash dedup)
+│   ├── dom-snapshot.ts             # buildDomSnapshot: two-pass DOM element discovery
+│   ├── page-utils.ts              # normalizeHtml, computeHashes (async sha256: Node + browser)
 │   └── page-utils.test.ts
 ├── config/
-│   └── constants.ts            # Timeouts, limits, URL patterns, error patterns
-├── detectors/
-│   ├── index.ts                # Re-exports all detectors
-│   ├── link-checker.ts         # Broken link detection (HEAD requests, 4xx/5xx)
-│   ├── visual-checker.ts       # Broken images, missing alt, duplicate IDs/headings, empty links
-│   ├── content-checker.ts      # Placeholder text, error pages, invalid prices, short pages
-│   ├── functional-checker.ts   # Console errors, network failures, error pages after clicks
-│   └── *.test.ts               # Colocated tests
-├── domain/
-│   ├── types.ts                # Re-exports from @sudobility/testomniac_types
-│   └── url-ownership.ts        # normalizeBaseUrl, getRegistrableDomain, emailMatchesUrlDomain
-├── scanner/
-│   ├── action-queue.ts         # In-memory action queue (add, next, complete, hasOpen)
-│   ├── state-manager.ts        # Page state tracker (update, getCurrentPageStateId, matches)
-│   ├── loop-guard.ts           # Prevents infinite loops (200 actions/page, 5000 total)
-│   ├── phase-timer.ts          # Per-phase duration tracking
-│   ├── issue-detector.ts       # detectDeadClick, detectErrorOnPage, detectConsoleErrors, detectNetworkErrors
-│   ├── component-detector.ts   # Reusable UI component detection across pages
-│   ├── email-detector.ts       # Email verification flow detection
-│   ├── scroll-scanner.ts       # Discover lazy-loaded elements via scrolling
-│   ├── pairwise.ts             # Pairwise test combination generator
-│   └── *.test.ts               # Colocated tests
-└── detectors/
-    └── *.test.ts
+│   └── constants.ts               # Timeouts, limits, URL patterns, error patterns
+├── extractors/                     # Modular element extraction system (11 files)
+│   ├── index.ts                   # extractActionableItems — registers extractors in priority order
+│   ├── types.ts                   # ItemExtractor, DomSnapshotEntry, ExtractorCandidate, ActionKind
+│   ├── helpers.ts                 # createCandidate, withResolvedSelector, uniqueBySelector
+│   ├── selectors.ts               # classifyActionKind: navigate|select|fill|toggle|click
+│   ├── text-inputs.ts             # <input>, <textarea>, role="textbox", contenteditable
+│   ├── selects.ts                 # <select>, role="combobox"
+│   ├── toggles.ts                 # checkbox, radio, role="switch"
+│   ├── product-actions.ts         # E-commerce actions (cart, checkout, options)
+│   ├── buttons.ts                 # <button>, input[type="submit"]
+│   ├── clickables.ts              # Remaining clickable elements (links, divs, etc.)
+│   └── form-extractor.ts          # extractForms: discover form structures
+├── planners/
+│   └── fill-value-planner.ts      # RuleBasedFillValuePlanner: multi-signal form value heuristics
+├── detectors/                      # Page-level quality checks + bug/modal detection
+│   ├── index.ts                   # Re-exports all detectors
+│   ├── bug-detector.ts            # Comprehensive bug detection (broken links, visual, content, media)
+│   ├── modal-handler.ts           # Detect & dismiss Bootstrap, ARIA dialog, Fancybox, etc.
+│   ├── link-checker.ts            # Broken link detection (HEAD requests, 4xx/5xx)
+│   ├── visual-checker.ts          # Broken images, missing alt, duplicate IDs/headings, empty links
+│   ├── content-checker.ts         # Placeholder text, error pages, invalid prices, short pages
+│   ├── functional-checker.ts      # Console errors, network failures, error-after-click
+│   └── *.test.ts                  # Colocated tests
+├── ai/                             # AI analysis pipeline (GPT-4o)
+│   ├── analyzer.ts                # runAiAnalysis: orchestrates persona → use case → input generation
+│   ├── persona-generator.ts       # Generate 1-5 user personas from page content
+│   ├── use-case-generator.ts      # Generate 2-8 use cases per persona
+│   ├── input-generator.ts         # Generate realistic form inputs per use case
+│   └── token-tracker.ts           # AI token usage tracking (reported to API)
+├── generation/                     # Test case generation (9 template files)
+│   ├── generator.ts               # generateTestCases: orchestrator
+│   ├── suite-tagger.ts            # Priority assignment (critical → low) by route keywords
+│   ├── render.ts                  # Render test template (navigate + assert visibility)
+│   ├── interaction.ts             # Interaction test template (click/hover sequences)
+│   ├── form.ts                    # Form positive test template
+│   ├── form-negative.ts           # Form negative/validation test template
+│   ├── password.ts                # Password requirement test template
+│   ├── navigation.ts              # Navigation flow test template
+│   └── e2e.ts                     # E2E multi-step path enumeration + template
+├── orchestrator/                   # Scan pipeline orchestration
+│   ├── types.ts                   # ScanConfig, ScanEventHandler, TestExecutor, ScanResult, ScanPhase
+│   ├── orchestrator.ts            # runScan(adapter, config, api, eventHandler, testExecutor?)
+│   ├── mouse-scanning.ts          # Phase 1a: navigate → extract → hover/click → detect → discover
+│   ├── ai-analysis.ts             # Phase 1b: GPT-4o persona/use case/input generation
+│   ├── input-scanning.ts          # Phase 1c: pairwise form filling with AI-generated values
+│   ├── test-generation.ts         # Phase 3: JSON test case creation
+│   └── test-execution.ts          # Phase 4: test execution via TestExecutor interface
+├── scanner/                        # Scanner utility modules
+│   ├── action-classifier.ts       # normalizeHref, shouldExpectNavigation, getActionPriority
+│   ├── navigator.ts               # Cross-page navigation tracking
+│   ├── action-queue.ts            # In-memory action queue
+│   ├── state-manager.ts           # Page state tracker
+│   ├── loop-guard.ts              # Action dedup + caps (200/page, 5000 total)
+│   ├── phase-timer.ts             # Per-phase duration tracking
+│   ├── component-detector.ts      # Reusable UI component detection across pages
+│   ├── email-detector.ts          # Email verification flow detection
+│   ├── scroll-scanner.ts          # Lazy-loaded element discovery via scrolling
+│   ├── pairwise.ts                # Pairwise combination generator
+│   ├── issue-detector.ts          # detectDeadClick, detectErrorOnPage, detectConsoleErrors
+│   └── *.test.ts                  # Colocated tests
+├── plugins/                        # Plugin interface + registry
+│   ├── types.ts                   # Plugin, PluginContext, PluginResult, PluginIssue interfaces
+│   └── registry.ts                # registerPlugin, getPlugin, getEnabledPlugins
+└── domain/
+    ├── types.ts                   # Re-exports from @sudobility/testomniac_types
+    └── url-ownership.ts           # normalizeBaseUrl, getRegistrableDomain, emailMatchesUrlDomain
 ```
 
 ## Commands
@@ -66,44 +110,87 @@ bun run format:check # Prettier check
 bun run verify       # typecheck + lint + test + build (run before publish)
 ```
 
-## Public API Exports
+## Main Entry Point: `runScan()`
 
-Everything exported from `src/index.ts`:
+The orchestrator is the primary consumer API. Both `testomniac_scanner` and `testomniac_extension` call it:
 
 ```typescript
-// Browser abstraction
-export type { BrowserAdapter } from "./adapter"
+runScan(
+  adapter: BrowserAdapter,    // ChromeAdapter or PuppeteerAdapter
+  config: ScanConfig,         // runId, appId, baseUrl, phases, options
+  api: ApiClient,             // HTTP client for testomniac_api
+  eventHandler: ScanEventHandler,  // Progress callbacks
+  testExecutor?: TestExecutor      // Optional test runner (server-side only)
+): Promise<ScanResult>
+```
 
-// Scanner modules
-export { ActionQueue } from "./scanner/action-queue"
-export { StateManager } from "./scanner/state-manager"
-export { LoopGuard } from "./scanner/loop-guard"
-export { PhaseTimer } from "./scanner/phase-timer"
-export { ComponentDetector } from "./scanner/component-detector"
-export { EmailDetector } from "./scanner/email-detector"
-export { ScrollScanner } from "./scanner/scroll-scanner"
-export { generatePairwiseCombinations } from "./scanner/pairwise"
+### ScanConfig
 
-// Issue detection
-export { detectDeadClick, detectErrorOnPage, detectConsoleErrors, detectNetworkErrors } from "./scanner/issue-detector"
+```typescript
+interface ScanConfig {
+  runId: number;
+  appId: number;
+  baseUrl: string;
+  phases: ScanPhase[];          // ["mouse_scanning", "ai_analysis", "input_scanning", ...]
+  sizeClass?: string;
+  openaiApiKey?: string;
+  openaiModel?: string;
+  testWorkerCount?: number;
+}
+```
 
-// Detectors (page-level quality checks)
-export { LinkChecker, VisualChecker, ContentChecker, FunctionalChecker } from "./detectors"
+### ScanEventHandler
 
-// Page utilities
-export { normalizeHtml, computeHashes } from "./browser/page-utils"
+Callback interface for progress reporting. Consumers implement this to bridge events to their UI (side panel messages for extension, Pino logging for scanner):
 
-// Domain types (re-exported from @sudobility/testomniac_types)
-export * from "./domain/types"
+```typescript
+interface ScanEventHandler {
+  onPageFound(page): void;
+  onPageStateCreated(state): void;
+  onActionCompleted(action): void;
+  onIssueDetected(issue): void;
+  onPhaseChanged(phase): void;
+  onStatsUpdated(stats): void;
+  onScreenshotCaptured(data): void;
+  onScanComplete(summary): void;
+  onError(error): void;
+}
+```
 
-// URL utilities
-export { normalizeBaseUrl, getRegistrableDomain, emailMatchesUrlDomain } from "./domain/url-ownership"
+### TestExecutor
 
-// Configuration constants
-export * from "./config/constants"
+Optional interface for test execution. Only the server-side scanner provides this (via Puppeteer worker pool):
 
-// API client
-export { ApiClient, getApiClient } from "./api/client"
+```typescript
+interface TestExecutor {
+  executeTestCase(actions: TestAction[], screen: Screen): Promise<{ passed: boolean; error?: string; durationMs: number }>;
+}
+```
+
+## Scan Pipeline Phases
+
+```
+Phase: mouse_scanning
+  Navigate → buildDomSnapshot → extractActionableItems → hover/click each →
+  bug detection → modal dismissal → discover pages → enqueue
+  Output: pages, page_states, actionable_items, actions, issues
+
+Phase: ai_analysis
+  Feed page content to GPT-4o → generate personas, use cases, input values
+  Output: personas, use_cases, input_values
+
+Phase: input_scanning
+  Fill forms with pairwise combinations of AI-generated values
+  Output: form fill actions, new page_states
+
+Phase: test_generation
+  Create JSON test cases: render, interaction, form, navigation, E2E
+  Assign priority tags based on route keywords
+  Output: test_cases with actions_json
+
+Phase: test_execution
+  Delegate to TestExecutor interface for actual execution
+  Output: test_runs (pass/fail), issues for failures
 ```
 
 ## BrowserAdapter Interface
@@ -112,31 +199,20 @@ The core abstraction that allows the same scanning logic to work with both Puppe
 
 ```typescript
 interface BrowserAdapter {
-  // Navigation
-  goto(url: string, options?: { waitUntil?: string; timeout?: number }): Promise<void>
-  waitForNavigation(options?: { timeout?: number }): Promise<void>
+  goto(url, options?): Promise<void>
+  waitForNavigation(options?): Promise<void>
   url(): Promise<string>
-
-  // DOM
   content(): Promise<string>
-  evaluate<T>(fn: (...args: any[]) => T, ...args: any[]): Promise<T>
-  waitForSelector(selector: string, options?: { timeout?: number; visible?: boolean }): Promise<void>
-
-  // Interaction
-  click(selector: string, options?: { timeout?: number }): Promise<void>
-  hover(selector: string, options?: { timeout?: number }): Promise<void>
-  type(selector: string, text: string): Promise<void>
-  select(selector: string, value: string): Promise<void>
-  pressKey(key: string): Promise<void>
-
-  // Capture
-  screenshot(options?: { type?: string; quality?: number }): Promise<Uint8Array>
-  setViewport(width: number, height: number): Promise<void>
-
-  // Events
-  on(event: string, handler: (...args: any[]) => void): void
-
-  // Lifecycle
+  evaluate<T>(fn, ...args): Promise<T>
+  waitForSelector(selector, options?): Promise<void>
+  click(selector, options?): Promise<void>
+  hover(selector, options?): Promise<void>
+  type(selector, text): Promise<void>
+  select(selector, value): Promise<void>
+  pressKey(key): Promise<void>
+  screenshot(options?): Promise<Uint8Array>
+  setViewport(width, height): Promise<void>
+  on(event, handler): void
   close(): Promise<void>
 }
 ```
@@ -161,32 +237,38 @@ const client = getApiClient(baseUrl, apiKey);
 - **Personas/use cases**: `createPersona()`, `createUseCase()`, `createInputValue()`
 - **Forms/tests**: `insertForm()`, `insertTestCase()`, `createTestRun()`, `completeTestRun()`
 - **Issues**: `createIssue()`, `getIssuesByRun()`
-- **Other**: AI usage tracking, report emails, component saving
+- **Other**: AI usage tracking, report emails, component saving, `getApp()`
 
 All methods communicate via HTTP with `X-Scanner-Key` header authentication.
 
+## Extractors
+
+The extraction system uses a two-pass approach in `dom-snapshot.ts`:
+
+**Pass 1**: Query comprehensive CSS selectors for interactive elements (inputs, buttons, links, ARIA roles, event handlers, tabindex, contenteditable)
+
+**Pass 2**: Find `cursor:pointer` elements missed by Pass 1 (framework-specific clickable divs, etc.)
+
+6 extractors registered in priority order: textInputs, selects, toggles, productActions, buttons, clickables. Each returns candidates that are deduplicated and classified into action kinds: `navigate`, `select`, `fill`, `toggle`, `click`.
+
 ## Detectors
 
-### Link Checker
-Extracts all `<a href>` links from HTML, resolves relative URLs, sends HEAD requests to same-origin links. Reports 4xx/5xx as broken links with status code, URL, and link text.
+### Bug Detector
+Comprehensive bug detection combining broken link checking, visual analysis, content analysis, and media issues. Runs inline during mouse scanning.
 
-### Visual Checker
-- Broken images: `<img>` with empty/invalid `src`
-- Missing alt text on images
-- Duplicate element IDs
-- Duplicate heading text
-- Empty links (no text, no img alt, no aria-label)
+### Modal Handler
+Detects and dismisses Bootstrap, Popup Maker, ARIA dialog, Fancybox modals. Uses close button, overlay click, or Escape key.
 
-### Content Checker
-- Placeholder text: Lorem ipsum, TODO, FIXME, test@test, etc.
-- Error page patterns: 404, 500, 503, "Something went wrong"
-- Invalid prices: zero or negative amounts
-- Very short pages (<50 chars, likely error states)
+### Link Checker / Visual Checker / Content Checker / Functional Checker
+Individual page-level quality check modules. Pure functions that take HTML/text and return issue arrays.
 
-### Functional Checker
-- Console error filtering (ignores common noise: favicon, extension errors, CORS warnings)
-- Network response analysis (5xx errors, failed requests)
-- Error-after-click detection
+## Fill Value Planner
+
+`RuleBasedFillValuePlanner` uses multi-signal heuristics for form field values:
+1. HTML input type (email, password, tel, date, etc.)
+2. HTML5 autocomplete attribute
+3. Keyword matching on combined signals (name, id, placeholder, label) — English, Spanish, French, German
+4. Default by tag
 
 ## Key Constants
 
@@ -206,11 +288,11 @@ DEFAULT_WORKERS = 3              // Concurrent test workers
 
 ## Page State Hashing
 
-`computeHashes()` creates 4 hashes for deduplication:
-- **htmlHash**: SHA-256 of raw HTML (detects any change)
-- **normalizedHtmlHash**: SHA-256 of whitespace-normalized HTML (structural changes only)
-- **textHash**: SHA-256 of visible text only (content changes)
-- **actionableHash**: SHA-256 of sorted visible interactive items (UI state changes like dropdowns)
+`computeHashes()` is **async** and uses universal SHA-256 (Node.js `crypto.createHash` when available, falls back to Web `crypto.subtle` for browser environments). Creates 4 hashes for deduplication:
+- **htmlHash**: SHA-256 of raw HTML
+- **normalizedHtmlHash**: SHA-256 of whitespace-normalized HTML
+- **textHash**: SHA-256 of visible text only
+- **actionableHash**: SHA-256 of sorted visible interactive items
 
 ## Dependencies
 
@@ -227,25 +309,30 @@ DEFAULT_WORKERS = 3              // Concurrent test workers
 
 This library is the **shared foundation** consumed by both scanning clients:
 
-- **testomniac_scanner** — Server-side Puppeteer worker. Imports `BrowserAdapter`, `ApiClient`, all detectors, scanner modules, and constants. Implements `PuppeteerAdapter`.
-- **testomniac_extension** — Chrome extension. Imports `BrowserAdapter`, `ApiClient`, constants. Implements `ChromeAdapter`.
+- **testomniac_scanner** — Server-side Puppeteer worker. Thin wrapper that calls `runScan()` with `PuppeteerAdapter` and a `TestExecutor` backed by a worker pool. Provides auth, email, runner, and plugin implementations.
+- **testomniac_extension** — Chrome extension. Thin wrapper that calls `runScan()` with `ChromeAdapter`. Only runs `mouse_scanning` phase. Bridges events to side panel UI.
 - **testomniac_api** — REST API backend that `ApiClient` communicates with. Stores all scan data.
 - **testomniac_types** (`@sudobility/testomniac_types`) — Shared type definitions re-exported by this library.
 
 ## Coding Patterns
 
+- **`runScan()` is the single entry point**: Both consumers call `runScan()` with their adapter, config, and event handler. All scanning phases, extraction, detection, and orchestration are managed internally.
 - **Pure functions for detectors**: All detector modules export pure functions that take HTML/text and return issue arrays. No side effects, easy to test.
 - **Interface-driven browser abstraction**: `BrowserAdapter` is a plain TypeScript interface, not a class. Implementations in consumer packages.
 - **Singleton API client**: `getApiClient(baseUrl, apiKey)` returns a cached instance. Call once during initialization.
+- **Async `computeHashes`**: Uses a universal `sha256()` that auto-detects Node vs browser runtime. Callers must `await` it.
 - **Colocated tests**: Test files live next to source files (`*.test.ts` pattern). Run with `bun run test`.
 - **Hash-based dedup**: Page states are compared via 4-level hashing, not string equality.
 - **Constants, not config**: Timeouts, limits, and patterns are hardcoded constants. To change them, edit `config/constants.ts` and republish.
+- **Plugin interface is defined here, implementations live in consumers**: `Plugin`, `PluginContext`, `PluginResult` types and the registry are in this library. Actual plugin code (SEO, security, content, UI consistency) lives in `testomniac_scanner`.
 
 ## Gotchas
 
 - **Published to npm**: This is a library, not an application. Changes require `bun run verify` + `npm publish`. Consumer packages must update their dependency version.
 - **No runtime dependencies**: All dependencies are peer or dev. Consumers must provide `@sudobility/testomniac_types` at minimum.
-- **`computeHashes` needs crypto**: Uses Node.js `crypto.createHash('sha256')`. The extension shims this via `SubtleCrypto`; the scanner uses Node.js crypto natively.
+- **`computeHashes` is async**: Uses `await sha256()` internally with universal Node + browser support. The extension shims `node:crypto` via `SubtleCrypto` at the Vite level, but `page-utils.ts` also has its own runtime detection.
 - **Constants are compile-time**: Changing a constant requires republishing. Consumer packages pick up changes only after updating their dependency.
 - **LoopGuard caps are per-instance**: Each scanner run creates its own `LoopGuard` instance. The 200/5000 limits apply per run, not globally.
 - **No logging**: This library does not import any logger. Consumers are responsible for logging around detector/scanner calls.
+- **Plugin types reference Puppeteer and OpenAI**: `PluginContext` in `plugins/types.ts` references `Page` from `puppeteer-core` and `OpenAI`. These are optional peer dependencies. The extension does not use plugins.
+- **`buildDomSnapshot` runs inside `page.evaluate()`**: The DOM snapshot code executes in the browser context. It cannot reference Node.js modules or closures from the calling scope.
