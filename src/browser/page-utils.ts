@@ -1,6 +1,6 @@
 import type { ActionableItem, PageHashes } from "../domain/types";
 
-async function sha256(input: string): Promise<string> {
+export async function sha256(input: string): Promise<string> {
   // Use Node.js crypto when available, fall back to Web SubtleCrypto
   if (
     typeof globalThis.process !== "undefined" &&

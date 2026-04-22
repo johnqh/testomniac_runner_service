@@ -20,6 +20,10 @@ import {
 } from "../detectors/bug-detector";
 import { detectAndHandleModal, dismissModal } from "../detectors/modal-handler";
 import { HOVER_DELAY_MS, POST_ACTION_SETTLE_MS } from "../config/constants";
+import { detectReusableRegions } from "../scanner/component-detector";
+import { decomposeHtml } from "../scanner/html-decomposer";
+import { ReusableElementCache } from "../scanner/reusable-element-cache";
+import { sha256 } from "../browser/page-utils";
 import type { ActionableItem } from "@sudobility/testomniac_types";
 
 export async function runMouseScanning(
@@ -38,6 +42,13 @@ export async function runMouseScanning(
     sizeClass,
     baseUrl: config.baseUrl,
   });
+
+  // Initialize reusable element cache (preloads from API)
+  const reusableCache = new ReusableElementCache(config.appId, api);
+  await reusableCache.preload();
+
+  // Track which reusable elements have been tested to avoid duplicates
+  const testedReusableElements = new Set<number>();
 
   // Navigate to base URL
   await adapter.goto(config.baseUrl, {
@@ -95,7 +106,7 @@ export async function runMouseScanning(
         const pageRecord = await api.findOrCreatePage(config.appId, currentUrl);
         events.onPageFound({ url: currentUrl, pageId: pageRecord.id });
 
-        // Capture page state
+        // Capture page state with HTML decomposition
         const html = await adapter.content();
         const items = await extractActionableItems(adapter);
         const visibleText = extractVisibleText(html);
@@ -113,12 +124,91 @@ export async function runMouseScanning(
           continue;
         }
 
+        // Detect reusable regions and decompose HTML
+        const reusableRegions = await detectReusableRegions(adapter);
+        const resolvedReusableElements: Array<{
+          type: string;
+          selector: string;
+          reusableId: number;
+        }> = [];
+        for (const region of reusableRegions) {
+          const reusable = await reusableCache.findOrCreate(
+            region.type,
+            region.outerHtml,
+            region.hash
+          );
+          resolvedReusableElements.push({
+            type: region.type,
+            selector: region.selector,
+            reusableId: reusable.id,
+          });
+        }
+
+        const { contentHtml } = decomposeHtml(html, reusableRegions);
+
+        // Create html elements for body and content
+        const bodyHash = await sha256(html);
+        const contentHash = await sha256(contentHtml);
+        const bodyElement = await api.findOrCreateHtmlElement(html, bodyHash);
+        const contentElement = await api.findOrCreateHtmlElement(
+          contentHtml,
+          contentHash
+        );
+
+        // Tag actionable items with their containing reusable element
+        if (resolvedReusableElements.length > 0) {
+          const containmentMap = (await adapter.evaluate(
+            (...args: unknown[]) => {
+              const regionSels = args[0] as string[];
+              const itemSels = args[1] as string[];
+              const result: Record<string, string | null> = {};
+              for (const itemSel of itemSels) {
+                const el = document.querySelector(itemSel);
+                if (!el) {
+                  result[itemSel] = null;
+                  continue;
+                }
+                let found = false;
+                for (const regionSel of regionSels) {
+                  try {
+                    const container = document.querySelector(regionSel);
+                    if (container && container.contains(el)) {
+                      result[itemSel] = regionSel;
+                      found = true;
+                      break;
+                    }
+                  } catch {
+                    // skip
+                  }
+                }
+                if (!found) result[itemSel] = null;
+              }
+              return result;
+            },
+            resolvedReusableElements.map(r => r.selector),
+            items.map(i => i.selector)
+          )) as Record<string, string | null>;
+
+          const selectorToReusableId = new Map(
+            resolvedReusableElements.map(r => [r.selector, r.reusableId])
+          );
+          for (const item of items) {
+            const containingSelector = containmentMap[item.selector];
+            if (containingSelector) {
+              item.reusableHtmlElementId =
+                selectorToReusableId.get(containingSelector);
+            }
+          }
+        }
+
         await adapter.screenshot({ type: "jpeg", quality: 72 });
         const pageState = await api.createPageState({
           pageId: pageRecord.id,
           sizeClass,
           hashes,
           contentText: visibleText.slice(0, 5000),
+          bodyHtmlElementId: bodyElement.id,
+          contentHtmlElementId: contentElement.id,
         });
         stateManager.update(pageState.id, currentUrl);
         events.onPageStateCreated({
@@ -126,7 +216,13 @@ export async function runMouseScanning(
           pageId: pageRecord.id,
         });
 
-        // Insert actionable items
+        // Link page state to reusable elements
+        const reusableIds = resolvedReusableElements.map(r => r.reusableId);
+        if (reusableIds.length > 0) {
+          await api.linkPageStateReusableElements(pageState.id, reusableIds);
+        }
+
+        // Insert actionable items (now includes reusableHtmlElementId tags)
         if (items.length > 0) {
           await api.insertActionableItems(pageState.id, items);
         }
@@ -137,6 +233,13 @@ export async function runMouseScanning(
           .sort((a, b) => getActionPriority(a) - getActionPriority(b));
 
         for (const item of sortedItems) {
+          // Skip if reusable element already tested in this run
+          if (item.reusableHtmlElementId) {
+            if (testedReusableElements.has(item.reusableHtmlElementId))
+              continue;
+            testedReusableElements.add(item.reusableHtmlElementId);
+          }
+
           const actionType =
             item.actionKind === "fill"
               ? "fill"

@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { normalizeHtml } from "../browser/page-utils";
+import type { BrowserAdapter } from "../adapter";
+import type { HtmlComponentType } from "@sudobility/testomniac_types";
 
 export const COMPONENT_SELECTORS = [
   "nav",
@@ -9,6 +11,98 @@ export const COMPONENT_SELECTORS = [
   '[role="banner"]',
   '[role="contentinfo"]',
 ];
+
+export const COMPONENT_TYPE_SELECTORS: Record<HtmlComponentType, string[]> = {
+  topMenu: [
+    "header nav",
+    'nav[aria-label*="main" i]',
+    'nav[aria-label*="primary" i]',
+    '[role="banner"] nav',
+    ".navbar",
+    ".top-nav",
+    "#main-nav",
+    "header",
+  ],
+  footer: ["footer", '[role="contentinfo"]', ".footer", "#footer"],
+  breadcrumb: [
+    'nav[aria-label*="breadcrumb" i]',
+    '[aria-label="breadcrumb"]',
+    ".breadcrumb",
+    "nav.breadcrumb",
+    "ol.breadcrumb",
+  ],
+  leftMenu: [
+    "aside nav",
+    ".sidebar nav",
+    ".side-nav",
+    '[role="complementary"] nav',
+    ".left-menu",
+  ],
+  hamburgerMenu: [
+    ".hamburger-menu",
+    ".mobile-menu",
+    ".offcanvas",
+    '[data-toggle="offcanvas"]',
+    ".drawer",
+    ".mobile-nav",
+  ],
+};
+
+export interface DetectedReusableRegion {
+  type: HtmlComponentType;
+  selector: string;
+  outerHtml: string;
+  hash: string;
+}
+
+export async function detectReusableRegions(
+  adapter: BrowserAdapter
+): Promise<DetectedReusableRegion[]> {
+  const typeEntries = Object.entries(COMPONENT_TYPE_SELECTORS) as Array<
+    [HtmlComponentType, string[]]
+  >;
+
+  const results = await adapter.evaluate((...args: unknown[]) => {
+    const entries = args[0] as Array<[string, string[]]>;
+    const detected: Array<{
+      type: string;
+      selector: string;
+      outerHtml: string;
+    }> = [];
+    const seen = new Set<Element>();
+
+    for (const [type, selectors] of entries) {
+      for (const sel of selectors) {
+        try {
+          const el = document.querySelector(sel);
+          if (el && !seen.has(el) && (el as HTMLElement).offsetWidth > 0) {
+            seen.add(el);
+            detected.push({
+              type,
+              selector: sel,
+              outerHtml: el.outerHTML,
+            });
+            break; // one match per type
+          }
+        } catch {
+          // Invalid selector
+        }
+      }
+    }
+    return detected;
+  }, typeEntries);
+
+  const regions = (
+    results as Array<{ type: string; selector: string; outerHtml: string }>
+  ).map(r => ({
+    type: r.type as HtmlComponentType,
+    selector: r.selector,
+    outerHtml: r.outerHtml,
+    hash: sha256(normalizeHtml(r.outerHtml)),
+  }));
+
+  return regions;
+}
 
 export interface CandidateRegion {
   pageStateId: number;

@@ -21,9 +21,21 @@ export {
   getActionPriority,
 } from "./scanner/action-classifier";
 export { Navigator } from "./scanner/navigator";
+export { ReusableElementCache } from "./scanner/reusable-element-cache";
+export { decomposeHtml, type DecomposedHtml } from "./scanner/html-decomposer";
+export {
+  detectReusableRegions,
+  COMPONENT_TYPE_SELECTORS,
+  type DetectedReusableRegion,
+} from "./scanner/component-detector";
 
 // Page utilities
-export * from "./browser/page-utils";
+export {
+  sha256,
+  normalizeHtml,
+  extractVisibleText,
+  computeHashes,
+} from "./browser/page-utils";
 export { buildDomSnapshot } from "./browser/dom-snapshot";
 
 // Detectors (existing + new)

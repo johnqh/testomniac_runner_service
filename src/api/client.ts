@@ -33,6 +33,9 @@ import type {
   RecordAiUsageRequest,
   CreateReportEmailRequest,
   SaveComponentRequest,
+  HtmlElementResponse,
+  ReusableHtmlElementResponse,
+  FindOrCreateReusableHtmlElementRequest,
   PageHashes,
   ActionableItem,
   TestCase,
@@ -353,11 +356,49 @@ export class ApiClient {
   }
 
   // ===========================================================================
-  // Components
+  // Components (deprecated)
   // ===========================================================================
 
+  /** @deprecated Use findOrCreateReusableHtmlElement instead */
   saveComponent(params: SaveComponentRequest): Promise<void> {
     return this.post("/components", params);
+  }
+
+  // ===========================================================================
+  // Html Elements
+  // ===========================================================================
+
+  findOrCreateHtmlElement(
+    html: string,
+    hash: string
+  ): Promise<HtmlElementResponse> {
+    return this.post("/html-elements", { html, hash });
+  }
+
+  // ===========================================================================
+  // Reusable Html Elements
+  // ===========================================================================
+
+  findOrCreateReusableHtmlElement(
+    params: FindOrCreateReusableHtmlElementRequest
+  ): Promise<ReusableHtmlElementResponse> {
+    return this.post("/reusable-html-elements/find-or-create", params);
+  }
+
+  getReusableHtmlElements(
+    appId: number
+  ): Promise<ReusableHtmlElementResponse[]> {
+    return this.get(`/reusable-html-elements?appId=${appId}`);
+  }
+
+  linkPageStateReusableElements(
+    pageStateId: number,
+    reusableHtmlElementIds: number[]
+  ): Promise<void> {
+    return this.post("/page-state-reusable-elements", {
+      pageStateId,
+      reusableHtmlElementIds,
+    });
   }
 }
 
