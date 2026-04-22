@@ -93,6 +93,10 @@ export class ApiClient {
     return this.get("/runs/pending");
   }
 
+  getRun(runId: number): Promise<PendingRunResponse | null> {
+    return this.get(`/runs/${runId}`);
+  }
+
   updateRunPhase(runId: number, phase: string): Promise<void> {
     const body: UpdateRunPhaseRequest = { phase };
     return this.patch(`/runs/${runId}/phase`, body);

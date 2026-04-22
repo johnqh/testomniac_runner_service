@@ -62,16 +62,20 @@ export async function runMouseScanning(
   navigator.markPageAsNavigable(initialPage.id);
   events.onPageFound({ url: config.baseUrl, pageId: initialPage.id });
 
-  // Create initial navigate action
-  await api.createAction({
-    runId: config.runId,
-    type: "navigate",
-    targetPageId: initialPage.id,
-    sizeClass,
-  });
+  // Check if there's already an open navigate action (created by POST /scan)
+  let action = await api.getNextOpenAction(config.runId, sizeClass);
+  if (!action) {
+    // No existing action — create the initial navigate action
+    await api.createAction({
+      runId: config.runId,
+      type: "navigate",
+      targetPageId: initialPage.id,
+      sizeClass,
+    });
+    action = await api.getNextOpenAction(config.runId, sizeClass);
+  }
 
   // Main action-driven loop
-  let action = await api.getNextOpenAction(config.runId, sizeClass);
   while (action) {
     if (
       !loopGuard.shouldCreate(
