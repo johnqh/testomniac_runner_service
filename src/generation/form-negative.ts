@@ -1,9 +1,5 @@
-import type {
-  TestAction,
-  TestCase,
-  SizeClass,
-  FormField,
-} from "../domain/types";
+import type { TestAction, SizeClass, FormField } from "../domain/types";
+import type { GeneratedTestCase } from "./render";
 import { assignSuiteTags } from "./suite-tagger";
 
 interface FormNegativeInput {
@@ -18,7 +14,7 @@ interface FormNegativeInput {
 
 export function generateFormNegativeTests(
   input: FormNegativeInput
-): TestCase[] {
+): GeneratedTestCase[] {
   const requiredFields = input.fields.filter(f => f.required);
   if (requiredFields.length === 0) return [];
 
@@ -44,11 +40,13 @@ export function generateFormNegativeTests(
     });
 
     return {
-      name: `Form Negative — ${input.pageName} (missing ${skippedField.name})`,
-      type: "form" as const,
-      sizeClass: input.sizeClass,
-      suite_tags: assignSuiteTags("form", input.priority),
-      priority: input.priority,
+      testCase: {
+        name: `Form Negative — ${input.pageName} (missing ${skippedField.name})`,
+        type: "form" as const,
+        sizeClass: input.sizeClass,
+        suite_tags: assignSuiteTags("form", input.priority),
+        priority: input.priority,
+      },
       actions,
     };
   });

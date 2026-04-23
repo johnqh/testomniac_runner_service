@@ -19,10 +19,6 @@ export function createCandidate(
     href: entry.href,
     disabled: entry.disabled,
     visible: entry.visible,
-    x: entry.x,
-    y: entry.y,
-    width: entry.width,
-    height: entry.height,
     attributes: entry.attributes,
     source,
   };

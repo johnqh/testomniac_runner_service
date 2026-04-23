@@ -1,4 +1,5 @@
-import type { TestAction, TestCase, SizeClass } from "../domain/types";
+import type { TestAction, SizeClass } from "../domain/types";
+import type { GeneratedTestCase } from "./render";
 import { assignSuiteTags } from "./suite-tagger";
 
 interface E2EStep {
@@ -12,7 +13,7 @@ interface E2EInput {
   steps: E2EStep[];
 }
 
-export function generateE2ETest(input: E2EInput): TestCase {
+export function generateE2ETest(input: E2EInput): GeneratedTestCase {
   const actions: TestAction[] = [
     { action: "navigate", url: input.steps[0].url },
     { action: "waitForLoad" },
@@ -33,11 +34,13 @@ export function generateE2ETest(input: E2EInput): TestCase {
   }
   const scenarioName = input.steps.map(s => s.pageName).join(" → ");
   return {
-    name: `E2E — ${scenarioName}`,
-    type: "e2e",
-    sizeClass: input.sizeClass,
-    suite_tags: assignSuiteTags("e2e", "high"),
-    priority: "high",
+    testCase: {
+      name: `E2E — ${scenarioName}`,
+      type: "e2e",
+      sizeClass: input.sizeClass,
+      suite_tags: assignSuiteTags("e2e", "high"),
+      priority: "high",
+    },
     actions,
   };
 }

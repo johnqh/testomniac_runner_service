@@ -1,4 +1,5 @@
-import type { TestAction, TestCase, SizeClass } from "../domain/types";
+import type { TestAction, SizeClass } from "../domain/types";
+import type { GeneratedTestCase } from "./render";
 
 export interface PasswordTestCase {
   password: string;
@@ -17,7 +18,9 @@ interface PasswordTestInput {
   passwordCases: PasswordTestCase[];
 }
 
-export function generatePasswordTests(input: PasswordTestInput): TestCase[] {
+export function generatePasswordTests(
+  input: PasswordTestInput
+): GeneratedTestCase[] {
   const sorted = [...input.passwordCases].sort((a, b) => {
     if (a.shouldFail && !b.shouldFail) return -1;
     if (!a.shouldFail && b.shouldFail) return 1;
@@ -51,11 +54,13 @@ export function generatePasswordTests(input: PasswordTestInput): TestCase[] {
     }
 
     return {
-      name: `Password ${pc.shouldFail ? "Fail" : "Pass"} — ${input.pageName} (${pc.description})`,
-      type: "form" as const,
-      sizeClass: input.sizeClass,
-      suite_tags: ["regression"],
-      priority: "high",
+      testCase: {
+        name: `Password ${pc.shouldFail ? "Fail" : "Pass"} — ${input.pageName} (${pc.description})`,
+        type: "form" as const,
+        sizeClass: input.sizeClass,
+        suite_tags: ["regression"],
+        priority: "high",
+      },
       actions,
     };
   });

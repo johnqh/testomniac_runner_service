@@ -51,12 +51,11 @@ export function looksLikeEnterCommitField(item: ActionableItem): boolean {
 }
 
 export function getActionPriority(item: ActionableItem): number {
-  const y = item.y || 0;
   const text =
     `${item.accessibleName || ""} ${item.textContent || ""}`.toLowerCase();
   const href = (item.href || "").toLowerCase();
   if (item.actionKind === "fill" || item.actionKind === "select") return 0;
-  if (item.actionKind === "toggle") return 1;
+  if (item.actionKind === "radio_select") return 1;
   if (
     href.includes("/store/") ||
     href.includes("ec_action=addtocart") ||
@@ -72,7 +71,7 @@ export function getActionPriority(item: ActionableItem): number {
   ) {
     return 2;
   }
-  if (item.actionKind === "navigate") return y < 120 ? 6 : 4;
-  if (item.actionKind === "click") return y < 120 ? 4 : 3;
+  if (item.actionKind === "navigate") return 4;
+  if (item.actionKind === "click") return 3;
   return 3;
 }

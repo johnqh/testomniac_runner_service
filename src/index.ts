@@ -89,7 +89,10 @@ export {
   type GeneratorOptions,
 } from "./generation/generator";
 export { assignPriority, assignSuiteTags } from "./generation/suite-tagger";
-export { generateRenderTest } from "./generation/render";
+export {
+  generateRenderTest,
+  type GeneratedTestCase,
+} from "./generation/render";
 export { generateInteractionTest } from "./generation/interaction";
 export { generateFormTest } from "./generation/form";
 export { generateFormNegativeTests } from "./generation/form-negative";

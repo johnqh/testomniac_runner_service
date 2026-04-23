@@ -32,7 +32,6 @@ import type {
   IssueResponse,
   RecordAiUsageRequest,
   CreateReportEmailRequest,
-  SaveComponentRequest,
   HtmlElementResponse,
   ReusableHtmlElementResponse,
   FindOrCreateReusableHtmlElementRequest,
@@ -190,10 +189,10 @@ export class ApiClient {
   // ===========================================================================
 
   insertActionableItems(
-    pageStateId: number,
+    htmlElementId: number,
     items: ActionableItem[]
   ): Promise<ActionableItemResponse[]> {
-    const body: InsertActionableItemsRequest = { pageStateId, items };
+    const body: InsertActionableItemsRequest = { htmlElementId, items };
     return this.post("/actionable-items", body);
   }
 
@@ -307,13 +306,13 @@ export class ApiClient {
   // Test Cases
   // ===========================================================================
 
-  insertTestCase(runId: number, testCase: TestCase): Promise<TestCaseResponse> {
-    const body: InsertTestCaseRequest = { runId, testCase };
+  insertTestCase(appId: number, testCase: TestCase): Promise<TestCaseResponse> {
+    const body: InsertTestCaseRequest = { appId, testCase };
     return this.post("/test-cases", body);
   }
 
-  getTestCasesByRun(runId: number): Promise<TestCaseResponse[]> {
-    return this.get(`/test-cases?runId=${runId}`);
+  getTestCasesByApp(appId: number): Promise<TestCaseResponse[]> {
+    return this.get(`/test-cases?appId=${appId}`);
   }
 
   // ===========================================================================
@@ -360,13 +359,8 @@ export class ApiClient {
   }
 
   // ===========================================================================
-  // Components (deprecated)
+  // Components (deprecated — removed, use findOrCreateReusableHtmlElement)
   // ===========================================================================
-
-  /** @deprecated Use findOrCreateReusableHtmlElement instead */
-  saveComponent(params: SaveComponentRequest): Promise<void> {
-    return this.post("/components", params);
-  }
 
   // ===========================================================================
   // Html Elements

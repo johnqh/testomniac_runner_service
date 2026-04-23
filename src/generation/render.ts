@@ -1,6 +1,11 @@
 import type { TestAction, TestCase, SizeClass } from "../domain/types";
 import { assignSuiteTags } from "./suite-tagger";
 
+export interface GeneratedTestCase {
+  testCase: TestCase;
+  actions: TestAction[];
+}
+
 interface RenderInput {
   pageId: number;
   pageName: string;
@@ -14,7 +19,7 @@ interface RenderInput {
   }>;
 }
 
-export function generateRenderTest(input: RenderInput): TestCase {
+export function generateRenderTest(input: RenderInput): GeneratedTestCase {
   const actions: TestAction[] = [
     { action: "navigate", url: input.url },
     { action: "waitForLoad" },
@@ -27,12 +32,14 @@ export function generateRenderTest(input: RenderInput): TestCase {
     label: `render-${input.pageName.toLowerCase().replace(/\s+/g, "-")}`,
   });
   return {
-    name: `Render — ${input.pageName}`,
-    type: "render",
-    sizeClass: input.sizeClass,
-    suite_tags: assignSuiteTags("render", input.priority),
-    page_id: input.pageId,
-    priority: input.priority,
+    testCase: {
+      name: `Render — ${input.pageName}`,
+      type: "render",
+      sizeClass: input.sizeClass,
+      suite_tags: assignSuiteTags("render", input.priority),
+      page_id: input.pageId,
+      priority: input.priority,
+    },
     actions,
   };
 }

@@ -1,6 +1,6 @@
-import { generateRenderTest } from "./render";
+import { generateRenderTest, type GeneratedTestCase } from "./render";
 import { assignPriority } from "./suite-tagger";
-import type { TestCase, SizeClass } from "../domain/types";
+import type { SizeClass } from "../domain/types";
 import type { ApiClient } from "../api/client";
 
 export interface GeneratorOptions {
@@ -12,14 +12,14 @@ export interface GeneratorOptions {
 
 export async function generateTestCases(
   options: GeneratorOptions
-): Promise<TestCase[]> {
+): Promise<GeneratedTestCase[]> {
   const { appId, sizeClass, api } = options;
-  const testCases: TestCase[] = [];
+  const results: GeneratedTestCase[] = [];
   const allPages = await api.getPagesByApp(appId);
 
   for (const page of allPages) {
     const priority = assignPriority(page.routeKey || "", page.url);
-    testCases.push(
+    results.push(
       generateRenderTest({
         pageId: page.id,
         pageName: page.routeKey || page.url,
@@ -31,5 +31,5 @@ export async function generateTestCases(
     );
   }
 
-  return testCases;
+  return results;
 }

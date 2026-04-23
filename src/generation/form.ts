@@ -1,4 +1,5 @@
-import type { TestAction, TestCase, SizeClass } from "../domain/types";
+import type { TestAction, SizeClass } from "../domain/types";
+import type { GeneratedTestCase } from "./render";
 import { assignSuiteTags } from "./suite-tagger";
 
 interface FormInput {
@@ -13,7 +14,7 @@ interface FormInput {
   submitSelector?: string;
 }
 
-export function generateFormTest(input: FormInput): TestCase {
+export function generateFormTest(input: FormInput): GeneratedTestCase {
   const actions: TestAction[] = [
     { action: "navigate", url: input.url },
     { action: "waitForLoad" },
@@ -26,7 +27,7 @@ export function generateFormTest(input: FormInput): TestCase {
     });
   }
   for (const ctrl of input.discreteControls) {
-    if (ctrl.type === "checkbox" || ctrl.type === "toggle") {
+    if (ctrl.type === "checkbox" || ctrl.type === "radio_select") {
       actions.push({
         action: "check",
         selector: ctrl.selector,
@@ -46,13 +47,15 @@ export function generateFormTest(input: FormInput): TestCase {
   actions.push({ action: "waitForNavigation" });
   actions.push({ action: "assertUrlChanged" });
   return {
-    name: `Form — ${input.pageName}`,
-    type: "form",
-    sizeClass: input.sizeClass,
-    suite_tags: assignSuiteTags("form", input.priority),
-    persona_id: input.personaId,
-    use_case_id: input.useCaseId,
-    priority: input.priority,
+    testCase: {
+      name: `Form — ${input.pageName}`,
+      type: "form",
+      sizeClass: input.sizeClass,
+      suite_tags: assignSuiteTags("form", input.priority),
+      persona_id: input.personaId,
+      use_case_id: input.useCaseId,
+      priority: input.priority,
+    },
     actions,
   };
 }

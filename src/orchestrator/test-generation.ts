@@ -9,14 +9,14 @@ export async function runTestGenerationPhase(
 ): Promise<void> {
   const sizeClass = (config.sizeClass || "desktop") as SizeClass;
 
-  const testCases = await generateTestCases({
+  const generated = await generateTestCases({
     appId: config.appId,
     runId: config.runId,
     sizeClass,
     api,
   });
 
-  for (const tc of testCases) {
-    await api.insertTestCase(config.runId, tc);
+  for (const { testCase } of generated) {
+    await api.insertTestCase(config.appId, testCase);
   }
 }

@@ -1,4 +1,5 @@
-import type { TestAction, TestCase, SizeClass } from "../domain/types";
+import type { TestAction, SizeClass } from "../domain/types";
+import type { GeneratedTestCase } from "./render";
 import { assignSuiteTags } from "./suite-tagger";
 
 interface InteractionInput {
@@ -11,7 +12,9 @@ interface InteractionInput {
   expectedUrl?: string;
 }
 
-export function generateInteractionTest(input: InteractionInput): TestCase {
+export function generateInteractionTest(
+  input: InteractionInput
+): GeneratedTestCase {
   const actions: TestAction[] = [
     { action: "navigate", url: input.url },
     { action: "waitForLoad" },
@@ -25,11 +28,13 @@ export function generateInteractionTest(input: InteractionInput): TestCase {
     actions.push({ action: "assertUrl", pattern: input.expectedUrl });
   }
   return {
-    name: `Interaction — ${input.pageName}`,
-    type: "interaction",
-    sizeClass: input.sizeClass,
-    suite_tags: assignSuiteTags("interaction", input.priority),
-    priority: input.priority,
+    testCase: {
+      name: `Interaction — ${input.pageName}`,
+      type: "interaction",
+      sizeClass: input.sizeClass,
+      suite_tags: assignSuiteTags("interaction", input.priority),
+      priority: input.priority,
+    },
     actions,
   };
 }

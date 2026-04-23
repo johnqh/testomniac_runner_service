@@ -236,7 +236,7 @@ export async function runMouseScanning(
 
         // Insert actionable items (now includes reusableHtmlElementId tags)
         if (items.length > 0) {
-          await api.insertActionableItems(pageState.id, items);
+          await api.insertActionableItems(contentElement.id, items);
         }
 
         // Create actions for visible items sorted by priority
@@ -257,8 +257,8 @@ export async function runMouseScanning(
               ? "fill"
               : item.actionKind === "select"
                 ? "select"
-                : item.actionKind === "toggle"
-                  ? "toggle"
+                : item.actionKind === "radio_select"
+                  ? "radio_select"
                   : "click";
 
           await api.createAction({
@@ -350,7 +350,7 @@ export async function runMouseScanning(
                 }
               } else if (action.type === "select") {
                 await adapter.select(itemSelector, "");
-              } else if (action.type === "toggle") {
+              } else if (action.type === "radio_select") {
                 await adapter.click(itemSelector, { timeout: 3000 });
               } else {
                 await adapter.click(itemSelector, { timeout: 3000 });
@@ -442,15 +442,15 @@ async function runBugDetection(
   visibleText: string,
   events: ScanEventHandler,
   api: ApiClient,
-  runId: number,
-  actionId: number
+  scanId: number,
+  actionExecutionId: number
 ): Promise<void> {
   const visualIssues = detectVisualIssues(html);
   for (const issue of visualIssues) {
     events.onIssueDetected(issue);
     await api.createIssue({
-      runId,
-      actionId,
+      scanId,
+      actionExecutionId,
       type: issue.type,
       description: issue.description,
       reproductionSteps: [],
@@ -461,8 +461,8 @@ async function runBugDetection(
   for (const issue of contentIssues) {
     events.onIssueDetected(issue);
     await api.createIssue({
-      runId,
-      actionId,
+      scanId,
+      actionExecutionId,
       type: issue.type,
       description: issue.description,
       reproductionSteps: [],
@@ -478,8 +478,8 @@ async function runBugDetection(
       };
       events.onIssueDetected(issue);
       await api.createIssue({
-        runId,
-        actionId,
+        scanId,
+        actionExecutionId,
         ...issue,
         reproductionSteps: [],
       });
@@ -493,8 +493,8 @@ async function runBugDetection(
     for (const issue of mediaIssues) {
       events.onIssueDetected(issue);
       await api.createIssue({
-        runId,
-        actionId,
+        scanId,
+        actionExecutionId,
         ...issue,
         reproductionSteps: [],
       });

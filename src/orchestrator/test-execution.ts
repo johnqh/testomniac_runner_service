@@ -8,13 +8,13 @@ export async function runTestExecutionPhase(
   events: ScanEventHandler,
   executor: TestExecutor
 ): Promise<void> {
-  const testCases = await api.getTestCasesByRun(config.runId);
+  const testCases = await api.getTestCasesByApp(config.appId);
   const screen = DESKTOP_SCREENS[0];
 
   for (const tc of testCases) {
     const testRun = await api.createTestRun({
       testCaseId: tc.id,
-      runId: config.runId,
+      scanId: config.runId,
       screen: config.sizeClass || "desktop",
     });
 
@@ -31,7 +31,7 @@ export async function runTestExecutionPhase(
 
       if (!result.passed && result.error) {
         await api.createIssue({
-          runId: config.runId,
+          scanId: config.runId,
           testCaseId: tc.id,
           testRunId: testRun.id,
           type: "test_failure",

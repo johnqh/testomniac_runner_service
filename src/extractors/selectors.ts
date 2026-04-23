@@ -31,8 +31,10 @@ function classifyActionKind(
   ) {
     return "fill";
   }
-  if (["checkbox", "radio", "switch"].includes(role)) return "toggle";
-  if (["checkbox", "radio"].includes(inputType)) return "toggle";
+  if (["radio"].includes(role)) return "radio_select";
+  if (["radio"].includes(inputType)) return "radio_select";
+  if (["checkbox", "switch"].includes(role)) return "click";
+  if (["checkbox"].includes(inputType)) return "click";
   return "click";
 }
 

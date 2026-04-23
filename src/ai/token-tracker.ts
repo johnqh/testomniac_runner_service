@@ -3,7 +3,7 @@ import type { ApiClient } from "../api/client";
 
 export async function trackOpenAiCall(
   api: ApiClient,
-  runId: number,
+  scanId: number,
   phase: string,
   purpose: string,
   callFn: () => Promise<OpenAI.Chat.Completions.ChatCompletion>
@@ -12,7 +12,7 @@ export async function trackOpenAiCall(
   const usage = response.usage;
   if (usage) {
     await api.recordAiUsage({
-      runId,
+      scanId,
       phase,
       model: response.model,
       promptTokens: usage.prompt_tokens,
