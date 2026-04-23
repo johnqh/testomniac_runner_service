@@ -38,6 +38,7 @@ export async function runMouseScanning(
   const navigator = new Navigator({
     stateManager,
     api,
+    appId: config.appId,
     runId: config.runId,
     sizeClass,
     baseUrl: config.baseUrl,
@@ -67,17 +68,15 @@ export async function runMouseScanning(
   const initialPage = await pageCache.findOrCreate(config.baseUrl);
   navigator.markPageAsNavigable(initialPage.id);
 
-  // Check if there's already an open navigate action (created by POST /scan)
-  let action = await api.getNextOpenAction(config.runId, sizeClass);
+  // Check if there's already an open action execution (created by POST /scan)
+  let action = await api.getNextOpenAction(config.runId);
   if (!action) {
-    // No existing action — create the initial navigate action
-    await api.createAction({
-      runId: config.runId,
+    // No existing execution — create navigate action + execution
+    await api.createActionAndExecution(config.appId, config.runId, {
       type: "navigate",
-      targetPageId: initialPage.id,
-      sizeClass,
+      targetUrl: config.baseUrl,
     });
-    action = await api.getNextOpenAction(config.runId, sizeClass);
+    action = await api.getNextOpenAction(config.runId);
   }
 
   // Main action-driven loop
@@ -103,9 +102,7 @@ export async function runMouseScanning(
 
     try {
       if (action.type === "navigate") {
-        const targetUrl = await navigator.resolveTargetPageUrl(
-          action.targetPageId ?? null
-        );
+        const targetUrl = action.targetUrl ?? config.baseUrl;
         await adapter.goto(targetUrl, {
           waitUntil: "networkidle0",
           timeout: 30_000,
@@ -263,11 +260,9 @@ export async function runMouseScanning(
                   ? "radio_select"
                   : "click";
 
-          await api.createAction({
-            runId: config.runId,
+          await api.createActionAndExecution(config.appId, config.runId, {
             type: actionType,
             startingPageStateId: pageState.id,
-            sizeClass,
           });
         }
 
@@ -278,7 +273,7 @@ export async function runMouseScanning(
             appId: config.appId,
             type: action.type,
             startingPageStateId: action.startingPageStateId ?? null,
-            targetUrl: action.targetPageId ? currentUrl : null,
+            targetUrl: action.targetUrl ?? null,
             actionableItemId: action.actionableItemId ?? null,
             htmlElementId: null,
             inputValue: null,
@@ -442,7 +437,7 @@ export async function runMouseScanning(
         }
 
         events.onActionCompleted({
-          type: action.type,
+          type: action.type ?? "unknown",
           selector: itemSelector || undefined,
           pageUrl: currentUrl,
         });

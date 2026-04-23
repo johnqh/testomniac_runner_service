@@ -12,9 +12,13 @@ import type {
   PageStateResponse,
   InsertActionableItemsRequest,
   ActionableItemResponse,
+  CreateActionDefinitionRequest,
+  ActionDefinitionResponse,
+  CreateActionExecutionRequest,
+  ActionExecutionResponse,
+  CompleteActionExecutionRequest,
   CreateActionRequest,
   ActionResponse,
-  CompleteActionRequest,
   CreatePersonaRequest,
   PersonaResponse,
   CreateUseCaseRequest,
@@ -204,29 +208,62 @@ export class ApiClient {
   }
 
   // ===========================================================================
-  // Actions
+  // Action Definitions (app-level)
   // ===========================================================================
 
-  createAction(params: CreateActionRequest): Promise<ActionResponse> {
+  createActionDefinition(
+    params: CreateActionDefinitionRequest
+  ): Promise<ActionDefinitionResponse> {
     return this.post("/actions", params);
   }
 
-  getNextOpenAction(
-    runId: number,
-    sizeClass: string
-  ): Promise<ActionResponse | null> {
-    return this.get(`/actions/next?runId=${runId}&sizeClass=${sizeClass}`);
+  /** @deprecated Use createActionDefinition */
+  createAction(params: CreateActionRequest): Promise<ActionResponse> {
+    return this.post("/actions", params as unknown as Record<string, unknown>);
   }
 
-  startAction(actionId: number): Promise<void> {
-    return this.patch(`/actions/${actionId}/start`);
+  // ===========================================================================
+  // Action Executions (scan-level)
+  // ===========================================================================
+
+  createActionExecution(
+    params: CreateActionExecutionRequest
+  ): Promise<ActionExecutionResponse> {
+    return this.post("/action-executions", params);
+  }
+
+  /** Create an action definition + execution in one call */
+  async createActionAndExecution(
+    appId: number,
+    scanId: number,
+    actionParams: Omit<CreateActionDefinitionRequest, "appId">
+  ): Promise<ActionExecutionResponse> {
+    const actionDef = await this.createActionDefinition({
+      appId,
+      ...actionParams,
+    });
+    return this.createActionExecution({
+      scanId,
+      actionId: actionDef.id,
+    });
+  }
+
+  getNextOpenAction(
+    scanId: number,
+    _sizeClass?: string
+  ): Promise<ActionExecutionResponse | null> {
+    return this.get(`/action-executions/next?scanId=${scanId}`);
+  }
+
+  startAction(executionId: number): Promise<void> {
+    return this.patch(`/action-executions/${executionId}/start`);
   }
 
   completeAction(
-    actionId: number,
-    params: CompleteActionRequest
+    executionId: number,
+    params: CompleteActionExecutionRequest
   ): Promise<void> {
-    return this.patch(`/actions/${actionId}/complete`, params);
+    return this.patch(`/action-executions/${executionId}/complete`, params);
   }
 
   getOpenActionCount(runId: number, sizeClass: string): Promise<number> {
