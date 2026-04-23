@@ -16,6 +16,8 @@ export interface ScanConfig {
   openaiApiKey?: string;
   openaiModel?: string;
   testWorkerCount?: number;
+  /** AbortSignal to cancel the scan. When aborted, the scan loop exits gracefully. */
+  signal?: AbortSignal;
 }
 
 export interface ScanEventHandler {

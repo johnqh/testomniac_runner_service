@@ -81,6 +81,9 @@ export async function runMouseScanning(
 
   // Main action-driven loop
   while (action) {
+    // Check for cancellation
+    if (config.signal?.aborted) break;
+
     if (
       !loopGuard.shouldCreate(
         "action",

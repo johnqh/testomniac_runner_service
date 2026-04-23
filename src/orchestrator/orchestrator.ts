@@ -75,6 +75,7 @@ export async function runScan(
     await api.updateRunPhase(config.runId, "mouse_scanning");
 
     for (const phase of config.phases) {
+      if (config.signal?.aborted) break;
       wrappedHandler.onPhaseChanged(phase);
       timer.startPhase(phase);
 
