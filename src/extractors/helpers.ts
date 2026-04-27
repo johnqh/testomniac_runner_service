@@ -19,7 +19,18 @@ export function createCandidate(
     href: entry.href,
     disabled: entry.disabled,
     visible: entry.visible,
-    attributes: entry.attributes,
+    attributes: {
+      ...entry.attributes,
+      ...(entry.groupName ? { _groupName: entry.groupName } : {}),
+      ...(entry.headingContext
+        ? { _headingContext: entry.headingContext }
+        : {}),
+      ...(entry.landmarkAncestor
+        ? { _landmarkAncestor: entry.landmarkAncestor }
+        : {}),
+      ...(entry.testId ? { _testId: entry.testId } : {}),
+      ...(entry.formContext ? { _formContext: entry.formContext } : {}),
+    },
     source,
   };
 }

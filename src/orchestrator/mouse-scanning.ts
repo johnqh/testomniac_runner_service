@@ -23,8 +23,23 @@ import { sha256 } from "../browser/page-utils";
 import type {
   ActionableItem,
   ActionDefinitionResponse,
+  ElementIdentity,
+  ElementLocator,
+} from "@sudobility/testomniac_types";
+import {
+  resolvePlaywrightRole,
+  LocatorStrategy,
 } from "@sudobility/testomniac_types";
 import type { DetectionContext } from "../detectors/detection-rule";
+import { IdentityCache } from "../identity/identity-cache";
+import {
+  matchElementIdentity,
+  type ElementFingerprint,
+} from "../identity/element-matcher";
+import {
+  toPlaywrightLocator,
+  buildScopeChain,
+} from "../identity/playwright-locator";
 
 export async function runMouseScanning(
   adapter: BrowserAdapter,
@@ -51,17 +66,16 @@ export async function runMouseScanning(
   const reusableCache = new ReusableElementCache(config.appId, api);
   await reusableCache.preload();
 
+  const identityCache = new IdentityCache(config.appId, api);
+  await identityCache.preload();
+
   // Track which reusable elements have been tested to avoid duplicates
   const testedReusableElements = new Set<number>();
 
   // Track the current action chain for detection context
   let actionChainStack: ActionDefinitionResponse[] = [];
 
-  // Navigate to base URL
-  await adapter.goto(config.baseUrl, {
-    waitUntil: "networkidle0",
-    timeout: 30_000,
-  });
+  // Determine the start origin (don't re-navigate — the caller already did)
   const startOrigin = new URL(config.baseUrl).origin;
 
   // Create initial page record (page state created when navigate action is processed)
@@ -106,17 +120,27 @@ export async function runMouseScanning(
     try {
       if (action.type === "navigate") {
         const targetUrl = action.targetUrl ?? config.baseUrl;
-        await adapter.goto(targetUrl, {
-          waitUntil: "networkidle0",
-          timeout: 30_000,
-        });
-
         const currentUrl = await adapter.getUrl();
-        const pageRecord = await pageCache.findOrCreate(currentUrl);
+
+        // Only navigate if we're not already on the target URL
+        if (currentUrl.split("#")[0] !== targetUrl.split("#")[0]) {
+          await adapter.goto(targetUrl, {
+            waitUntil: "networkidle0",
+            timeout: 30_000,
+          });
+        }
+
+        // Wait for page to settle (SPA rendering, animations, lazy loading)
+        await new Promise(r => setTimeout(r, 2000));
+
+        const afterUrl = await adapter.getUrl();
+        const pageRecord = await pageCache.findOrCreate(afterUrl);
 
         // Capture page state with HTML decomposition
         const html = await adapter.content();
+        console.log(`[mouse-scanning] HTML length: ${html.length}`);
         const items = await extractActionableItems(adapter);
+        console.log(`[mouse-scanning] Extracted ${items.length} items (${items.filter(i => i.visible).length} visible)`);
         const visibleText = extractVisibleText(html);
         const hashes = await computeHashes(html, items);
 
@@ -125,17 +149,9 @@ export async function runMouseScanning(
           hashes,
           sizeClass
         );
-        if (existing) {
-          stateManager.update(existing.id, currentUrl);
-          events.onPageFound({ url: currentUrl, pageId: pageRecord.id });
-          events.onPageStateCreated({
-            pageStateId: existing.id,
-            pageId: pageRecord.id,
-          });
-          await api.completeAction(action.id, {});
-          action = await api.getNextOpenAction(config.runId, sizeClass);
-          continue;
-        }
+
+        // If page state already exists, reuse it but still create actions for this scan
+        let pageState = existing;
 
         // Detect reusable regions and decompose HTML
         const reusableRegions = await detectReusableRegions(adapter);
@@ -215,14 +231,18 @@ export async function runMouseScanning(
         }
 
         await adapter.screenshot({ type: "jpeg", quality: 72 });
-        const pageState = await api.createPageState({
-          pageId: pageRecord.id,
-          sizeClass,
-          hashes,
-          contentText: visibleText.slice(0, 5000),
-          bodyHtmlElementId: bodyElement.id,
-          contentHtmlElementId: contentElement.id,
-        });
+
+        if (!pageState) {
+          // Create new page state only if no existing match
+          pageState = await api.createPageState({
+            pageId: pageRecord.id,
+            sizeClass,
+            hashes,
+            contentText: visibleText.slice(0, 5000),
+            bodyHtmlElementId: bodyElement.id,
+            contentHtmlElementId: contentElement.id,
+          });
+        }
         stateManager.update(pageState.id, currentUrl);
         events.onPageFound({ url: currentUrl, pageId: pageRecord.id });
         events.onPageStateCreated({
@@ -236,43 +256,182 @@ export async function runMouseScanning(
           await api.linkPageStateReusableElements(pageState.id, reusableIds);
         }
 
-        // Insert actionable items (now includes reusableHtmlElementId tags)
+        // Insert actionable items and capture their DB IDs
+        let insertedItems: Array<{ id: number; selector: string | null; actionKind: string | null; reusableHtmlElementId?: number | null }> = [];
         if (items.length > 0) {
-          await api.insertActionableItems(contentElement.id, items);
+          insertedItems = await api.insertActionableItems(
+            contentElement.id,
+            items
+          );
+        }
+
+        // Match / create element identities for visible items
+        for (const inserted of insertedItems) {
+          const original = items.find(o => o.selector === inserted.selector);
+          if (!original || !original.visible) continue;
+
+          const attrs = (original.attributes || {}) as Record<string, string>;
+          const role = resolvePlaywrightRole(
+            original.tagName,
+            original.inputType,
+            original.role
+          );
+
+          const fp: ElementFingerprint = {
+            role,
+            computedName:
+              original.accessibleName || original.textContent || "",
+            tagName: original.tagName,
+            labelText: attrs.labelText || attrs._groupName ? undefined : attrs.labelText,
+            groupName: attrs._groupName || undefined,
+            placeholder: attrs.placeholder || undefined,
+            altText:
+              original.tagName === "IMG"
+                ? original.accessibleName || undefined
+                : undefined,
+            testId: attrs._testId || undefined,
+            inputType: original.inputType,
+            formContext: attrs._formContext || undefined,
+            headingContext: attrs._headingContext || undefined,
+            landmarkAncestor: attrs._landmarkAncestor || undefined,
+            cssSelector: original.selector,
+          };
+          // Fix labelText assignment
+          fp.labelText = attrs.labelText || undefined;
+
+          const partialIdentity: ElementIdentity = {
+            ...fp,
+            playwrightLocator: "",
+            isUniqueOnPage: true,
+            locators: [],
+          };
+          const locator = toPlaywrightLocator(partialIdentity);
+          const scopeChain = buildScopeChain(partialIdentity);
+
+          const locators: ElementLocator[] = [];
+          if (fp.testId) {
+            locators.push({
+              strategy: LocatorStrategy.TestId,
+              value: `getByTestId('${fp.testId}')`,
+              priority: 0,
+            });
+          }
+          if (fp.labelText) {
+            locators.push({
+              strategy: LocatorStrategy.Label,
+              value: `getByLabel('${fp.labelText}')`,
+              priority: 1,
+            });
+          }
+          if (fp.placeholder) {
+            locators.push({
+              strategy: LocatorStrategy.Placeholder,
+              value: `getByPlaceholder('${fp.placeholder}')`,
+              priority: 2,
+            });
+          }
+          if (fp.computedName && role !== "generic") {
+            locators.push({
+              strategy: LocatorStrategy.RoleName,
+              value: `getByRole('${role}', { name: '${fp.computedName}' })`,
+              priority: 3,
+            });
+          }
+          if (fp.computedName) {
+            locators.push({
+              strategy: LocatorStrategy.Text,
+              value: `getByText('${fp.computedName}')`,
+              priority: 4,
+            });
+          }
+          locators.push({
+            strategy: LocatorStrategy.Css,
+            value: original.selector,
+            priority: 10,
+          });
+
+          const match = matchElementIdentity(fp, identityCache.getAll());
+          if (match) {
+            await api.updateElementIdentity(match.identity.id, {
+              lastSeenScanId: config.runId,
+              playwrightLocator: locator,
+              playwrightScopeChain: scopeChain,
+              cssSelector: original.selector,
+              locators,
+            });
+            identityCache.add({
+              ...match.identity,
+              lastSeenScanId: config.runId,
+            });
+          } else {
+            const created = await api.findOrCreateElementIdentity({
+              appId: config.appId,
+              scanId: config.runId,
+              role,
+              computedName: fp.computedName,
+              tagName: fp.tagName,
+              labelText: fp.labelText,
+              groupName: fp.groupName,
+              placeholder: fp.placeholder,
+              altText: fp.altText,
+              testId: fp.testId,
+              inputType: fp.inputType,
+              formContext: fp.formContext,
+              headingContext: fp.headingContext,
+              landmarkAncestor: fp.landmarkAncestor,
+              playwrightLocator: locator,
+              playwrightScopeChain: scopeChain,
+              isUniqueOnPage: true,
+              cssSelector: original.selector,
+              locators,
+            });
+            identityCache.add(created);
+          }
         }
 
         // Create actions for visible items sorted by priority
-        const sortedItems = [...items]
-          .filter(i => i.visible && !i.disabled)
-          .sort((a, b) => getActionPriority(a) - getActionPriority(b));
+        const sortedInserted = insertedItems
+          .filter(i => {
+            const original = items.find(o => o.selector === i.selector);
+            return original && original.visible && !original.disabled;
+          })
+          .sort((a, b) => {
+            const origA = items.find(o => o.selector === a.selector);
+            const origB = items.find(o => o.selector === b.selector);
+            return (
+              getActionPriority(origA || ({} as ActionableItem)) -
+              getActionPriority(origB || ({} as ActionableItem))
+            );
+          });
 
-        for (const item of sortedItems) {
+        for (const inserted of sortedInserted) {
           // Skip if reusable element already tested in this run
-          if (item.reusableHtmlElementId) {
-            if (testedReusableElements.has(item.reusableHtmlElementId))
+          if (inserted.reusableHtmlElementId) {
+            if (testedReusableElements.has(inserted.reusableHtmlElementId))
               continue;
-            testedReusableElements.add(item.reusableHtmlElementId);
+            testedReusableElements.add(inserted.reusableHtmlElementId);
           }
 
           const actionType =
-            item.actionKind === "fill"
+            inserted.actionKind === "fill"
               ? "fill"
-              : item.actionKind === "select"
+              : inserted.actionKind === "select"
                 ? "select"
-                : item.actionKind === "radio_select"
+                : inserted.actionKind === "radio_select"
                   ? "radio_select"
                   : "click";
 
           await api.createActionAndExecution(config.appId, config.runId, {
             type: actionType,
             startingPageStateId: pageState.id,
+            actionableItemId: inserted.id,
           });
         }
 
         // Reset action chain on navigate and push current action
         actionChainStack = [
           {
-            id: action.id,
+            id: action.actionId,
             appId: config.appId,
             type: action.type,
             startingPageStateId: action.startingPageStateId ?? null,
@@ -325,21 +484,14 @@ export async function runMouseScanning(
 
         const currentUrl = await adapter.getUrl();
 
-        // Resolve the actionable item if we have an ID
+        // Resolve the actionable item by ID
         let item: ActionableItem | null = null;
         let itemSelector: string | null = null;
         if (action.actionableItemId) {
-          const pageStateId =
-            action.startingPageStateId ?? stateManager.getCurrentPageStateId();
-          if (pageStateId) {
-            const stateItems = await api.getItemsByPageState(pageStateId);
-            const found = stateItems.find(
-              i => i.id === action!.actionableItemId
-            );
-            if (found) {
-              item = found as unknown as ActionableItem;
-              itemSelector = found.selector;
-            }
+          const found = await api.getActionableItem(action.actionableItemId);
+          if (found) {
+            item = found as unknown as ActionableItem;
+            itemSelector = found.selector;
           }
         }
 
@@ -439,9 +591,14 @@ export async function runMouseScanning(
           }
         }
 
+        // Build human-readable description for the action
+        const elementDesc = item
+          ? `"${(item.accessibleName || item.textContent || "").slice(0, 40)}" ${(item.tagName || "").toLowerCase()}`
+          : itemSelector || currentUrl;
+
         events.onActionCompleted({
           type: action.type ?? "unknown",
-          selector: itemSelector || undefined,
+          selector: elementDesc,
           pageUrl: currentUrl,
         });
       }
