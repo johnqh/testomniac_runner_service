@@ -143,11 +143,9 @@ export async function runInputScanningPhase(
             }
 
             // Record fill action
-            await api.createAction({
-              runId: config.runId,
+            await api.createActionAndExecution(config.appId, config.runId, {
               type: "fill",
               startingPageStateId: form.pageStateId,
-              sizeClass,
             });
 
             events.onActionCompleted({

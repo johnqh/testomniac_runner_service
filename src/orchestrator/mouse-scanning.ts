@@ -140,7 +140,9 @@ export async function runMouseScanning(
         const html = await adapter.content();
         console.log(`[mouse-scanning] HTML length: ${html.length}`);
         const items = await extractActionableItems(adapter);
-        console.log(`[mouse-scanning] Extracted ${items.length} items (${items.filter(i => i.visible).length} visible)`);
+        console.log(
+          `[mouse-scanning] Extracted ${items.length} items (${items.filter(i => i.visible).length} visible)`
+        );
         const visibleText = extractVisibleText(html);
         const hashes = await computeHashes(html, items);
 
@@ -257,7 +259,12 @@ export async function runMouseScanning(
         }
 
         // Insert actionable items and capture their DB IDs
-        let insertedItems: Array<{ id: number; selector: string | null; actionKind: string | null; reusableHtmlElementId?: number | null }> = [];
+        let insertedItems: Array<{
+          id: number;
+          selector: string | null;
+          actionKind: string | null;
+          reusableHtmlElementId?: number | null;
+        }> = [];
         if (items.length > 0) {
           insertedItems = await api.insertActionableItems(
             contentElement.id,
@@ -279,10 +286,10 @@ export async function runMouseScanning(
 
           const fp: ElementFingerprint = {
             role,
-            computedName:
-              original.accessibleName || original.textContent || "",
+            computedName: original.accessibleName || original.textContent || "",
             tagName: original.tagName,
-            labelText: attrs.labelText || attrs._groupName ? undefined : attrs.labelText,
+            labelText:
+              attrs.labelText || attrs._groupName ? undefined : attrs.labelText,
             groupName: attrs._groupName || undefined,
             placeholder: attrs.placeholder || undefined,
             altText:

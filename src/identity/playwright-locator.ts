@@ -65,9 +65,7 @@ export function toPlaywrightLocator(identity: ElementIdentity): string {
   return `locator('${identity.cssSelector}')`;
 }
 
-export function buildScopeChain(
-  identity: ElementIdentity
-): string | undefined {
+export function buildScopeChain(identity: ElementIdentity): string | undefined {
   if (identity.groupName) {
     return wrapRole("group", identity.groupName);
   }

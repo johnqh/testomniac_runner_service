@@ -89,7 +89,7 @@ describe("toPlaywrightLocator", () => {
       computedName: "Don't click",
     });
     expect(toPlaywrightLocator(id)).toBe(
-      'getByRole(\'button\', { name: "Don\'t click" })'
+      "getByRole('button', { name: \"Don't click\" })"
     );
   });
 
@@ -114,7 +114,7 @@ describe("buildScopeChain", () => {
 
   it("returns form scope for elements with formContext", () => {
     const id = makeIdentity({ formContext: "/login" });
-    expect(buildScopeChain(id)).toBe('locator(\'form[action="/login"]\')');
+    expect(buildScopeChain(id)).toBe("locator('form[action=\"/login\"]')");
   });
 
   it("returns landmark scope", () => {
@@ -133,8 +133,6 @@ describe("buildScopeChain", () => {
       formContext: "/form",
       landmarkAncestor: "main",
     });
-    expect(buildScopeChain(id)).toBe(
-      "getByRole('group', { name: 'Options' })"
-    );
+    expect(buildScopeChain(id)).toBe("getByRole('group', { name: 'Options' })");
   });
 });

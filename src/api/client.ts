@@ -285,9 +285,7 @@ export class ApiClient {
     ).then((r: any) => r.count);
   }
 
-  getExecutionChain(
-    executionId: number
-  ): Promise<ActionExecutionResponse[]> {
+  getExecutionChain(executionId: number): Promise<ActionExecutionResponse[]> {
     return this.get(`/action-executions/chain/${executionId}`);
   }
 
@@ -498,9 +496,7 @@ export class ApiClient {
     return this.post("/element-identities", params);
   }
 
-  getElementIdentitiesByApp(
-    appId: number
-  ): Promise<ElementIdentityResponse[]> {
+  getElementIdentitiesByApp(appId: number): Promise<ElementIdentityResponse[]> {
     return this.get(`/element-identities?appId=${appId}`);
   }
 
