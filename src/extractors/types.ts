@@ -30,6 +30,12 @@ export interface DomSnapshotEntry {
   height: number;
   attributes: Record<string, string>;
   sourceHints: string[];
+  // Identity signals for persistent element matching
+  groupName?: string;
+  headingContext?: string;
+  landmarkAncestor?: string;
+  testId?: string;
+  formContext?: string;
 }
 
 export interface ItemExtractor {

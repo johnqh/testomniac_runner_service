@@ -157,6 +157,11 @@ export async function buildDomSnapshot(
       height: number;
       attributes: Record<string, string>;
       sourceHints: string[];
+      groupName?: string;
+      headingContext?: string;
+      landmarkAncestor?: string;
+      testId?: string;
+      formContext?: string;
     }
 
     const entries: SnapshotEntry[] = [];
@@ -263,6 +268,79 @@ export async function buildDomSnapshot(
         }
       }
 
+      // --- Identity signals ---
+      const testId =
+        el.getAttribute("data-testid") ||
+        el.getAttribute("data-test-id") ||
+        el.getAttribute("data-cy") ||
+        undefined;
+
+      let groupName: string | undefined;
+      const fieldset = el.closest("fieldset");
+      if (fieldset) {
+        const legend = fieldset.querySelector("legend");
+        if (legend) groupName = legend.textContent?.trim().slice(0, 80);
+      }
+      if (!groupName) {
+        const radioGroup = el.closest('[role="radiogroup"], [role="group"]');
+        if (radioGroup) {
+          const lblBy = radioGroup.getAttribute("aria-labelledby");
+          groupName =
+            radioGroup.getAttribute("aria-label") ||
+            (lblBy
+              ? document.getElementById(lblBy)?.textContent?.trim().slice(0, 80)
+              : undefined);
+        }
+      }
+
+      let headingContext: string | undefined;
+      let prevEl: Element | null = el;
+      for (let i = 0; i < 50 && prevEl; i++) {
+        const prevSibling: Element | null = prevEl.previousElementSibling;
+        if (prevSibling) {
+          if (/^H[1-6]$/.test(prevSibling.tagName)) {
+            headingContext = prevSibling.textContent?.trim().slice(0, 80);
+            break;
+          }
+          const nested = prevSibling.querySelector("h1,h2,h3,h4,h5,h6");
+          if (nested) {
+            headingContext = nested.textContent?.trim().slice(0, 80);
+            break;
+          }
+          prevEl = prevSibling;
+        } else {
+          prevEl = prevEl.parentElement;
+        }
+      }
+
+      const landmarkTags: Record<string, string> = {
+        HEADER: "banner",
+        NAV: "navigation",
+        MAIN: "main",
+        ASIDE: "complementary",
+        FOOTER: "contentinfo",
+      };
+      let landmarkAncestor: string | undefined;
+      const landmarkEl = el.closest(
+        '[role="banner"],[role="navigation"],[role="main"],[role="complementary"],[role="contentinfo"],[role="form"],[role="region"],[role="search"],header,nav,main,aside,footer,form[aria-label],section[aria-label]'
+      );
+      if (landmarkEl && landmarkEl !== el) {
+        landmarkAncestor =
+          landmarkEl.getAttribute("role") ||
+          landmarkTags[landmarkEl.tagName] ||
+          undefined;
+      }
+
+      let formContext: string | undefined;
+      const formEl = el.closest("form");
+      if (formEl) {
+        formContext =
+          formEl.getAttribute("action") ||
+          formEl.getAttribute("id") ||
+          formEl.getAttribute("name") ||
+          undefined;
+      }
+
       entries.push({
         selector: `[data-tmnc-id="${uid}"]`,
         tagName,
@@ -284,6 +362,11 @@ export async function buildDomSnapshot(
         height: rect.height,
         attributes: attrs,
         sourceHints: hints,
+        groupName,
+        headingContext,
+        landmarkAncestor,
+        testId,
+        formContext,
       });
     }
 
