@@ -12,13 +12,6 @@ import type {
   PageStateResponse,
   InsertActionableItemsRequest,
   ActionableItemResponse,
-  CreateActionDefinitionRequest,
-  ActionDefinitionResponse,
-  CreateActionExecutionRequest,
-  ActionExecutionResponse,
-  CompleteActionExecutionRequest,
-  CreateActionRequest,
-  ActionResponse,
   CreatePersonaRequest,
   PersonaResponse,
   CreateUseCaseRequest,
@@ -31,9 +24,6 @@ import type {
   CreateTestRunRequest,
   TestRunResponse,
   CompleteTestRunRequest,
-  CreateIssueRequest,
-  IssueResponse,
-  RecordAiUsageRequest,
   CreateReportEmailRequest,
   HtmlElementResponse,
   ReusableHtmlElementResponse,
@@ -44,9 +34,6 @@ import type {
   TestCase,
   LegacyTestCase,
   FormInfo,
-  CreateTestCaseActionRequest,
-  TestCaseActionResponse,
-  FindTestCaseByActionsRequest,
   CreateElementIdentityRequest,
   UpdateElementIdentityRequest,
   ElementIdentityResponse,
@@ -247,75 +234,6 @@ export class ApiClient {
   }
 
   // ===========================================================================
-  // Action Definitions (app-level)
-  // ===========================================================================
-
-  createActionDefinition(
-    params: CreateActionDefinitionRequest
-  ): Promise<ActionDefinitionResponse> {
-    return this.post("/actions", params);
-  }
-
-  /** @deprecated Use createActionDefinition */
-  createAction(params: CreateActionRequest): Promise<ActionResponse> {
-    return this.post("/actions", params as unknown as Record<string, unknown>);
-  }
-
-  // ===========================================================================
-  // Action Executions (scan-level)
-  // ===========================================================================
-
-  createActionExecution(
-    params: CreateActionExecutionRequest
-  ): Promise<ActionExecutionResponse> {
-    return this.post("/action-executions", params);
-  }
-
-  /** Create an action definition + execution in one call */
-  async createActionAndExecution(
-    appId: number,
-    scanId: number,
-    actionParams: Omit<CreateActionDefinitionRequest, "appId">
-  ): Promise<ActionExecutionResponse> {
-    const actionDef = await this.createActionDefinition({
-      appId,
-      ...actionParams,
-    });
-    return this.createActionExecution({
-      scanId,
-      actionId: actionDef.id,
-    });
-  }
-
-  getNextOpenAction(
-    scanId: number,
-    _sizeClass?: string
-  ): Promise<ActionExecutionResponse | null> {
-    return this.get(`/action-executions/next?scanId=${scanId}`);
-  }
-
-  startAction(executionId: number): Promise<void> {
-    return this.patch(`/action-executions/${executionId}/start`);
-  }
-
-  completeAction(
-    executionId: number,
-    params: CompleteActionExecutionRequest
-  ): Promise<void> {
-    return this.patch(`/action-executions/${executionId}/complete`, params);
-  }
-
-  getOpenExecutionCount(scanId: number): Promise<number> {
-    return this.get<{ count: number }>(
-      `/action-executions/open-count?scanId=${scanId}`
-    ).then((r: any) => r.count);
-  }
-
-  getExecutionChain(executionId: number): Promise<ActionExecutionResponse[]> {
-    return this.get(`/action-executions/chain/${executionId}`);
-  }
-
-  // ===========================================================================
   // Personas / Use Cases / Input Values
   // ===========================================================================
 
@@ -395,28 +313,6 @@ export class ApiClient {
 
   getTestCasesByApp(appId: number): Promise<TestCaseResponse[]> {
     return this.get(`/test-cases?appId=${appId}`);
-  }
-
-  findTestCaseByActions(
-    appId: number,
-    actionIds: number[]
-  ): Promise<TestCaseResponse | null> {
-    const body: FindTestCaseByActionsRequest = { appId, actionIds };
-    return this.post("/test-cases/find-by-actions", body);
-  }
-
-  // ===========================================================================
-  // Test Case Actions
-  // ===========================================================================
-
-  createTestCaseAction(
-    params: CreateTestCaseActionRequest
-  ): Promise<TestCaseActionResponse> {
-    return this.post("/test-case-actions", params);
-  }
-
-  getTestCaseActions(testCaseId: number): Promise<TestCaseActionResponse[]> {
-    return this.get(`/test-case-actions?testCaseId=${testCaseId}`);
   }
 
   // ===========================================================================
@@ -548,39 +444,6 @@ export class ApiClient {
 
   getTestSuite(id: number): Promise<TestSuiteResponse | null> {
     return this.get(`/test-suites/${id}`);
-  }
-
-  // ===========================================================================
-  // Issues
-  // ===========================================================================
-
-  createIssue(params: CreateIssueRequest): Promise<IssueResponse> {
-    return this.post("/issues", params);
-  }
-
-  getIssuesByScan(scanId: number): Promise<IssueResponse[]> {
-    return this.get(`/issues?scanId=${scanId}`);
-  }
-
-  getIssuesByApp(appId: number): Promise<IssueResponse[]> {
-    return this.get(`/issues?appId=${appId}`);
-  }
-
-  findIssueByRule(
-    testCaseId: number,
-    ruleName: string
-  ): Promise<IssueResponse | null> {
-    return this.get(
-      `/issues/find-by-rule?testCaseId=${testCaseId}&ruleName=${encodeURIComponent(ruleName)}`
-    );
-  }
-
-  // ===========================================================================
-  // AI Usage
-  // ===========================================================================
-
-  recordAiUsage(params: RecordAiUsageRequest): Promise<void> {
-    return this.post("/ai-usage", params);
   }
 
   // ===========================================================================

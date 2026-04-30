@@ -6,8 +6,6 @@ export class Navigator {
   private pagesWithNavAction = new Set<number>();
   private stateManager: StateManager;
   private api: ApiClient;
-  private appId: number;
-  private runId: number;
   private sizeClass: string;
   private baseUrl: string;
 
@@ -21,8 +19,6 @@ export class Navigator {
   }) {
     this.stateManager = opts.stateManager;
     this.api = opts.api;
-    this.appId = opts.appId;
-    this.runId = opts.runId;
     this.sizeClass = opts.sizeClass;
     this.baseUrl = opts.baseUrl;
   }
@@ -49,11 +45,6 @@ export class Navigator {
     _url: string
   ): Promise<void> {
     if (this.pagesWithNavAction.has(pageId)) return;
-
-    await this.api.createActionAndExecution(this.appId, this.runId, {
-      type: "navigate",
-      targetUrl: _url,
-    });
     this.pagesWithNavAction.add(pageId);
   }
 

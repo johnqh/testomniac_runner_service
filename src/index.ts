@@ -82,7 +82,6 @@ export {
   generateInputValues,
   type InputValueResult,
 } from "./ai/input-generator";
-export { trackOpenAiCall } from "./ai/token-tracker";
 
 // Generation (new)
 export {
