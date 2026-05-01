@@ -1,10 +1,7 @@
 import type {
   BaseResponse,
-  PendingRunResponse,
-  UpdateRunPhaseRequest,
-  UpdateRunStatsRequest,
-  UpdatePhaseDurationRequest,
-  CompleteRunRequest,
+  UpdateTestRunStatsRequest,
+  CompleteTestRunRequest,
   AppResponse,
   FindOrCreatePageRequest,
   PageResponse,
@@ -23,7 +20,9 @@ import type {
   TestCaseResponse,
   CreateTestRunRequest,
   TestRunResponse,
-  CompleteTestRunRequest,
+  CreateTestCaseRunRequest,
+  TestCaseRunResponse,
+  CompleteTestCaseRunRequest,
   CreateReportEmailRequest,
   HtmlElementResponse,
   ReusableHtmlElementResponse,
@@ -42,10 +41,6 @@ import type {
   UiPattern,
   CreateDecompositionJobRequest,
   DecompositionJobResponse,
-  CreateTestSuiteSuiteLinkRequest,
-  TestSuiteSuiteLinkResponse,
-  CreateTestSuiteCaseLinkRequest,
-  TestSuiteCaseLinkResponse,
   CreateTestActionRequest,
   TestActionResponse,
   CreateTestRunFindingRequest,
@@ -59,9 +54,7 @@ import type {
   InsertTestSuiteRequest,
 } from "@sudobility/testomniac_types";
 
-type CompleteRunPayload = CompleteRunRequest & {
-  status?: "completed" | "failed";
-};
+type CompleteRunPayload = CompleteTestRunRequest;
 
 export class ApiClient {
   private baseUrl: string;
@@ -107,43 +100,50 @@ export class ApiClient {
   }
 
   // ===========================================================================
-  // Runs
+  // Test Runs
   // ===========================================================================
 
-  getPendingRun(): Promise<PendingRunResponse | null> {
-    return this.get("/scans/pending");
+  getPendingTestRun(): Promise<TestRunResponse | null> {
+    return this.get("/test-runs/pending");
   }
 
-  getRun(runId: number): Promise<PendingRunResponse | null> {
-    return this.get(`/scans/${runId}`);
+  getTestRun(testRunId: number): Promise<TestRunResponse | null> {
+    return this.get(`/test-runs/${testRunId}`);
   }
 
-  updateRunPhase(runId: number, phase: string): Promise<void> {
-    const body: UpdateRunPhaseRequest = { phase };
-    return this.patch(`/runs/${runId}/phase`, body);
-  }
-
-  updateRunStats(runId: number, stats: UpdateRunStatsRequest): Promise<void> {
-    return this.patch(`/scans/${runId}/stats`, stats);
-  }
-
-  updatePhaseDuration(
-    runId: number,
-    field: string,
-    durationMs: number
+  updateTestRunStats(
+    testRunId: number,
+    stats: UpdateTestRunStatsRequest
   ): Promise<void> {
-    const body: UpdatePhaseDurationRequest = { field, durationMs };
-    return this.patch(`/scans/${runId}/phase-duration`, body);
+    return this.patch(`/test-runs/${testRunId}/stats`, stats);
   }
 
-  completeRun(
-    runId: number,
-    aiSummary?: string,
-    totalDurationMs?: number,
-    status?: "completed" | "failed"
+  completeTestRun(
+    testRunId: number,
+    payload: CompleteRunPayload
   ): Promise<void> {
-    const body: CompleteRunPayload = { aiSummary, totalDurationMs, status };
-    return this.patch(`/scans/${runId}/complete`, body);
+    return this.patch(`/test-runs/${testRunId}/complete`, payload);
+  }
+
+  createTestRun(request: CreateTestRunRequest): Promise<TestRunResponse> {
+    return this.post("/test-runs", request);
+  }
+
+  // ===========================================================================
+  // Test Case Runs
+  // ===========================================================================
+
+  createTestCaseRun(
+    request: CreateTestCaseRunRequest
+  ): Promise<TestCaseRunResponse> {
+    return this.post("/test-case-runs", request);
+  }
+
+  completeTestCaseRun(
+    testCaseRunId: number,
+    payload: CompleteTestCaseRunRequest
+  ): Promise<void> {
+    return this.patch(`/test-case-runs/${testCaseRunId}/complete`, payload);
   }
 
   // ===========================================================================
@@ -316,31 +316,16 @@ export class ApiClient {
   }
 
   // ===========================================================================
-  // Test Runs
-  // ===========================================================================
-
-  createTestRun(params: CreateTestRunRequest): Promise<TestRunResponse> {
-    return this.post("/test-runs", params);
-  }
-
-  completeTestRun(
-    testRunId: number,
-    result: CompleteTestRunRequest
-  ): Promise<void> {
-    return this.patch(`/test-runs/${testRunId}/complete`, result);
-  }
-
-  // ===========================================================================
   // AI Decomposition Jobs
   // ===========================================================================
 
   createDecompositionJob(
-    scanId: number,
+    testRunId: number,
     pageStateId: number,
     personaId?: number
   ): Promise<DecompositionJobResponse> {
     const body: CreateDecompositionJobRequest = {
-      scanId,
+      testRunId,
       pageStateId,
       personaId,
     };
@@ -348,36 +333,13 @@ export class ApiClient {
   }
 
   getPendingDecompositionJobs(
-    scanId: number
+    testRunId: number
   ): Promise<DecompositionJobResponse[]> {
-    return this.get(`/ai-decomposition-jobs/pending?scanId=${scanId}`);
+    return this.get(`/ai-decomposition-jobs/pending?testRunId=${testRunId}`);
   }
 
   completeDecompositionJob(jobId: number): Promise<void> {
     return this.patch(`/ai-decomposition-jobs/${jobId}/complete`);
-  }
-
-  // ===========================================================================
-  // Test Suite Junction Tables
-  // ===========================================================================
-
-  linkSuiteToSuite(
-    parentSuiteId: number,
-    childSuiteId: number
-  ): Promise<TestSuiteSuiteLinkResponse> {
-    const body: CreateTestSuiteSuiteLinkRequest = {
-      parentSuiteId,
-      childSuiteId,
-    };
-    return this.post("/test-suite-suites", body);
-  }
-
-  linkSuiteToCase(
-    testSuiteId: number,
-    testCaseId: number
-  ): Promise<TestSuiteCaseLinkResponse> {
-    const body: CreateTestSuiteCaseLinkRequest = { testSuiteId, testCaseId };
-    return this.post("/test-suite-cases", body);
   }
 
   // ===========================================================================

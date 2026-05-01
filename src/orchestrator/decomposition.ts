@@ -64,6 +64,5 @@ export async function processDecompositionJob(
         continueOnFailure: step.continueOnFailure,
       });
     }
-    await api.linkSuiteToCase(suite.id, tc.id);
   }
 }

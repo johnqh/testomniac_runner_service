@@ -125,10 +125,11 @@ export async function runScan(
       if (!newJobsCreated) break;
     }
 
-    // 4. Complete scan
+    // 4. Complete test run
     const durationMs = Date.now() - startTime;
-    await api.completeRun(config.scanId, undefined, durationMs);
-    await api.updateRunStats(config.scanId, {
+    await api.completeTestRun(config.scanId, {
+      status: "completed",
+      totalDurationMs: durationMs,
       pagesFound,
       pageStatesFound,
       testRunsCompleted,

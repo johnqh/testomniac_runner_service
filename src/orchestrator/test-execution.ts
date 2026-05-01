@@ -139,10 +139,13 @@ export async function executeTestCases(
       }
     }
 
-    // Create test run
+    // Create test case run + child test run
+    const testCaseRun = await api.createTestCaseRun({ testCaseId: tc.id });
     const testRun = await api.createTestRun({
-      testCaseId: tc.id,
-      scanId: config.scanId,
+      appId: config.appId,
+      testCaseRunId: testCaseRun.id,
+      parentTestRunId: config.scanId,
+      rootTestRunId: config.scanId,
       sizeClass: config.sizeClass,
     });
 
@@ -263,10 +266,11 @@ export async function executeTestCases(
       }
 
       const durationMs = Date.now() - startTime;
-      await api.completeTestRun(testRun.id, {
+      await api.completeTestCaseRun(testCaseRun.id, {
         status: "completed",
         durationMs,
       });
+      await api.completeTestRun(testRun.id, { status: "completed" });
 
       completedCaseIds.add(tc.id);
       events.onTestRunCompleted({ testRunId: testRun.id, passed: true });
@@ -275,15 +279,16 @@ export async function executeTestCases(
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
 
-      await api.completeTestRun(testRun.id, {
-        status: "completed",
+      await api.completeTestCaseRun(testCaseRun.id, {
+        status: "failed",
         durationMs,
         errorMessage,
       });
+      await api.completeTestRun(testRun.id, { status: "failed" });
 
       // Create finding for the error
       await api.createTestRunFinding({
-        testRunId: testRun.id,
+        testCaseRunId: testCaseRun.id,
         type: "error",
         title: `Test failure: ${tc.title}`,
         description: errorMessage,
