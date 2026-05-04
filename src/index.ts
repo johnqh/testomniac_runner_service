@@ -22,13 +22,13 @@ export {
   getActionPriority,
 } from "./scanner/action-classifier";
 export { Navigator } from "./scanner/navigator";
-export { ReusableElementCache } from "./scanner/reusable-element-cache";
+export { ScaffoldCache } from "./scanner/scaffold-cache";
 export { PageCache } from "./scanner/page-cache";
 export { decomposeHtml, type DecomposedHtml } from "./scanner/html-decomposer";
 export {
-  detectReusableRegions,
+  detectScaffoldRegions,
   COMPONENT_TYPE_SELECTORS,
-  type DetectedReusableRegion,
+  type DetectedScaffoldRegion,
 } from "./scanner/component-detector";
 
 // Page utilities

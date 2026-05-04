@@ -25,8 +25,8 @@ import type {
   CompleteTestCaseRunRequest,
   CreateReportEmailRequest,
   HtmlElementResponse,
-  ReusableHtmlElementResponse,
-  FindOrCreateReusableHtmlElementRequest,
+  ScaffoldResponse,
+  FindOrCreateScaffoldRequest,
   PageHashes,
   DecomposedPageHashes,
   ActionableItem,
@@ -420,7 +420,7 @@ export class ApiClient {
   }
 
   // ===========================================================================
-  // Components (deprecated — removed, use findOrCreateReusableHtmlElement)
+  // Components (deprecated — removed, use findOrCreateScaffold)
   // ===========================================================================
 
   // ===========================================================================
@@ -435,28 +435,26 @@ export class ApiClient {
   }
 
   // ===========================================================================
-  // Reusable Html Elements
+  // Scaffolds
   // ===========================================================================
 
-  findOrCreateReusableHtmlElement(
-    params: FindOrCreateReusableHtmlElementRequest
-  ): Promise<ReusableHtmlElementResponse> {
-    return this.post("/reusable-html-elements/find-or-create", params);
+  findOrCreateScaffold(
+    params: FindOrCreateScaffoldRequest
+  ): Promise<ScaffoldResponse> {
+    return this.post("/scaffolds/find-or-create", params);
   }
 
-  getReusableHtmlElements(
-    runnerId: number
-  ): Promise<ReusableHtmlElementResponse[]> {
-    return this.get(`/reusable-html-elements?runnerId=${runnerId}`);
+  getScaffolds(runnerId: number): Promise<ScaffoldResponse[]> {
+    return this.get(`/scaffolds?runnerId=${runnerId}`);
   }
 
-  linkPageStateReusableElements(
+  linkPageStateScaffolds(
     pageStateId: number,
-    reusableHtmlElementIds: number[]
+    scaffoldIds: number[]
   ): Promise<void> {
-    return this.post("/page-state-reusable-elements", {
+    return this.post("/page-state-scaffolds", {
       pageStateId,
-      reusableHtmlElementIds,
+      scaffoldIds,
     });
   }
   // ===========================================================================
@@ -472,7 +470,7 @@ export class ApiClient {
       pageId: String(pageId),
       sizeClass,
       fixedBodyHash: decomposedHashes.fixedBodyHash,
-      reusableElementsHash: decomposedHashes.reusableElementsHash,
+      scaffoldsHash: decomposedHashes.scaffoldsHash,
       patternsHash: decomposedHashes.patternsHash,
     });
     return this.get(`/page-states/match-decomposed?${qs}`);

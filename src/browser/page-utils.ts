@@ -3,7 +3,7 @@ import type {
   PageHashes,
   DecomposedPageHashes,
 } from "../domain/types";
-import type { DetectedReusableRegion } from "../scanner/component-detector";
+import type { DetectedScaffoldRegion } from "../scanner/component-detector";
 import type { DetectedPatternWithInstances } from "../scanner/pattern-detector";
 
 export async function sha256(input: string): Promise<string> {
@@ -66,17 +66,17 @@ export async function computeHashes(
 
 export async function computeDecomposedHashes(
   fixedBody: string,
-  reusableElements: DetectedReusableRegion[],
+  scaffolds: DetectedScaffoldRegion[],
   patternSummaries: DetectedPatternWithInstances[]
 ): Promise<DecomposedPageHashes> {
   const fixedBodyHash = await sha256(normalizeHtml(fixedBody));
 
-  const reusableKey =
-    reusableElements
+  const scaffoldsKey =
+    scaffolds
       .map(r => `${r.type}:${r.hash}`)
       .sort()
       .join("|") || "none";
-  const reusableElementsHash = await sha256(reusableKey);
+  const scaffoldsHash = await sha256(scaffoldsKey);
 
   const patternKey =
     patternSummaries
@@ -85,5 +85,5 @@ export async function computeDecomposedHashes(
       .join("|") || "none";
   const patternsHash = await sha256(patternKey);
 
-  return { fixedBodyHash, reusableElementsHash, patternsHash };
+  return { fixedBodyHash, scaffoldsHash, patternsHash };
 }

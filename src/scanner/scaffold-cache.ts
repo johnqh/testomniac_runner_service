@@ -1,11 +1,11 @@
 import type { ApiClient } from "../api/client";
 import type {
   HtmlComponentType,
-  ReusableHtmlElementResponse,
+  ScaffoldResponse,
 } from "@sudobility/testomniac_types";
 
-export class ReusableElementCache {
-  private cache = new Map<string, ReusableHtmlElementResponse>();
+export class ScaffoldCache {
+  private cache = new Map<string, ScaffoldResponse>();
   private runnerId: number;
   private api: ApiClient;
 
@@ -15,7 +15,7 @@ export class ReusableElementCache {
   }
 
   async preload(): Promise<void> {
-    const existing = await this.api.getReusableHtmlElements(this.runnerId);
+    const existing = await this.api.getScaffolds(this.runnerId);
     for (const el of existing) {
       if (el.htmlHash) {
         this.cache.set(el.htmlHash, el);
@@ -27,11 +27,11 @@ export class ReusableElementCache {
     type: HtmlComponentType,
     html: string,
     hash: string
-  ): Promise<ReusableHtmlElementResponse> {
+  ): Promise<ScaffoldResponse> {
     const cached = this.cache.get(hash);
     if (cached) return cached;
 
-    const result = await this.api.findOrCreateReusableHtmlElement({
+    const result = await this.api.findOrCreateScaffold({
       runnerId: this.runnerId,
       type,
       html,
@@ -41,7 +41,7 @@ export class ReusableElementCache {
     return result;
   }
 
-  get(hash: string): ReusableHtmlElementResponse | undefined {
+  get(hash: string): ScaffoldResponse | undefined {
     return this.cache.get(hash);
   }
 

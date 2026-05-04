@@ -5,7 +5,7 @@ import {
   getFixedBody,
   decomposeHtml,
 } from "./html-decomposer";
-import type { DetectedReusableRegion } from "./component-detector";
+import type { DetectedScaffoldRegion } from "./component-detector";
 import type { PatternInstance } from "@sudobility/testomniac_types";
 
 describe("getBody", () => {
@@ -37,7 +37,7 @@ describe("getContentBody", () => {
   it("strips reusable regions from body", () => {
     const body =
       "<header><nav>Menu</nav></header><main>Content</main><footer>Foot</footer>";
-    const regions: DetectedReusableRegion[] = [
+    const regions: DetectedScaffoldRegion[] = [
       {
         type: "topMenu",
         selector: "header",
@@ -51,16 +51,16 @@ describe("getContentBody", () => {
         hash: "def",
       },
     ];
-    const { contentBody, reusableElements } = getContentBody(body, regions);
+    const { contentBody, scaffolds } = getContentBody(body, regions);
     expect(contentBody).toBe(
-      "<!-- reusable: topMenu --><main>Content</main><!-- reusable: footer -->"
+      "<!-- scaffold: topMenu --><main>Content</main><!-- scaffold: footer -->"
     );
-    expect(reusableElements).toHaveLength(2);
+    expect(scaffolds).toHaveLength(2);
   });
 
   it("skips regions not found in body", () => {
     const body = "<main>Content</main>";
-    const regions: DetectedReusableRegion[] = [
+    const regions: DetectedScaffoldRegion[] = [
       {
         type: "footer",
         selector: "footer",
@@ -68,16 +68,16 @@ describe("getContentBody", () => {
         hash: "xyz",
       },
     ];
-    const { contentBody, reusableElements } = getContentBody(body, regions);
+    const { contentBody, scaffolds } = getContentBody(body, regions);
     expect(contentBody).toBe("<main>Content</main>");
-    expect(reusableElements).toHaveLength(0);
+    expect(scaffolds).toHaveLength(0);
   });
 
   it("handles empty regions array", () => {
     const body = "<main>Content</main>";
-    const { contentBody, reusableElements } = getContentBody(body, []);
+    const { contentBody, scaffolds } = getContentBody(body, []);
     expect(contentBody).toBe(body);
-    expect(reusableElements).toHaveLength(0);
+    expect(scaffolds).toHaveLength(0);
   });
 });
 
@@ -117,7 +117,7 @@ describe("getFixedBody", () => {
 describe("decomposeHtml (backward compat)", () => {
   it("wraps getContentBody", () => {
     const body = "<header>H</header><main>M</main>";
-    const regions: DetectedReusableRegion[] = [
+    const regions: DetectedScaffoldRegion[] = [
       {
         type: "topMenu",
         selector: "header",
@@ -127,7 +127,7 @@ describe("decomposeHtml (backward compat)", () => {
     ];
     const result = decomposeHtml(body, regions);
     expect(result.bodyHtml).toBe(body);
-    expect(result.contentHtml).toBe("<!-- reusable: topMenu --><main>M</main>");
+    expect(result.contentHtml).toBe("<!-- scaffold: topMenu --><main>M</main>");
     expect(result.regions).toHaveLength(1);
   });
 });

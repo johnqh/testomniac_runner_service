@@ -1,4 +1,4 @@
-import type { DetectedReusableRegion } from "./component-detector";
+import type { DetectedScaffoldRegion } from "./component-detector";
 import type { PatternInstance } from "@sudobility/testomniac_types";
 
 // =============================================================================
@@ -11,25 +11,25 @@ export function getBody(html: string): string {
 }
 
 // =============================================================================
-// getContentBody — strip reusable elements from body
+// getContentBody — strip scaffolds from body
 // =============================================================================
 
 export function getContentBody(
   body: string,
-  regions: DetectedReusableRegion[]
-): { contentBody: string; reusableElements: DetectedReusableRegion[] } {
+  regions: DetectedScaffoldRegion[]
+): { contentBody: string; scaffolds: DetectedScaffoldRegion[] } {
   let contentBody = body;
-  const reusableElements: DetectedReusableRegion[] = [];
+  const scaffolds: DetectedScaffoldRegion[] = [];
   for (const region of regions) {
     if (contentBody.includes(region.outerHtml)) {
       contentBody = contentBody.replace(
         region.outerHtml,
-        `<!-- reusable: ${region.type} -->`
+        `<!-- scaffold: ${region.type} -->`
       );
-      reusableElements.push(region);
+      scaffolds.push(region);
     }
   }
-  return { contentBody, reusableElements };
+  return { contentBody, scaffolds };
 }
 
 // =============================================================================
@@ -61,14 +61,14 @@ export function getFixedBody(
 export interface DecomposedHtml {
   bodyHtml: string;
   contentHtml: string;
-  regions: DetectedReusableRegion[];
+  regions: DetectedScaffoldRegion[];
 }
 
 /** @deprecated Use getContentBody instead */
 export function decomposeHtml(
   bodyHtml: string,
-  regions: DetectedReusableRegion[]
+  regions: DetectedScaffoldRegion[]
 ): DecomposedHtml {
-  const { contentBody, reusableElements } = getContentBody(bodyHtml, regions);
-  return { bodyHtml, contentHtml: contentBody, regions: reusableElements };
+  const { contentBody, scaffolds } = getContentBody(bodyHtml, regions);
+  return { bodyHtml, contentHtml: contentBody, regions: scaffolds };
 }

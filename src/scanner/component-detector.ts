@@ -115,16 +115,16 @@ export const COMPONENT_TYPE_SELECTORS: Record<HtmlComponentType, string[]> = {
   ],
 };
 
-export interface DetectedReusableRegion {
+export interface DetectedScaffoldRegion {
   type: HtmlComponentType;
   selector: string;
   outerHtml: string;
   hash: string;
 }
 
-export async function detectReusableRegions(
+export async function detectScaffoldRegions(
   adapter: BrowserAdapter
-): Promise<DetectedReusableRegion[]> {
+): Promise<DetectedScaffoldRegion[]> {
   const typeEntries = Object.entries(COMPONENT_TYPE_SELECTORS) as Array<
     [HtmlComponentType, string[]]
   >;
