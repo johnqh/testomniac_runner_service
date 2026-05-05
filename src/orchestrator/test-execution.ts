@@ -15,45 +15,45 @@ function checkAbort(signal?: AbortSignal): void {
   if (signal?.aborted) throw new Error("Scan aborted");
 }
 
-/**
- * Track seen page states by actionableHash (stable across dynamic content).
- * Key: "pageId:actionableHash", prevents infinite state creation from
- * pages with timestamps, counters, or other non-interactive dynamic content.
- */
-const seenActionableStates = new Set<string>();
+/** Pages already discovered — only create decomposition jobs for NEW pages. */
+const discoveredPagePaths = new Set<string>();
 
+/**
+ * After each action, check if we navigated to a new page (different path).
+ * Only new pages trigger decomposition jobs. Same-page DOM changes from
+ * clicks/hovers are ignored — they don't generate new test work.
+ */
 async function captureCurrentPageState(
   config: ScanConfig,
   adapter: BrowserAdapter,
   api: ApiClient,
-  testRunId: number
-): Promise<{
-  isNew: boolean;
-  pageStateId: number;
-  pageId: number;
-  jobId?: number;
-} | null> {
+  testRunId: number,
+  events: ScanEventHandler
+): Promise<boolean> {
   const currentUrl = await adapter.getUrl();
   const current = new URL(currentUrl);
   const base = new URL(config.baseUrl);
 
+  // Off-site navigation — skip
   if (current.origin !== base.origin) {
-    return null;
+    return false;
   }
 
-  const relativePath = `${current.pathname}${current.search}${current.hash}`;
+  const relativePath = current.pathname;
+
+  // Already seen this page path — no new work
+  if (discoveredPagePaths.has(relativePath)) {
+    return false;
+  }
+  discoveredPagePaths.add(relativePath);
+
+  // New page discovered — create page, state, and decomposition job
   const page = await api.findOrCreatePage(config.runnerId, relativePath);
+  events.onPageFound({ relativePath, pageId: page.id });
+
   const html = await adapter.content();
   const items = await extractActionableItems(adapter);
   const hashes = await computeHashes(html, items);
-
-  // Use actionableHash for deduplication — it only changes when interactive
-  // elements change, not from dynamic text/timestamps/counters.
-  const stateKey = `${page.id}:${hashes.actionableHash}`;
-  if (seenActionableStates.has(stateKey)) {
-    return { isNew: false, pageStateId: 0, pageId: page.id };
-  }
-  seenActionableStates.add(stateKey);
 
   const newState = await api.createPageState({
     pageId: page.id,
@@ -62,14 +62,18 @@ async function captureCurrentPageState(
     contentText: html.slice(0, 5000),
     createdByTestRunId: testRunId,
   });
-
-  const job = await api.createDecompositionJob(config.scanId, newState.id);
-  return {
-    isNew: true,
+  events.onPageStateCreated({
     pageStateId: newState.id,
     pageId: page.id,
+  });
+
+  const job = await api.createDecompositionJob(config.scanId, newState.id);
+  events.onDecompositionJobCreated({
     jobId: job.id,
-  };
+    pageStateId: newState.id,
+  });
+
+  return true;
 }
 
 async function executeStoredAction(
@@ -146,6 +150,10 @@ export async function executeTestCases(
   api: ApiClient,
   events: ScanEventHandler
 ): Promise<boolean> {
+  // Seed the initial scan URL path so we don't re-discover it
+  const scanPath = new URL(config.scanUrl).pathname;
+  discoveredPagePaths.add(scanPath);
+
   const testCases = await api.getTestCasesByRunner(config.runnerId);
   let newJobsCreated = false;
   const completedCaseIds = new Set<number>();
@@ -270,27 +278,15 @@ export async function executeTestCases(
             break;
         }
 
-        const capturedState = await captureCurrentPageState(
+        const isNewPage = await captureCurrentPageState(
           config,
           adapter,
           api,
-          testRun.id
+          testRun.id,
+          events
         );
-        if (capturedState?.isNew) {
-          if (capturedState.jobId == null) {
-            throw new Error(
-              "New page state was captured without a decomposition job"
-            );
-          }
+        if (isNewPage) {
           newJobsCreated = true;
-          events.onPageStateCreated({
-            pageStateId: capturedState.pageStateId,
-            pageId: capturedState.pageId,
-          });
-          events.onDecompositionJobCreated({
-            jobId: capturedState.jobId,
-            pageStateId: capturedState.pageStateId,
-          });
         }
       }
 
