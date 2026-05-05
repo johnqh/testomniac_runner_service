@@ -4,6 +4,17 @@ import type { ScanConfig, ScanEventHandler } from "./types";
 import { extractActionableItems } from "../extractors";
 import { computeHashes } from "../browser/page-utils";
 
+/** Delay after each browser action to let the page settle. */
+const POST_ACTION_DELAY_MS = 2000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+function checkAbort(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new Error("Scan aborted");
+}
+
 async function captureCurrentPageState(
   config: ScanConfig,
   adapter: BrowserAdapter,
@@ -72,6 +83,7 @@ async function executeStoredAction(
       ? gotoPath
       : new URL(gotoPath, config.baseUrl).toString();
     await adapter.goto(absoluteUrl, { waitUntil: "networkidle0" });
+    await sleep(POST_ACTION_DELAY_MS);
     return;
   }
 
@@ -87,6 +99,7 @@ async function executeStoredAction(
     } catch {
       // Treat "no navigation pending" as settled enough for scan orchestration.
     }
+    await sleep(POST_ACTION_DELAY_MS);
     return;
   }
 
@@ -97,6 +110,7 @@ async function executeStoredAction(
     const selector = fallbackPath;
     if (!selector) throw new Error("Missing selector for click action");
     await adapter.click(selector);
+    await sleep(POST_ACTION_DELAY_MS);
     return;
   }
 
@@ -107,6 +121,7 @@ async function executeStoredAction(
     const selector = fallbackPath;
     if (!selector) throw new Error("Missing selector for hover action");
     await adapter.hover(selector);
+    await sleep(POST_ACTION_DELAY_MS);
     return;
   }
 
@@ -130,7 +145,7 @@ export async function executeTestCases(
   const completedCaseIds = new Set<number>();
 
   for (const tc of testCases) {
-    if (config.signal?.aborted) break;
+    checkAbort(config.signal);
 
     // Check dependency
     if (tc.dependencyTestCaseId) {
@@ -159,10 +174,13 @@ export async function executeTestCases(
             waitUntil: "networkidle0",
           }
         );
+        await sleep(POST_ACTION_DELAY_MS);
       }
 
       const actions = await api.getTestActionsByCase(tc.id);
       for (const action of actions) {
+        checkAbort(config.signal);
+
         switch (action.actionType) {
           case "goto":
             if (!action.path) {
@@ -174,6 +192,7 @@ export async function executeTestCases(
                 waitUntil: "networkidle0",
               }
             );
+            await sleep(POST_ACTION_DELAY_MS);
             break;
           case "waitForLoadState":
             await executeStoredAction(
@@ -206,6 +225,7 @@ export async function executeTestCases(
               );
             }
             await adapter.type(action.path, action.value);
+            await sleep(POST_ACTION_DELAY_MS);
             break;
           case "select":
             if (!action.path || action.value == null) {
@@ -214,6 +234,7 @@ export async function executeTestCases(
               );
             }
             await adapter.select(action.path, action.value);
+            await sleep(POST_ACTION_DELAY_MS);
             break;
           case "radio_select":
             if (!action.path) {
@@ -222,12 +243,14 @@ export async function executeTestCases(
               );
             }
             await adapter.click(action.path);
+            await sleep(POST_ACTION_DELAY_MS);
             break;
           case "hover":
             if (!action.path) {
               throw new Error("Hover test action requires selector path");
             }
             await adapter.hover(action.path);
+            await sleep(POST_ACTION_DELAY_MS);
             break;
           case "screenshot":
             await executeStoredAction(
