@@ -15,6 +15,13 @@ function checkAbort(signal?: AbortSignal): void {
   if (signal?.aborted) throw new Error("Scan aborted");
 }
 
+/**
+ * Track seen page states by actionableHash (stable across dynamic content).
+ * Key: "pageId:actionableHash", prevents infinite state creation from
+ * pages with timestamps, counters, or other non-interactive dynamic content.
+ */
+const seenActionableStates = new Set<string>();
+
 async function captureCurrentPageState(
   config: ScanConfig,
   adapter: BrowserAdapter,
@@ -39,15 +46,14 @@ async function captureCurrentPageState(
   const html = await adapter.content();
   const items = await extractActionableItems(adapter);
   const hashes = await computeHashes(html, items);
-  const existingState = await api.findMatchingPageState(
-    page.id,
-    hashes,
-    config.sizeClass
-  );
 
-  if (existingState) {
-    return { isNew: false, pageStateId: existingState.id, pageId: page.id };
+  // Use actionableHash for deduplication — it only changes when interactive
+  // elements change, not from dynamic text/timestamps/counters.
+  const stateKey = `${page.id}:${hashes.actionableHash}`;
+  if (seenActionableStates.has(stateKey)) {
+    return { isNew: false, pageStateId: 0, pageId: page.id };
   }
+  seenActionableStates.add(stateKey);
 
   const newState = await api.createPageState({
     pageId: page.id,
