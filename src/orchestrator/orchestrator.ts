@@ -3,6 +3,8 @@ import type { ApiClient } from "../api/client";
 import type { ScanConfig, ScanEventHandler, ScanResult } from "./types";
 import { processDecompositionJob } from "./decomposition";
 import { executeTestCases } from "./test-execution";
+import { computeHashes } from "../browser/page-utils";
+import { extractActionableItems } from "../extractors";
 
 export async function runScan(
   adapter: BrowserAdapter,
@@ -62,9 +64,7 @@ export async function runScan(
     const page = await api.findOrCreatePage(config.runnerId, relativePath);
     wrappedHandler.onPageFound({ relativePath, pageId: page.id });
 
-    // Import page-utils for hash computation
-    const { computeHashes } = await import("../browser/page-utils");
-    const { extractActionableItems } = await import("../extractors");
+    // Extract actionable items and compute hashes
     const items = await extractActionableItems(adapter);
     const hashes = await computeHashes(initialHtml, items);
 
@@ -136,7 +136,7 @@ export async function runScan(
     });
 
     const result: ScanResult = {
-      scanId: config.scanId,
+      testRunId: config.scanId,
       pagesFound,
       pageStatesFound,
       testRunsCompleted,

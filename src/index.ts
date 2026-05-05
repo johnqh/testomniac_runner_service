@@ -103,15 +103,34 @@ export {
 export { generateNavigationTest } from "./generation/navigation";
 export { generateE2ETest, enumerateE2EPaths } from "./generation/e2e";
 
-// Orchestrator
-export { runScan } from "./orchestrator/orchestrator";
-export { processDecompositionJob } from "./orchestrator/decomposition";
-export { executeTestCases } from "./orchestrator/test-execution";
+// Orchestrator (new)
+export { runTestRun } from "./orchestrator/runner";
+export { executeTestCase } from "./orchestrator/test-case-executor";
 export type {
-  ScanConfig,
+  RunConfig,
   ScanEventHandler,
   ScanResult,
 } from "./orchestrator/types";
+
+// Orchestrator (deprecated — use runTestRun)
+export { runScan } from "./orchestrator/orchestrator";
+export { processDecompositionJob } from "./orchestrator/decomposition";
+export { executeTestCases } from "./orchestrator/test-execution";
+export type { ScanConfig } from "./orchestrator/types";
+
+// Analyzer
+export { PageAnalyzer, type AnalyzerContext } from "./analyzer";
+
+// Expertise system
+export type { Outcome, ExpertiseContext, Expertise } from "./expertise";
+export {
+  TesterExpertise,
+  SeoExpertise,
+  SecurityExpertise,
+  PerformanceExpertise,
+  NoopExpertise,
+  createDefaultExpertises,
+} from "./expertise";
 
 // Plugins (new)
 export type {

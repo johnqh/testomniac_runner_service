@@ -23,6 +23,15 @@ import type {
   CreateTestCaseRunRequest,
   TestCaseRunResponse,
   CompleteTestCaseRunRequest,
+  CreateTestSuiteRunRequest,
+  CompleteTestSuiteRunRequest,
+  TestSuiteRunResponse,
+  CreateTestSuiteBundleRunRequest,
+  CompleteTestSuiteBundleRunRequest,
+  TestSuiteBundleRunResponse,
+  CreateTestSuiteBundleRequest,
+  TestSuiteBundleResponse,
+  TestSuiteBundleSuiteLinkResponse,
   CreateReportEmailRequest,
   HtmlElementResponse,
   ScaffoldResponse,
@@ -52,6 +61,7 @@ import type {
   TestSuite,
   TestSuiteResponse,
   InsertTestSuiteRequest,
+  InsertTestCaseRequest,
 } from "@sudobility/testomniac_types";
 
 type CompleteRunPayload = CompleteTestRunRequest;
@@ -515,6 +525,121 @@ export class ApiClient {
     params: UpdateElementIdentityRequest
   ): Promise<void> {
     return this.patch(`/element-identities/${id}`, params);
+  }
+
+  // ===========================================================================
+  // Ensure (find or create)
+  // ===========================================================================
+
+  ensureTestSuiteBundle(
+    runnerId: number,
+    title: string,
+    uid?: string
+  ): Promise<TestSuiteBundleResponse> {
+    const body: CreateTestSuiteBundleRequest = { runnerId, title, uid };
+    return this.post("/test-suite-bundles/ensure", body);
+  }
+
+  ensureTestSuite(
+    runnerId: number,
+    testSuite: TestSuite
+  ): Promise<TestSuiteResponse> {
+    const body: InsertTestSuiteRequest = { runnerId, testSuite };
+    return this.post("/test-suites/ensure", body);
+  }
+
+  ensureTestCase(
+    runnerId: number,
+    testSuiteId: number,
+    testCase: TestCase
+  ): Promise<TestCaseResponse> {
+    const body: InsertTestCaseRequest = { runnerId, testSuiteId, testCase };
+    return this.post("/test-cases/ensure", body);
+  }
+
+  ensureBundleSuiteLink(
+    testSuiteBundleId: number,
+    testSuiteId: number
+  ): Promise<TestSuiteBundleSuiteLinkResponse> {
+    return this.post("/test-suite-bundle-suites/ensure", {
+      testSuiteBundleId,
+      testSuiteId,
+    });
+  }
+
+  // ===========================================================================
+  // Test Run Claiming
+  // ===========================================================================
+
+  claimTestRun(
+    testRunId: number,
+    runnerInstanceId: string,
+    runnerInstanceName: string
+  ): Promise<boolean> {
+    return this.patch(`/test-runs/${testRunId}/claim`, {
+      runnerInstanceId,
+      runnerInstanceName,
+    })
+      .then(() => true)
+      .catch(() => false);
+  }
+
+  // ===========================================================================
+  // Test Suite Runs
+  // ===========================================================================
+
+  createTestSuiteRun(
+    request: CreateTestSuiteRunRequest
+  ): Promise<TestSuiteRunResponse> {
+    return this.post("/test-suite-runs", request);
+  }
+
+  completeTestSuiteRun(
+    id: number,
+    payload: CompleteTestSuiteRunRequest
+  ): Promise<void> {
+    return this.patch(`/test-suite-runs/${id}/complete`, payload);
+  }
+
+  // ===========================================================================
+  // Test Suite Bundle Runs
+  // ===========================================================================
+
+  createTestSuiteBundleRun(
+    request: CreateTestSuiteBundleRunRequest
+  ): Promise<TestSuiteBundleRunResponse> {
+    return this.post("/test-suite-bundle-runs", request);
+  }
+
+  completeTestSuiteBundleRun(
+    id: number,
+    payload: CompleteTestSuiteBundleRunRequest
+  ): Promise<void> {
+    return this.patch(`/test-suite-bundle-runs/${id}/complete`, payload);
+  }
+
+  // ===========================================================================
+  // Queries for execution loop
+  // ===========================================================================
+
+  getTestCasesByTestSuite(testSuiteId: number): Promise<TestCaseResponse[]> {
+    return this.get(`/test-cases?testSuiteId=${testSuiteId}`);
+  }
+
+  getTestSuitesByBundle(bundleId: number): Promise<TestSuiteResponse[]> {
+    return this.get(`/test-suite-bundle-suites?bundleId=${bundleId}`);
+  }
+
+  getOpenTestCaseRuns(testSuiteRunId: number): Promise<TestCaseRunResponse[]> {
+    return this.get(
+      `/test-case-runs?testSuiteRunId=${testSuiteRunId}&status=pending`
+    );
+  }
+
+  getOpenTestSuiteRuns(bundleRunId: number): Promise<TestSuiteRunResponse[]> {
+    return this.get(
+      `/test-suite-runs?bundleRunId=${bundleRunId}&status=pending`
+    );
   }
 }
 

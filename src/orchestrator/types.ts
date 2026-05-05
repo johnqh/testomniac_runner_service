@@ -1,16 +1,25 @@
 import type { SizeClass } from "../domain/types";
 
-export interface ScanConfig {
-  scanId: number;
+export interface RunConfig {
+  testRunId: number;
   runnerId: number;
-  scanUrl: string;
   baseUrl: string;
   sizeClass: SizeClass;
+  testEnvironmentId?: number;
+  uid?: string;
+  runnerInstanceId: string;
+  runnerInstanceName: string;
+  signal?: AbortSignal;
+}
+
+/** @deprecated Use RunConfig */
+export type ScanConfig = RunConfig & {
+  scanId: number;
+  scanUrl: string;
   openaiApiKey?: string;
   openaiModel?: string;
   testWorkerCount?: number;
-  signal?: AbortSignal;
-}
+};
 
 export interface ScanEventHandler {
   onPageFound(page: { relativePath: string; pageId: number }): void;
@@ -22,6 +31,7 @@ export interface ScanEventHandler {
   onDecompositionJobCreated(job: { jobId: number; pageStateId: number }): void;
   onDecompositionJobCompleted(job: { jobId: number }): void;
   onTestSuiteCreated(suite: { suiteId: number; title: string }): void;
+  onTestCaseRunCompleted(run: { testCaseRunId: number; passed: boolean }): void;
   onTestRunCompleted(run: { testRunId: number; passed: boolean }): void;
   onFindingCreated(finding: { type: string; title: string }): void;
   onStatsUpdated(stats: {
@@ -40,7 +50,7 @@ export interface ScanEventHandler {
 }
 
 export interface ScanResult {
-  scanId: number;
+  testRunId: number;
   pagesFound: number;
   pageStatesFound: number;
   testRunsCompleted: number;

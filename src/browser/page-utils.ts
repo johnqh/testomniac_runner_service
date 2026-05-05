@@ -5,6 +5,7 @@ import type {
 } from "../domain/types";
 import type { DetectedScaffoldRegion } from "../scanner/component-detector";
 import type { DetectedPatternWithInstances } from "../scanner/pattern-detector";
+import { createHash } from "node:crypto";
 
 export async function sha256(input: string): Promise<string> {
   // Use Node.js crypto when available, fall back to Web SubtleCrypto
@@ -12,7 +13,6 @@ export async function sha256(input: string): Promise<string> {
     typeof globalThis.process !== "undefined" &&
     typeof globalThis.process.versions?.node === "string"
   ) {
-    const { createHash } = await import("node:crypto");
     return createHash("sha256").update(input).digest("hex");
   }
   const encoder = new TextEncoder();
