@@ -6,6 +6,8 @@ import { executeTestCases } from "./test-execution";
 import { computeHashes } from "../browser/page-utils";
 import { extractActionableItems } from "../extractors";
 
+const LOG = (...args: unknown[]) => console.log("[orchestrator]", ...args);
+
 export async function runScan(
   adapter: BrowserAdapter,
   config: ScanConfig,
@@ -54,19 +56,24 @@ export async function runScan(
 
   try {
     // 1. Navigate to scan URL, capture initial page state
+    LOG(`Step 1: Navigating to ${config.scanUrl}`);
     await adapter.goto(config.scanUrl, { waitUntil: "networkidle0" });
     const initialHtml = await adapter.content();
+    LOG(`Page HTML length: ${initialHtml.length}`);
 
     // Compute relative path from scanUrl and baseUrl
     const scanUrlObj = new URL(config.scanUrl);
     const relativePath = scanUrlObj.pathname;
 
     const page = await api.findOrCreatePage(config.runnerId, relativePath);
+    LOG(`Page created/found: id=${page.id}, path=${relativePath}`);
     wrappedHandler.onPageFound({ relativePath, pageId: page.id });
 
     // Extract actionable items and compute hashes
     const items = await extractActionableItems(adapter);
+    LOG(`Extracted ${items.length} actionable items from page`);
     const hashes = await computeHashes(initialHtml, items);
+    LOG(`Computed hashes:`, hashes);
 
     const initialPageState = await api.createPageState({
       pageId: page.id,
@@ -75,6 +82,7 @@ export async function runScan(
       screenshotPath: undefined,
       contentText: initialHtml.slice(0, 5000),
     });
+    LOG(`Created page state: id=${initialPageState.id}`);
     wrappedHandler.onPageStateCreated({
       pageStateId: initialPageState.id,
       pageId: page.id,
@@ -85,6 +93,7 @@ export async function runScan(
       config.scanId,
       initialPageState.id
     );
+    LOG(`Created decomposition job: id=${initialJob.id}`);
     wrappedHandler.onDecompositionJobCreated({
       jobId: initialJob.id,
       pageStateId: initialPageState.id,
@@ -95,34 +104,57 @@ export async function runScan(
     const MAX_ITERATIONS = 50;
 
     while (iteration < MAX_ITERATIONS) {
-      if (config.signal?.aborted) break;
+      if (config.signal?.aborted) {
+        LOG("Aborted by signal");
+        break;
+      }
       iteration++;
+      LOG(`=== Iteration ${iteration} ===`);
 
       // Phase 1: GENERATE — process all pending decomposition jobs
       const pendingJobs = await api.getPendingDecompositionJobs(config.scanId);
+      LOG(`Pending decomposition jobs: ${pendingJobs.length}`);
+      const testCaseIds: number[] = [];
       for (const job of pendingJobs) {
         if (config.signal?.aborted) break;
-        await processDecompositionJob(
+        const ids = await processDecompositionJob(
           job,
           adapter,
           config,
           api,
           wrappedHandler
         );
+        LOG(
+          `Job ${job.id} produced ${ids.length} test case IDs: [${ids.join(", ")}]`
+        );
+        testCaseIds.push(...ids);
         await api.completeDecompositionJob(job.id);
         wrappedHandler.onDecompositionJobCompleted({ jobId: job.id });
       }
 
-      // Phase 2: RUN — execute test cases, check for new page states
+      if (testCaseIds.length === 0) {
+        LOG("No test cases generated — done");
+        break;
+      }
+
+      // Phase 2: RUN — execute only the test cases just created
+      LOG(
+        `Executing ${testCaseIds.length} test cases: [${testCaseIds.join(", ")}]`
+      );
       const newJobsCreated = await executeTestCases(
         config,
         adapter,
         api,
-        wrappedHandler
+        wrappedHandler,
+        testCaseIds
       );
 
-      // If no new decomposition jobs were created, we're done
-      if (!newJobsCreated) break;
+      // If no new pages were discovered, we're done
+      if (!newJobsCreated) {
+        LOG("No new pages discovered — done");
+        break;
+      }
+      LOG("New pages discovered — continuing to next iteration");
     }
 
     // 4. Complete test run

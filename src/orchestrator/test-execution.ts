@@ -4,6 +4,8 @@ import type { ScanConfig, ScanEventHandler } from "./types";
 import { extractActionableItems } from "../extractors";
 import { computeHashes } from "../browser/page-utils";
 
+const LOG = (...args: unknown[]) => console.log("[test-execution]", ...args);
+
 /** Delay after each browser action to let the page settle. */
 const POST_ACTION_DELAY_MS = 2000;
 
@@ -148,22 +150,37 @@ export async function executeTestCases(
   config: ScanConfig,
   adapter: BrowserAdapter,
   api: ApiClient,
-  events: ScanEventHandler
+  events: ScanEventHandler,
+  testCaseIds: number[]
 ): Promise<boolean> {
   // Seed the initial scan URL path so we don't re-discover it
   const scanPath = new URL(config.scanUrl).pathname;
   discoveredPagePaths.add(scanPath);
 
-  const testCases = await api.getTestCasesByRunner(config.runnerId);
+  // Only fetch and execute the specific test cases from this scan's decomposition
+  LOG(`Fetching test cases for runner ${config.runnerId}`);
+  const allTestCases = await api.getTestCasesByRunner(config.runnerId);
+  LOG(
+    `Total test cases for runner: ${allTestCases.length}, target IDs: [${testCaseIds.join(", ")}]`
+  );
+  const targetIds = new Set(testCaseIds);
+  const testCases = allTestCases.filter(tc => targetIds.has(tc.id));
+  LOG(`Matched ${testCases.length} test cases to execute`);
   let newJobsCreated = false;
   const completedCaseIds = new Set<number>();
 
   for (const tc of testCases) {
     checkAbort(config.signal);
+    LOG(
+      `--- Executing test case ${tc.id}: "${tc.title}" startingPath=${tc.startingPath}`
+    );
 
     // Check dependency
     if (tc.dependencyTestCaseId) {
       if (!completedCaseIds.has(tc.dependencyTestCaseId)) {
+        LOG(
+          `Skipping — dependency ${tc.dependencyTestCaseId} not completed yet`
+        );
         continue;
       }
     }
@@ -182,32 +199,40 @@ export async function executeTestCases(
 
     try {
       if (tc.startingPath) {
-        await adapter.goto(
-          new URL(tc.startingPath, config.baseUrl).toString(),
-          {
-            waitUntil: "networkidle0",
-          }
-        );
-        await sleep(POST_ACTION_DELAY_MS);
+        const targetUrl = new URL(tc.startingPath, config.baseUrl).toString();
+        const currentUrl = await adapter.getUrl();
+        if (new URL(currentUrl).pathname !== new URL(targetUrl).pathname) {
+          LOG(`Navigating from ${currentUrl} to ${targetUrl}`);
+          await adapter.goto(targetUrl, { waitUntil: "networkidle0" });
+          await sleep(POST_ACTION_DELAY_MS);
+        } else {
+          LOG(
+            `Already on ${new URL(currentUrl).pathname} — skipping navigation`
+          );
+        }
       }
 
       const actions = await api.getTestActionsByCase(tc.id);
+      LOG(`Test case has ${actions.length} actions`);
       for (const action of actions) {
         checkAbort(config.signal);
+        LOG(
+          `Action: ${action.actionType} path=${action.path?.slice(0, 60)} value=${action.value?.slice(0, 30)}`
+        );
 
         switch (action.actionType) {
-          case "goto":
+          case "goto": {
             if (!action.path) {
               throw new Error("Goto test action missing path");
             }
-            await adapter.goto(
-              new URL(action.path, config.baseUrl).toString(),
-              {
-                waitUntil: "networkidle0",
-              }
-            );
-            await sleep(POST_ACTION_DELAY_MS);
+            const gotoUrl = new URL(action.path, config.baseUrl).toString();
+            const nowUrl = await adapter.getUrl();
+            if (new URL(nowUrl).pathname !== new URL(gotoUrl).pathname) {
+              await adapter.goto(gotoUrl, { waitUntil: "networkidle0" });
+              await sleep(POST_ACTION_DELAY_MS);
+            }
             break;
+          }
           case "waitForLoadState":
             await executeStoredAction(
               adapter,
