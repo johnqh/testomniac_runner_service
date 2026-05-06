@@ -70,4 +70,7 @@ export interface BrowserAdapter {
 
   /** Submit a text entry by pressing Enter on the focused field */
   submitTextEntry(selector: string): Promise<void>;
+
+  /** Close any tabs/windows opened during interaction, keeping only the original */
+  closeOtherTabs?(): Promise<void>;
 }

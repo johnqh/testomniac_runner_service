@@ -4,7 +4,7 @@ import type { ScanConfig, ScanEventHandler } from "./types";
 import { extractActionableItems } from "../extractors";
 import { computeHashes } from "../browser/page-utils";
 
-const LOG = (...args: unknown[]) => console.log("[test-execution]", ...args);
+const LOG = (...args: unknown[]) => console.warn("[test-execution]", ...args);
 
 /** Delay after each browser action to let the page settle. */
 const POST_ACTION_DELAY_MS = 2000;
@@ -212,6 +212,10 @@ export async function executeTestCases(
         }
       }
 
+      // Re-inject data-tmnc-id attributes into the DOM (they are transient
+      // and lost when the page re-renders, e.g. React SPA)
+      await extractActionableItems(adapter);
+
       const actions = await api.getTestActionsByCase(tc.id);
       LOG(`Test case has ${actions.length} actions`);
       for (const action of actions) {
@@ -328,6 +332,10 @@ export async function executeTestCases(
       const durationMs = Date.now() - startTime;
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
+      LOG(`ERROR in test case ${tc.id} "${tc.title}":`, errorMessage);
+      if (error instanceof Error && error.stack) {
+        LOG(`Stack:`, error.stack);
+      }
 
       await api.completeTestCaseRun(testCaseRun.id, {
         status: "failed",
@@ -350,6 +358,15 @@ export async function executeTestCases(
       });
 
       events.onTestRunCompleted({ testRunId: testRun.id, passed: false });
+    } finally {
+      // Close any tabs/windows opened during this test case
+      if (adapter.closeOtherTabs) {
+        try {
+          await adapter.closeOtherTabs();
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
     }
   }
 

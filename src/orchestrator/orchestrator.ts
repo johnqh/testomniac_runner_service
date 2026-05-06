@@ -6,7 +6,7 @@ import { executeTestCases } from "./test-execution";
 import { computeHashes } from "../browser/page-utils";
 import { extractActionableItems } from "../extractors";
 
-const LOG = (...args: unknown[]) => console.log("[orchestrator]", ...args);
+const LOG = (...args: unknown[]) => console.warn("[orchestrator]", ...args);
 
 export async function runScan(
   adapter: BrowserAdapter,

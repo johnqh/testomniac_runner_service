@@ -10,7 +10,7 @@ import {
 } from "../domain/types";
 import type { TestCase, TestStep } from "../domain/types";
 
-const LOG = (...args: unknown[]) => console.log("[decomposition]", ...args);
+const LOG = (...args: unknown[]) => console.warn("[decomposition]", ...args);
 
 /**
  * Process a decomposition job: extract actionable items from the live page
