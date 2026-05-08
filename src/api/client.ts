@@ -105,8 +105,8 @@ export class ApiClient {
     return this.request<T>("POST", path, body);
   }
 
-  private patch<T>(path: string, body?: unknown): Promise<T> {
-    return this.request<T>("PATCH", path, body);
+  private put<T>(path: string, body?: unknown): Promise<T> {
+    return this.request<T>("PUT", path, body);
   }
 
   // ===========================================================================
@@ -125,14 +125,14 @@ export class ApiClient {
     testRunId: number,
     stats: UpdateTestRunStatsRequest
   ): Promise<void> {
-    return this.patch(`/test-runs/${testRunId}/stats`, stats);
+    return this.put(`/test-runs/${testRunId}/stats`, stats);
   }
 
   completeTestRun(
     testRunId: number,
     payload: CompleteRunPayload
   ): Promise<void> {
-    return this.patch(`/test-runs/${testRunId}/complete`, payload);
+    return this.put(`/test-runs/${testRunId}/complete`, payload);
   }
 
   createTestRun(request: CreateTestRunRequest): Promise<TestRunResponse> {
@@ -153,7 +153,7 @@ export class ApiClient {
     testCaseRunId: number,
     payload: CompleteTestCaseRunRequest
   ): Promise<void> {
-    return this.patch(`/test-case-runs/${testCaseRunId}/complete`, payload);
+    return this.put(`/test-case-runs/${testCaseRunId}/complete`, payload);
   }
 
   // ===========================================================================
@@ -181,7 +181,7 @@ export class ApiClient {
   }
 
   markRequiresLogin(pageId: number): Promise<void> {
-    return this.patch(`/pages/${pageId}/requires-login`);
+    return this.put(`/pages/${pageId}/requires-login`);
   }
 
   getPagesByRunner(runnerId: number): Promise<PageResponse[]> {
@@ -352,7 +352,7 @@ export class ApiClient {
   }
 
   completeDecompositionJob(jobId: number): Promise<void> {
-    return this.patch(`/ai-decomposition-jobs/${jobId}/complete`);
+    return this.put(`/ai-decomposition-jobs/${jobId}/complete`);
   }
 
   // ===========================================================================
@@ -451,7 +451,7 @@ export class ApiClient {
   findOrCreateScaffold(
     params: FindOrCreateScaffoldRequest
   ): Promise<ScaffoldResponse> {
-    return this.post("/scaffolds/find-or-create", params);
+    return this.post("/scaffolds", params);
   }
 
   getScaffolds(runnerId: number): Promise<ScaffoldResponse[]> {
@@ -524,7 +524,7 @@ export class ApiClient {
     id: number,
     params: UpdateElementIdentityRequest
   ): Promise<void> {
-    return this.patch(`/element-identities/${id}`, params);
+    return this.put(`/element-identities/${id}`, params);
   }
 
   // ===========================================================================
@@ -537,7 +537,7 @@ export class ApiClient {
     uid?: string
   ): Promise<TestSuiteBundleResponse> {
     const body: CreateTestSuiteBundleRequest = { runnerId, title, uid };
-    return this.post("/test-suite-bundles/ensure", body);
+    return this.post("/test-suite-bundles", body);
   }
 
   ensureTestSuite(
@@ -545,7 +545,7 @@ export class ApiClient {
     testSuite: TestSuite
   ): Promise<TestSuiteResponse> {
     const body: InsertTestSuiteRequest = { runnerId, testSuite };
-    return this.post("/test-suites/ensure", body);
+    return this.post("/test-suites", body);
   }
 
   ensureTestCase(
@@ -554,14 +554,14 @@ export class ApiClient {
     testCase: TestCase
   ): Promise<TestCaseResponse> {
     const body: InsertTestCaseRequest = { runnerId, testSuiteId, testCase };
-    return this.post("/test-cases/ensure", body);
+    return this.post("/test-cases", body);
   }
 
   ensureBundleSuiteLink(
     testSuiteBundleId: number,
     testSuiteId: number
   ): Promise<TestSuiteBundleSuiteLinkResponse> {
-    return this.post("/test-suite-bundle-suites/ensure", {
+    return this.post("/test-suite-bundle-suites", {
       testSuiteBundleId,
       testSuiteId,
     });
@@ -576,7 +576,7 @@ export class ApiClient {
     runnerInstanceId: string,
     runnerInstanceName: string
   ): Promise<boolean> {
-    return this.patch(`/test-runs/${testRunId}/claim`, {
+    return this.put(`/test-runs/${testRunId}/claim`, {
       runnerInstanceId,
       runnerInstanceName,
     })
@@ -598,7 +598,7 @@ export class ApiClient {
     id: number,
     payload: CompleteTestSuiteRunRequest
   ): Promise<void> {
-    return this.patch(`/test-suite-runs/${id}/complete`, payload);
+    return this.put(`/test-suite-runs/${id}/complete`, payload);
   }
 
   // ===========================================================================
@@ -615,7 +615,7 @@ export class ApiClient {
     id: number,
     payload: CompleteTestSuiteBundleRunRequest
   ): Promise<void> {
-    return this.patch(`/test-suite-bundle-runs/${id}/complete`, payload);
+    return this.put(`/test-suite-bundle-runs/${id}/complete`, payload);
   }
 
   // ===========================================================================
