@@ -188,6 +188,82 @@ export class ApiClient {
     return this.get(`/pages?runnerId=${runnerId}`);
   }
 
+  createDiscoveredPages(request: {
+    testEnvironmentId: number;
+    pages: Array<{
+      relativePath: string;
+      sourcePagePath?: string;
+      sourceLabel?: string;
+      isPublic?: boolean;
+    }>;
+  }): Promise<
+    Array<{
+      id: number;
+      testEnvironmentId: number;
+      relativePath: string;
+      sourcePagePath: string | null;
+      sourceLabel: string | null;
+      isPublic: boolean;
+      createdAt: string | null;
+      updatedAt: string | null;
+    }>
+  > {
+    return this.post("/discovered-pages", request);
+  }
+
+  getDiscoveredPages(testEnvironmentId: number): Promise<
+    Array<{
+      id: number;
+      testEnvironmentId: number;
+      relativePath: string;
+      sourcePagePath: string | null;
+      sourceLabel: string | null;
+      isPublic: boolean;
+      createdAt: string | null;
+      updatedAt: string | null;
+    }>
+  > {
+    return this.get(`/discovered-pages?testEnvironmentId=${testEnvironmentId}`);
+  }
+
+  createPageVisit(request: {
+    testRunId: number;
+    testEnvironmentId: number;
+    relativePath: string;
+    status: string;
+    redirectPath?: string;
+    requiresLogin?: boolean;
+    errorMessage?: string;
+  }): Promise<{
+    id: number;
+    testRunId: number;
+    testEnvironmentId: number;
+    relativePath: string;
+    status: string;
+    redirectPath: string | null;
+    requiresLogin: boolean | null;
+    errorMessage: string | null;
+    createdAt: string | null;
+  }> {
+    return this.post("/page-visits", request);
+  }
+
+  getPageVisits(testRunId: number): Promise<
+    Array<{
+      id: number;
+      testRunId: number;
+      testEnvironmentId: number;
+      relativePath: string;
+      status: string;
+      redirectPath: string | null;
+      requiresLogin: boolean | null;
+      errorMessage: string | null;
+      createdAt: string | null;
+    }>
+  > {
+    return this.get(`/page-visits?testRunId=${testRunId}`);
+  }
+
   // ===========================================================================
   // Page States
   // ===========================================================================
@@ -202,6 +278,17 @@ export class ApiClient {
 
   createPageState(params: CreatePageStateRequest): Promise<PageStateResponse> {
     return this.post("/page-states", params);
+  }
+
+  updatePageStateDecomposedHashes(
+    pageStateId: number,
+    decomposedHashes: DecomposedPageHashes
+  ): Promise<void> {
+    return this.put(`/page-states/${pageStateId}/decomposed-hashes`, {
+      fixedBodyHash: decomposedHashes.fixedBodyHash,
+      scaffoldsHash: decomposedHashes.scaffoldsHash,
+      patternsHash: decomposedHashes.patternsHash,
+    });
   }
 
   findMatchingPageState(
@@ -318,9 +405,10 @@ export class ApiClient {
 
   insertTestCase(
     runnerId: number,
-    testCase: TestCase | LegacyTestCase
+    testCase: TestCase | LegacyTestCase,
+    testSuiteId?: number
   ): Promise<TestCaseResponse> {
-    const body = { runnerId, testCase };
+    const body = { runnerId, testSuiteId, testCase };
     return this.post("/test-cases", body);
   }
 

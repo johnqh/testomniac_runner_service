@@ -45,6 +45,14 @@ export interface ScanEventHandler {
     totalPages: number;
     totalFindings: number;
     durationMs: number;
+    aiSummary?: string;
+    expertiseSummary?: Record<
+      string,
+      {
+        warnings: number;
+        errors: number;
+      }
+    >;
   }): void;
   onError(error: { message: string }): void;
 }
@@ -56,4 +64,12 @@ export interface ScanResult {
   testRunsCompleted: number;
   findingsFound: number;
   durationMs: number;
+  aiSummary?: string;
+  expertiseSummary?: Record<
+    string,
+    {
+      warnings: number;
+      errors: number;
+    }
+  >;
 }

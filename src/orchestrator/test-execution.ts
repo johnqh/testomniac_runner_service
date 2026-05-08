@@ -2,7 +2,12 @@ import type { BrowserAdapter } from "../adapter";
 import type { ApiClient } from "../api/client";
 import type { ScanConfig, ScanEventHandler } from "./types";
 import { extractActionableItems } from "../extractors";
-import { computeHashes } from "../browser/page-utils";
+import { toRelativePath } from "../crawler/url-normalizer";
+import {
+  captureCurrentPage,
+  hasCapturedPagePath,
+  seedCapturedPagePath,
+} from "./page-capture";
 
 const LOG = (...args: unknown[]) => console.warn("[test-execution]", ...args);
 
@@ -16,9 +21,6 @@ function sleep(ms: number): Promise<void> {
 function checkAbort(signal?: AbortSignal): void {
   if (signal?.aborted) throw new Error("Scan aborted");
 }
-
-/** Pages already discovered — only create decomposition jobs for NEW pages. */
-const discoveredPagePaths = new Set<string>();
 
 /**
  * After each action, check if we navigated to a new page (different path).
@@ -41,39 +43,20 @@ async function captureCurrentPageState(
     return false;
   }
 
-  const relativePath = current.pathname;
+  const relativePath = toRelativePath(currentUrl);
 
   // Already seen this page path — no new work
-  if (discoveredPagePaths.has(relativePath)) {
+  if (hasCapturedPagePath(relativePath)) {
     return false;
   }
-  discoveredPagePaths.add(relativePath);
-
-  // New page discovered — create page, state, and decomposition job
-  const page = await api.findOrCreatePage(config.runnerId, relativePath);
-  events.onPageFound({ relativePath, pageId: page.id });
-
-  const html = await adapter.content();
-  const items = await extractActionableItems(adapter);
-  const hashes = await computeHashes(html, items);
-
-  const newState = await api.createPageState({
-    pageId: page.id,
-    sizeClass: config.sizeClass,
-    hashes,
-    contentText: html.slice(0, 5000),
-    createdByTestRunId: testRunId,
+  const captureResult = await captureCurrentPage(adapter, config, api, events, {
+    testRunId,
+    markDiscovered: true,
+    createDecompositionJob: true,
   });
-  events.onPageStateCreated({
-    pageStateId: newState.id,
-    pageId: page.id,
-  });
-
-  const job = await api.createDecompositionJob(config.scanId, newState.id);
-  events.onDecompositionJobCreated({
-    jobId: job.id,
-    pageStateId: newState.id,
-  });
+  if (!captureResult?.createdNewState) {
+    return false;
+  }
 
   return true;
 }
@@ -154,8 +137,8 @@ export async function executeTestCases(
   testCaseIds: number[]
 ): Promise<boolean> {
   // Seed the initial scan URL path so we don't re-discover it
-  const scanPath = new URL(config.scanUrl).pathname;
-  discoveredPagePaths.add(scanPath);
+  const scanPath = toRelativePath(config.scanUrl);
+  seedCapturedPagePath(scanPath);
 
   // Only fetch and execute the specific test cases from this scan's decomposition
   LOG(`Fetching test cases for runner ${config.runnerId}`);
@@ -201,14 +184,12 @@ export async function executeTestCases(
       if (tc.startingPath) {
         const targetUrl = new URL(tc.startingPath, config.baseUrl).toString();
         const currentUrl = await adapter.getUrl();
-        if (new URL(currentUrl).pathname !== new URL(targetUrl).pathname) {
+        if (toRelativePath(currentUrl) !== toRelativePath(targetUrl)) {
           LOG(`Navigating from ${currentUrl} to ${targetUrl}`);
           await adapter.goto(targetUrl, { waitUntil: "networkidle0" });
           await sleep(POST_ACTION_DELAY_MS);
         } else {
-          LOG(
-            `Already on ${new URL(currentUrl).pathname} — skipping navigation`
-          );
+          LOG(`Already on ${toRelativePath(currentUrl)} — skipping navigation`);
         }
       }
 
@@ -231,7 +212,7 @@ export async function executeTestCases(
             }
             const gotoUrl = new URL(action.path, config.baseUrl).toString();
             const nowUrl = await adapter.getUrl();
-            if (new URL(nowUrl).pathname !== new URL(gotoUrl).pathname) {
+            if (toRelativePath(nowUrl) !== toRelativePath(gotoUrl)) {
               await adapter.goto(gotoUrl, { waitUntil: "networkidle0" });
               await sleep(POST_ACTION_DELAY_MS);
             }
@@ -271,6 +252,7 @@ export async function executeTestCases(
             await sleep(POST_ACTION_DELAY_MS);
             break;
           case "select":
+          case "selectOption":
             if (!action.path || action.value == null) {
               throw new Error(
                 "Select test action requires selector path and value"

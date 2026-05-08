@@ -1,12 +1,49 @@
 import type { BrowserAdapter } from "../adapter";
 import type { ApiClient } from "../api/client";
 import type { ScanConfig, ScanEventHandler, ScanResult } from "./types";
+import { discoverPublicPages } from "./discovery";
 import { processDecompositionJob } from "./decomposition";
 import { executeTestCases } from "./test-execution";
-import { computeHashes } from "../browser/page-utils";
-import { extractActionableItems } from "../extractors";
+import { captureCurrentPage, resetCapturedPagePaths } from "./page-capture";
 
 const LOG = (...args: unknown[]) => console.warn("[orchestrator]", ...args);
+
+function buildAiSummary(
+  pagesFound: number,
+  pageStatesFound: number,
+  testRunsCompleted: number,
+  findingsFound: number,
+  expertiseSummary: Record<string, { warnings: number; errors: number }>
+): string {
+  const expertiseLines = Object.entries(expertiseSummary)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, counts]) => {
+      const parts: string[] = [];
+      if (counts.errors > 0)
+        parts.push(`${counts.errors} error${counts.errors === 1 ? "" : "s"}`);
+      if (counts.warnings > 0) {
+        parts.push(
+          `${counts.warnings} warning${counts.warnings === 1 ? "" : "s"}`
+        );
+      }
+      return parts.length > 0
+        ? `${name}: ${parts.join(", ")}`
+        : `${name}: no findings`;
+    });
+
+  const headline =
+    findingsFound === 0
+      ? `Scan completed with no findings across ${pagesFound} page${pagesFound === 1 ? "" : "s"}.`
+      : `Scan completed with ${findingsFound} finding${findingsFound === 1 ? "" : "s"} across ${pagesFound} page${pagesFound === 1 ? "" : "s"}.`;
+
+  const detail = `Captured ${pageStatesFound} page state${pageStatesFound === 1 ? "" : "s"} and completed ${testRunsCompleted} test run${testRunsCompleted === 1 ? "" : "s"}.`;
+
+  if (expertiseLines.length === 0) {
+    return `${headline} ${detail}`;
+  }
+
+  return `${headline} ${detail} Findings by expertise: ${expertiseLines.join("; ")}.`;
+}
 
 export async function runScan(
   adapter: BrowserAdapter,
@@ -20,6 +57,8 @@ export async function runScan(
   let pageStatesFound = 0;
   let testRunsCompleted = 0;
   let findingsFound = 0;
+  const expertiseSummary: Record<string, { warnings: number; errors: number }> =
+    {};
 
   const wrappedHandler: ScanEventHandler = {
     ...eventHandler,
@@ -40,6 +79,20 @@ export async function runScan(
     },
     onFindingCreated(finding) {
       findingsFound++;
+      const match = /^\[([^\]]+)\]/.exec(finding.title);
+      if (match?.[1]) {
+        const expertiseName = match[1];
+        const counts = expertiseSummary[expertiseName] ?? {
+          warnings: 0,
+          errors: 0,
+        };
+        if (finding.type === "error") {
+          counts.errors += 1;
+        } else if (finding.type === "warning") {
+          counts.warnings += 1;
+        }
+        expertiseSummary[expertiseName] = counts;
+      }
       eventHandler.onFindingCreated(finding);
       emitStats();
     },
@@ -55,51 +108,34 @@ export async function runScan(
   }
 
   try {
-    // 1. Navigate to scan URL, capture initial page state
-    LOG(`Step 1: Navigating to ${config.scanUrl}`);
+    resetCapturedPagePaths();
+
+    // 1. Crawl the site from the scan URL to inventory public pages
+    LOG(`Step 1: Discovering pages from ${config.scanUrl}`);
+    await discoverPublicPages(adapter, config, api, wrappedHandler);
+
+    // 2. Navigate back to scan URL and capture initial page state
+    LOG(`Step 2: Navigating to ${config.scanUrl}`);
     await adapter.goto(config.scanUrl, { waitUntil: "networkidle0" });
-    const initialHtml = await adapter.content();
-    LOG(`Page HTML length: ${initialHtml.length}`);
-
-    // Compute relative path from scanUrl and baseUrl
-    const scanUrlObj = new URL(config.scanUrl);
-    const relativePath = scanUrlObj.pathname;
-
-    const page = await api.findOrCreatePage(config.runnerId, relativePath);
-    LOG(`Page created/found: id=${page.id}, path=${relativePath}`);
-    wrappedHandler.onPageFound({ relativePath, pageId: page.id });
-
-    // Extract actionable items and compute hashes
-    const items = await extractActionableItems(adapter);
-    LOG(`Extracted ${items.length} actionable items from page`);
-    const hashes = await computeHashes(initialHtml, items);
-    LOG(`Computed hashes:`, hashes);
-
-    const initialPageState = await api.createPageState({
-      pageId: page.id,
-      sizeClass: config.sizeClass,
-      hashes,
-      screenshotPath: undefined,
-      contentText: initialHtml.slice(0, 5000),
-    });
-    LOG(`Created page state: id=${initialPageState.id}`);
-    wrappedHandler.onPageStateCreated({
-      pageStateId: initialPageState.id,
-      pageId: page.id,
-    });
-
-    // 2. Create initial AI Decomposition Job
-    const initialJob = await api.createDecompositionJob(
-      config.scanId,
-      initialPageState.id
+    const initialCapture = await captureCurrentPage(
+      adapter,
+      config,
+      api,
+      wrappedHandler,
+      {
+        testRunId: config.scanId,
+        markDiscovered: false,
+        createDecompositionJob: true,
+      }
     );
-    LOG(`Created decomposition job: id=${initialJob.id}`);
-    wrappedHandler.onDecompositionJobCreated({
-      jobId: initialJob.id,
-      pageStateId: initialPageState.id,
-    });
+    if (!initialCapture?.pageStateId) {
+      throw new Error("Failed to capture initial page state");
+    }
+    LOG(
+      `Captured initial page state ${initialCapture.pageStateId} for ${initialCapture.relativePath}`
+    );
 
-    // 3. Generate/Run loop
+    // 4. Generate/Run loop
     let iteration = 0;
     const MAX_ITERATIONS = 50;
 
@@ -157,10 +193,18 @@ export async function runScan(
       LOG("New pages discovered — continuing to next iteration");
     }
 
-    // 4. Complete test run
+    // 5. Complete test run
     const durationMs = Date.now() - startTime;
+    const aiSummary = buildAiSummary(
+      pagesFound,
+      pageStatesFound,
+      testRunsCompleted,
+      findingsFound,
+      expertiseSummary
+    );
     await api.completeTestRun(config.scanId, {
       status: "completed",
+      aiSummary,
       totalDurationMs: durationMs,
       pagesFound,
       pageStatesFound,
@@ -174,12 +218,16 @@ export async function runScan(
       testRunsCompleted,
       findingsFound,
       durationMs,
+      aiSummary,
+      expertiseSummary,
     };
 
     wrappedHandler.onScanComplete({
       totalPages: pagesFound,
       totalFindings: findingsFound,
       durationMs,
+      aiSummary,
+      expertiseSummary,
     });
 
     return result;
