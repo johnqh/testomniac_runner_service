@@ -122,6 +122,10 @@ export interface DetectedScaffoldRegion {
   hash: string;
 }
 
+/**
+ * Detect scaffold regions using CSS selectors first, then position/content
+ * heuristics as a fallback for pages without semantic HTML or common classes.
+ */
 export async function detectScaffoldRegions(
   adapter: BrowserAdapter
 ): Promise<DetectedScaffoldRegion[]> {
@@ -135,9 +139,14 @@ export async function detectScaffoldRegions(
       type: string;
       selector: string;
       outerHtml: string;
+      method: string;
     }> = [];
     const seen = new Set<Element>();
+    const foundTypes = new Set<string>();
 
+    // ================================================================
+    // Phase 1: CSS selector matching (existing logic)
+    // ================================================================
     for (const [type, selectors] of entries) {
       for (const sel of selectors) {
         try {
@@ -148,22 +157,307 @@ export async function detectScaffoldRegions(
               type,
               selector: sel,
               outerHtml: el.outerHTML,
+              method: "selector",
             });
-            break; // one match per type
+            foundTypes.add(type);
+            break;
           }
         } catch {
           // Invalid selector
         }
       }
     }
+
+    // ================================================================
+    // Phase 2: Position & content heuristics for missing types
+    // ================================================================
+
+    function buildSelector(el: Element): string {
+      if (el.id) return "#" + el.id;
+      const tag = el.tagName.toLowerCase();
+      const parent = el.parentElement;
+      if (!parent) return tag;
+      const siblings = Array.from(parent.children).filter(
+        c => c.tagName === el.tagName
+      );
+      if (siblings.length === 1) {
+        const parentSel = parent.id
+          ? "#" + parent.id
+          : parent.tagName.toLowerCase();
+        return parentSel + " > " + tag;
+      }
+      const idx = siblings.indexOf(el);
+      return (
+        parent.tagName.toLowerCase() +
+        " > " +
+        tag +
+        ":nth-of-type(" +
+        (idx + 1) +
+        ")"
+      );
+    }
+
+    function countLinks(el: Element): number {
+      return el.querySelectorAll("a[href]").length;
+    }
+
+    // --- topMenu heuristic ---
+    if (!foundTypes.has("topMenu")) {
+      const candidates = Array.from(document.body.querySelectorAll("*"));
+      for (const el of candidates) {
+        if (seen.has(el)) continue;
+        const htmlEl = el as HTMLElement;
+        const rect = htmlEl.getBoundingClientRect();
+        if (rect.top > 150) break;
+        if (rect.width < window.innerWidth * 0.8) continue;
+        if (rect.height > 200 || rect.height < 20) continue;
+        if (countLinks(el) < 3) continue;
+        const style = window.getComputedStyle(htmlEl);
+        const isSticky =
+          style.position === "fixed" || style.position === "sticky";
+        if (isSticky || rect.top < 10) {
+          seen.add(el);
+          detected.push({
+            type: "topMenu",
+            selector: buildSelector(el),
+            outerHtml: el.outerHTML,
+            method: "heuristic:position-top-links",
+          });
+          foundTypes.add("topMenu");
+          break;
+        }
+      }
+    }
+
+    // --- footer heuristic ---
+    if (!foundTypes.has("footer")) {
+      const bodyChildren = Array.from(document.body.children);
+      for (let i = bodyChildren.length - 1; i >= 0; i--) {
+        const el = bodyChildren[i] as HTMLElement;
+        if (seen.has(el) || !el.offsetWidth) continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.width < window.innerWidth * 0.8) continue;
+        const text = el.textContent || "";
+        const hasCopyright = /\u00A9|copyright|all rights reserved|\d{4}/i.test(
+          text
+        );
+        const hasLinks = countLinks(el) >= 2;
+        if (hasCopyright || (hasLinks && rect.top > window.innerHeight * 0.5)) {
+          seen.add(el);
+          detected.push({
+            type: "footer",
+            selector: buildSelector(el),
+            outerHtml: el.outerHTML,
+            method: "heuristic:bottom-copyright",
+          });
+          foundTypes.add("footer");
+          break;
+        }
+      }
+    }
+
+    // --- breadcrumb heuristic ---
+    if (!foundTypes.has("breadcrumb")) {
+      const allElements = Array.from(
+        document.querySelectorAll("ol, ul, div, nav")
+      );
+      for (const el of allElements) {
+        if (seen.has(el)) continue;
+        const htmlEl = el as HTMLElement;
+        const rect = htmlEl.getBoundingClientRect();
+        if (rect.height > 60 || rect.width < 100) continue;
+        if (rect.top > 400) continue;
+        const links = el.querySelectorAll("a");
+        if (links.length < 1 || links.length > 8) continue;
+        const text = el.textContent || "";
+        if (
+          /[/\u203A\u00BB\u00B7\u2192>]/.test(text) ||
+          el.querySelectorAll("li").length >= 2
+        ) {
+          seen.add(el);
+          detected.push({
+            type: "breadcrumb",
+            selector: buildSelector(el),
+            outerHtml: el.outerHTML,
+            method: "heuristic:link-separators",
+          });
+          foundTypes.add("breadcrumb");
+          break;
+        }
+      }
+    }
+
+    // --- searchBar heuristic ---
+    if (!foundTypes.has("searchBar")) {
+      const inputs = Array.from(
+        document.querySelectorAll(
+          'input[type="search"], input[placeholder*="search" i], input[name*="search" i], input[name*="query" i]'
+        )
+      );
+      for (const input of inputs) {
+        if (seen.has(input)) continue;
+        const form = input.closest("form") || input.parentElement;
+        if (form && (form as HTMLElement).offsetWidth > 0) {
+          seen.add(form);
+          detected.push({
+            type: "searchBar",
+            selector: buildSelector(form),
+            outerHtml: form.outerHTML,
+            method: "heuristic:search-input",
+          });
+          foundTypes.add("searchBar");
+          break;
+        }
+      }
+    }
+
+    // --- hamburgerMenu heuristic ---
+    if (!foundTypes.has("hamburgerMenu")) {
+      const buttons = Array.from(
+        document.querySelectorAll(
+          'button[aria-expanded], button[aria-haspopup="menu"]'
+        )
+      );
+      for (const btn of buttons) {
+        if (seen.has(btn)) continue;
+        const htmlBtn = btn as HTMLElement;
+        const rect = htmlBtn.getBoundingClientRect();
+        if (rect.top > 150) continue;
+        const ariaLabel = (btn.getAttribute("aria-label") || "").toLowerCase();
+        const isMenu = ariaLabel.includes("menu");
+        const isResponsive = htmlBtn.closest(
+          '[class*="lg:hidden"], [class*="md:hidden"]'
+        );
+        if (isMenu || isResponsive) {
+          seen.add(btn);
+          detected.push({
+            type: "hamburgerMenu",
+            selector: buildSelector(btn),
+            outerHtml: btn.outerHTML,
+            method: "heuristic:menu-button",
+          });
+          foundTypes.add("hamburgerMenu");
+          break;
+        }
+      }
+    }
+
+    // --- languageSwitcher heuristic ---
+    if (!foundTypes.has("languageSwitcher")) {
+      const flagPattern = /[\u{1F1E0}-\u{1F1FF}]{2}/u;
+      const langPattern =
+        /\b(english|french|german|spanish|português|italiano)\b/i;
+      const langCandidates = Array.from(
+        document.querySelectorAll("button, select, [role='listbox']")
+      );
+      for (const el of langCandidates) {
+        if (seen.has(el)) continue;
+        const text = el.textContent || "";
+        if (flagPattern.test(text) || langPattern.test(text)) {
+          const container = el.parentElement || el;
+          seen.add(container);
+          detected.push({
+            type: "languageSwitcher",
+            selector: buildSelector(container),
+            outerHtml: container.outerHTML,
+            method: "heuristic:flag-or-lang-text",
+          });
+          foundTypes.add("languageSwitcher");
+          break;
+        }
+      }
+    }
+
+    // --- skipNav heuristic ---
+    if (!foundTypes.has("skipNav")) {
+      const skipLinks = Array.from(document.querySelectorAll('a[href^="#"]'));
+      for (const link of skipLinks) {
+        const text = (link.textContent || "").toLowerCase();
+        if (
+          text.includes("skip") &&
+          (text.includes("content") ||
+            text.includes("main") ||
+            text.includes("nav"))
+        ) {
+          seen.add(link);
+          detected.push({
+            type: "skipNav",
+            selector: buildSelector(link),
+            outerHtml: link.outerHTML,
+            method: "heuristic:skip-link-text",
+          });
+          foundTypes.add("skipNav");
+          break;
+        }
+      }
+    }
+
+    // --- userMenu heuristic ---
+    if (!foundTypes.has("userMenu")) {
+      const avatarCandidates = Array.from(
+        document.querySelectorAll(
+          'img[class*="avatar"], img[alt*="avatar" i], img[alt*="profile" i], [class*="avatar"], button[aria-label*="user" i]'
+        )
+      );
+      for (const el of avatarCandidates) {
+        if (seen.has(el)) continue;
+        const container = el.closest("button, a, div") || el;
+        if ((container as HTMLElement).offsetWidth > 0) {
+          seen.add(container);
+          detected.push({
+            type: "userMenu",
+            selector: buildSelector(container),
+            outerHtml: container.outerHTML,
+            method: "heuristic:avatar-or-user-label",
+          });
+          foundTypes.add("userMenu");
+          break;
+        }
+      }
+    }
+
+    // --- cookieBanner heuristic ---
+    if (!foundTypes.has("cookieBanner")) {
+      const allEls = Array.from(document.querySelectorAll("*"));
+      for (const el of allEls) {
+        if (seen.has(el)) continue;
+        const htmlEl = el as HTMLElement;
+        const style = window.getComputedStyle(htmlEl);
+        if (style.position !== "fixed" && style.position !== "sticky") continue;
+        const rect = htmlEl.getBoundingClientRect();
+        if (rect.top < window.innerHeight * 0.5) continue;
+        const text = (el.textContent || "").toLowerCase();
+        if (
+          text.includes("cookie") ||
+          text.includes("consent") ||
+          text.includes("privacy")
+        ) {
+          seen.add(el);
+          detected.push({
+            type: "cookieBanner",
+            selector: buildSelector(el),
+            outerHtml: el.outerHTML,
+            method: "heuristic:fixed-bottom-cookie-text",
+          });
+          foundTypes.add("cookieBanner");
+          break;
+        }
+      }
+    }
+
     return detected;
   }, typeEntries);
 
   const regions = (
-    results as Array<{ type: string; selector: string; outerHtml: string }>
+    results as Array<{
+      type: string;
+      selector: string;
+      outerHtml: string;
+      method: string;
+    }>
   ).map(r => ({
     type: r.type as HtmlComponentType,
-    selector: r.selector,
+    selector: r.selector + " [" + r.method + "]",
     outerHtml: r.outerHtml,
     hash: sha256(normalizeHtml(r.outerHtml)),
   }));

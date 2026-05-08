@@ -3,6 +3,7 @@ import type { ApiClient } from "../api/client";
 import type { DecompositionJobResponse } from "@sudobility/testomniac_types";
 import type { ScanConfig, ScanEventHandler } from "./types";
 import { extractActionableItems } from "../extractors";
+import { detectScaffoldRegions } from "../scanner/component-detector";
 import {
   PlaywrightAction,
   ExpectationType,
@@ -51,6 +52,48 @@ export async function processDecompositionJob(
       disabled: i.disabled,
     }))
   );
+
+  // Detect scaffolds (header, footer, breadcrumb, etc.)
+  const scaffolds = await detectScaffoldRegions(adapter);
+  LOG(
+    `Detected ${scaffolds.length} scaffolds:`,
+    scaffolds.map(s => ({ type: s.type, selector: s.selector }))
+  );
+
+  // Persist scaffolds and link to page state
+  if (scaffolds.length > 0) {
+    const scaffoldIds: number[] = [];
+    for (const scaffold of scaffolds) {
+      try {
+        const saved = await api.findOrCreateScaffold({
+          runnerId: config.runnerId,
+          type: scaffold.type,
+          hash: scaffold.hash,
+          html: scaffold.outerHtml,
+        });
+        scaffoldIds.push(saved.id);
+        LOG(`Scaffold saved: type=${scaffold.type} id=${saved.id}`);
+      } catch (err) {
+        LOG(
+          `Failed to save scaffold ${scaffold.type}:`,
+          err instanceof Error ? err.message : err
+        );
+      }
+    }
+    if (scaffoldIds.length > 0) {
+      try {
+        await api.linkPageStateScaffolds(job.pageStateId, scaffoldIds);
+        LOG(
+          `Linked ${scaffoldIds.length} scaffolds to page state ${job.pageStateId}`
+        );
+      } catch (err) {
+        LOG(
+          `Failed to link scaffolds:`,
+          err instanceof Error ? err.message : err
+        );
+      }
+    }
+  }
 
   // Filter to visible, enabled, interactive items
   const interactiveItems = items.filter(
