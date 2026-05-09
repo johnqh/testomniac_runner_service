@@ -1,6 +1,6 @@
 import type { LegacyTestAction, SizeClass, FormField } from "../domain/types";
-import type { LegacyGeneratedTestCase } from "./render";
-import { assignSuiteTags } from "./suite-tagger";
+import type { LegacyGeneratedTestElement } from "./render";
+import { assignSurfaceTags } from "./surface-tagger";
 
 interface FormNegativeInput {
   pageName: string;
@@ -14,7 +14,7 @@ interface FormNegativeInput {
 
 export function generateFormNegativeTests(
   input: FormNegativeInput
-): LegacyGeneratedTestCase[] {
+): LegacyGeneratedTestElement[] {
   const requiredFields = input.fields.filter(f => f.required);
   if (requiredFields.length === 0) return [];
 
@@ -40,11 +40,11 @@ export function generateFormNegativeTests(
     });
 
     return {
-      testCase: {
+      testElement: {
         name: `Form Negative — ${input.pageName} (missing ${skippedField.name})`,
         type: "form" as const,
         sizeClass: input.sizeClass,
-        suite_tags: assignSuiteTags("form", input.priority),
+        surface_tags: assignSurfaceTags("form", input.priority),
         priority: input.priority,
       },
       actions,

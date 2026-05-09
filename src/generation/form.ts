@@ -1,6 +1,6 @@
 import type { LegacyTestAction, SizeClass } from "../domain/types";
-import type { LegacyGeneratedTestCase } from "./render";
-import { assignSuiteTags } from "./suite-tagger";
+import type { LegacyGeneratedTestElement } from "./render";
+import { assignSurfaceTags } from "./surface-tagger";
 
 interface FormInput {
   pageName: string;
@@ -14,7 +14,7 @@ interface FormInput {
   submitSelector?: string;
 }
 
-export function generateFormTest(input: FormInput): LegacyGeneratedTestCase {
+export function generateFormTest(input: FormInput): LegacyGeneratedTestElement {
   const actions: LegacyTestAction[] = [
     { action: "navigate", url: input.url },
     { action: "waitForLoad" },
@@ -47,11 +47,11 @@ export function generateFormTest(input: FormInput): LegacyGeneratedTestCase {
   actions.push({ action: "waitForNavigation" });
   actions.push({ action: "assertUrlChanged" });
   return {
-    testCase: {
+    testElement: {
       name: `Form — ${input.pageName}`,
       type: "form",
       sizeClass: input.sizeClass,
-      suite_tags: assignSuiteTags("form", input.priority),
+      surface_tags: assignSurfaceTags("form", input.priority),
       persona_id: input.personaId,
       use_case_id: input.useCaseId,
       priority: input.priority,

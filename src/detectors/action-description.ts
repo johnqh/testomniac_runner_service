@@ -23,7 +23,7 @@ export function describeAction(
   }
 }
 
-export function buildTestCaseDescription(
+export function buildTestElementDescription(
   actions: ActionDefinitionResponse[],
   elementNames?: Map<number, string>
 ): string {

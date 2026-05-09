@@ -23,5 +23,5 @@ export type {
   DetectedIssue,
   DetectionRule,
 } from "./detection-rule";
-export { describeAction, buildTestCaseDescription } from "./action-description";
+export { describeAction, buildTestElementDescription } from "./action-description";
 export { getAllDetectionRules } from "./rules";

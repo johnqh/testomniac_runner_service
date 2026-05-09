@@ -1,7 +1,7 @@
 import type { LegacyTestAction, SizeClass } from "../domain/types";
-import type { LegacyGeneratedTestCase } from "./render";
+import type { LegacyGeneratedTestElement } from "./render";
 
-export interface PasswordTestCase {
+export interface PasswordTestElement {
   password: string;
   description: string;
   shouldFail: boolean;
@@ -15,13 +15,13 @@ interface PasswordTestInput {
   passwordSelector: string;
   submitSelector?: string;
   emailValue: string;
-  passwordCases: PasswordTestCase[];
+  passwordElements: PasswordTestElement[];
 }
 
 export function generatePasswordTests(
   input: PasswordTestInput
-): LegacyGeneratedTestCase[] {
-  const sorted = [...input.passwordCases].sort((a, b) => {
+): LegacyGeneratedTestElement[] {
+  const sorted = [...input.passwordElements].sort((a, b) => {
     if (a.shouldFail && !b.shouldFail) return -1;
     if (!a.shouldFail && b.shouldFail) return 1;
     return 0;
@@ -54,11 +54,11 @@ export function generatePasswordTests(
     }
 
     return {
-      testCase: {
+      testElement: {
         name: `Password ${pc.shouldFail ? "Fail" : "Pass"} — ${input.pageName} (${pc.description})`,
         type: "form" as const,
         sizeClass: input.sizeClass,
-        suite_tags: ["regression"],
+        surface_tags: ["regression"],
         priority: "high",
       },
       actions,

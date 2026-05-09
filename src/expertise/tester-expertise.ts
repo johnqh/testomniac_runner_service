@@ -1,7 +1,7 @@
 import type { Expertise, ExpertiseContext, Outcome } from "./types";
 
 /**
- * Checks each test case expectation is met.
+ * Checks each test element expectation is met.
  * Creates error outcomes for unmet expectations.
  */
 export class TesterExpertise implements Expertise {

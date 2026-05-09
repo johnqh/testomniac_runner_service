@@ -1,5 +1,5 @@
-import { generateRenderTest, type GeneratedTestCase } from "./render";
-import { assignPriority } from "./suite-tagger";
+import { generateRenderTest, type GeneratedTestElement } from "./render";
+import { assignPriority } from "./surface-tagger";
 import type { SizeClass } from "../domain/types";
 import type { ApiClient } from "../api/client";
 import type { ElementIdentityResponse } from "@sudobility/testomniac_types";
@@ -12,11 +12,11 @@ export interface GeneratorOptions {
   elementIdentities?: ElementIdentityResponse[];
 }
 
-export async function generateTestCases(
+export async function generateTestElements(
   options: GeneratorOptions
-): Promise<GeneratedTestCase[]> {
+): Promise<GeneratedTestElement[]> {
   const { runnerId, sizeClass, api } = options;
-  const results: GeneratedTestCase[] = [];
+  const results: GeneratedTestElement[] = [];
   const allPages = await api.getPagesByRunner(runnerId);
 
   // Load element identities if not provided

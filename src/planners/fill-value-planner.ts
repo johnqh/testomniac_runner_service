@@ -154,7 +154,7 @@ export class RuleBasedFillValuePlanner implements FillValuePlanner {
         "address2",
         "address_2",
         "apt",
-        "suite",
+        "surface",
         "unit"
       )
     )

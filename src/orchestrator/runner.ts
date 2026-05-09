@@ -3,12 +3,12 @@ import type { ApiClient } from "../api/client";
 import type { RunConfig, ScanEventHandler, ScanResult } from "./types";
 import type { Expertise } from "../expertise/types";
 import { PageAnalyzer } from "../analyzer";
-import { executeTestCase } from "./test-case-executor";
+import { executeTestElement } from "./test-element-executor";
 
 /**
  * Main entry point for the runner execution loop.
  *
- * Execution: bundle → iterate suites → iterate cases → run case
+ * Execution: bundle → iterate surfaces → iterate cases → run case
  */
 export async function runTestRun(
   adapter: BrowserAdapter,
@@ -36,9 +36,9 @@ export async function runTestRun(
       events.onPageStateCreated(state);
       emitStats();
     },
-    onTestCaseRunCompleted(run) {
+    onTestElementRunCompleted(run) {
       testRunsCompleted++;
-      events.onTestCaseRunCompleted(run);
+      events.onTestElementRunCompleted(run);
       emitStats();
     },
     onTestRunCompleted(run) {
@@ -79,52 +79,52 @@ export async function runTestRun(
       throw new Error(`Test run ${config.testRunId} not found`);
     }
 
-    if (!testRun.testSuiteBundleRunId) {
+    if (!testRun.testSurfaceBundleRunId) {
       throw new Error(
-        `Test run ${config.testRunId} has no test suite bundle run`
+        `Test run ${config.testRunId} has no test surface bundle run`
       );
     }
 
     // Set up analyzer for discovery mode
     const analyzer = testRun.discovery ? new PageAnalyzer() : null;
 
-    // Get navigation suite for discovery context
-    let navigationSuite = null;
+    // Get navigation surface for discovery context
+    let navigationSurface = null;
     if (testRun.discovery) {
-      const suites = await api.getTestSuitesByRunner(config.runnerId);
-      navigationSuite =
-        suites.find(
+      const surfaces = await api.getTestSurfacesByRunner(config.runnerId);
+      navigationSurface =
+        surfaces.find(
           s =>
             s.title === "Direct Navigations" &&
             (config.uid ? s.uid === config.uid : s.uid == null)
         ) ?? null;
     }
 
-    const bundleRun = testRun.testSuiteBundleRunId
-      ? await api.getTestSuiteBundleRun(testRun.testSuiteBundleRunId)
+    const bundleRun = testRun.testSurfaceBundleRunId
+      ? await api.getTestSurfaceBundleRun(testRun.testSurfaceBundleRunId)
       : null;
 
-    // Execution loop: iterate open suite runs in the bundle
-    let hasOpenSuites = true;
-    while (hasOpenSuites) {
+    // Execution loop: iterate open surface runs in the bundle
+    let hasOpenSurfaces = true;
+    while (hasOpenSurfaces) {
       if (config.signal?.aborted) break;
 
-      const openSuiteRuns = await api.getOpenTestSuiteRuns(
-        testRun.testSuiteBundleRunId
+      const openSurfaceRuns = await api.getOpenTestSurfaceRuns(
+        testRun.testSurfaceBundleRunId
       );
-      if (openSuiteRuns.length === 0) {
-        hasOpenSuites = false;
+      if (openSurfaceRuns.length === 0) {
+        hasOpenSurfaces = false;
         break;
       }
 
-      const currentSuiteRun = openSuiteRuns[0];
+      const currentSurfaceRun = openSurfaceRuns[0];
 
-      // Iterate open case runs in this suite
+      // Iterate open element runs in this surface
       let hasOpenCases = true;
       while (hasOpenCases) {
         if (config.signal?.aborted) break;
 
-        const openCaseRuns = await api.getOpenTestCaseRuns(currentSuiteRun.id);
+        const openCaseRuns = await api.getOpenTestElementRuns(currentSurfaceRun.id);
         if (openCaseRuns.length === 0) {
           hasOpenCases = false;
           break;
@@ -132,8 +132,8 @@ export async function runTestRun(
 
         const currentCaseRun = openCaseRuns[0];
 
-        // Execute the test case
-        await executeTestCase(
+        // Execute the test element
+        await executeTestElement(
           adapter,
           currentCaseRun,
           testRun,
@@ -141,23 +141,23 @@ export async function runTestRun(
           analyzer,
           api,
           wrappedEvents,
-          navigationSuite && bundleRun
+          navigationSurface && bundleRun
             ? {
-                navigationSuite,
+                navigationSurface,
                 bundleRun,
               }
             : undefined
         );
       }
 
-      // All cases done in this suite — mark suite run completed
-      await api.completeTestSuiteRun(currentSuiteRun.id, {
+      // All elements done in this surface — mark surface run completed
+      await api.completeTestSurfaceRun(currentSurfaceRun.id, {
         status: "completed",
       });
     }
 
-    // All suites done — mark bundle run and test run completed
-    await api.completeTestSuiteBundleRun(testRun.testSuiteBundleRunId, {
+    // All surfaces done — mark bundle run and test run completed
+    await api.completeTestSurfaceBundleRun(testRun.testSurfaceBundleRunId, {
       status: "completed",
     });
 

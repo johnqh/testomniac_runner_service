@@ -17,21 +17,21 @@ import type {
   InputValueResponse,
   InsertFormRequest,
   FormResponse,
-  TestCaseResponse,
+  TestElementResponse,
   CreateTestRunRequest,
   TestRunResponse,
-  CreateTestCaseRunRequest,
-  TestCaseRunResponse,
-  CompleteTestCaseRunRequest,
-  CreateTestSuiteRunRequest,
-  CompleteTestSuiteRunRequest,
-  TestSuiteRunResponse,
-  CreateTestSuiteBundleRunRequest,
-  CompleteTestSuiteBundleRunRequest,
-  TestSuiteBundleRunResponse,
-  CreateTestSuiteBundleRequest,
-  TestSuiteBundleResponse,
-  TestSuiteBundleSuiteLinkResponse,
+  CreateTestElementRunRequest,
+  TestElementRunResponse,
+  CompleteTestElementRunRequest,
+  CreateTestSurfaceRunRequest,
+  CompleteTestSurfaceRunRequest,
+  TestSurfaceRunResponse,
+  CreateTestSurfaceBundleRunRequest,
+  CompleteTestSurfaceBundleRunRequest,
+  TestSurfaceBundleRunResponse,
+  CreateTestSurfaceBundleRequest,
+  TestSurfaceBundleResponse,
+  TestSurfaceBundleSurfaceLinkResponse,
   CreateReportEmailRequest,
   HtmlElementResponse,
   ScaffoldResponse,
@@ -39,8 +39,8 @@ import type {
   PageHashes,
   DecomposedPageHashes,
   ActionableItem,
-  TestCase,
-  LegacyTestCase,
+  TestElement,
+  LegacyTestElement,
   FormInfo,
   CreateElementIdentityRequest,
   UpdateElementIdentityRequest,
@@ -56,10 +56,10 @@ import type {
   CreateExpertiseRequest,
   ExpertiseRuleResponse,
   CreateExpertiseRuleRequest,
-  TestSuite,
-  TestSuiteResponse,
-  InsertTestSuiteRequest,
-  InsertTestCaseRequest,
+  TestSurface,
+  TestSurfaceResponse,
+  InsertTestSurfaceRequest,
+  InsertTestElementRequest,
 } from "@sudobility/testomniac_types";
 
 type CompleteRunPayload = CompleteTestRunRequest;
@@ -138,20 +138,20 @@ export class ApiClient {
   }
 
   // ===========================================================================
-  // Test Case Runs
+  // Test Element Runs
   // ===========================================================================
 
-  createTestCaseRun(
-    request: CreateTestCaseRunRequest
-  ): Promise<TestCaseRunResponse> {
-    return this.post("/test-case-runs", request);
+  createTestElementRun(
+    request: CreateTestElementRunRequest
+  ): Promise<TestElementRunResponse> {
+    return this.post("/test-element-runs", request);
   }
 
-  completeTestCaseRun(
-    testCaseRunId: number,
-    payload: CompleteTestCaseRunRequest
+  completeTestElementRun(
+    testElementRunId: number,
+    payload: CompleteTestElementRunRequest
   ): Promise<void> {
-    return this.put(`/test-case-runs/${testCaseRunId}/complete`, payload);
+    return this.put(`/test-element-runs/${testElementRunId}/complete`, payload);
   }
 
   // ===========================================================================
@@ -398,20 +398,20 @@ export class ApiClient {
   }
 
   // ===========================================================================
-  // Test Cases
+  // Test Elements
   // ===========================================================================
 
-  insertTestCase(
+  insertTestElement(
     runnerId: number,
-    testCase: TestCase | LegacyTestCase,
-    testSuiteId?: number
-  ): Promise<TestCaseResponse> {
-    const body = { runnerId, testSuiteId, testCase };
-    return this.post("/test-cases", body);
+    testElement: TestElement | LegacyTestElement,
+    testSurfaceId?: number
+  ): Promise<TestElementResponse> {
+    const body = { runnerId, testSurfaceId, testElement };
+    return this.post("/test-elements", body);
   }
 
-  getTestCasesByRunner(runnerId: number): Promise<TestCaseResponse[]> {
-    return this.get(`/test-cases?runnerId=${runnerId}`);
+  getTestElementsByRunner(runnerId: number): Promise<TestElementResponse[]> {
+    return this.get(`/test-elements?runnerId=${runnerId}`);
   }
 
   // ===========================================================================
@@ -424,8 +424,8 @@ export class ApiClient {
     return this.post("/test-actions", params);
   }
 
-  getTestActionsByCase(testCaseId: number): Promise<TestActionResponse[]> {
-    return this.get(`/test-actions?testCaseId=${testCaseId}`);
+  getTestActionsByCase(testElementId: number): Promise<TestActionResponse[]> {
+    return this.get(`/test-actions?testElementId=${testElementId}`);
   }
 
   // ===========================================================================
@@ -461,23 +461,23 @@ export class ApiClient {
   }
 
   // ===========================================================================
-  // Test Suites
+  // Test Surfaces
   // ===========================================================================
 
-  insertTestSuite(
+  insertTestSurface(
     runnerId: number,
-    testSuite: TestSuite
-  ): Promise<TestSuiteResponse> {
-    const body: InsertTestSuiteRequest = { runnerId, testSuite };
-    return this.post("/test-suites", body);
+    testSurface: TestSurface
+  ): Promise<TestSurfaceResponse> {
+    const body: InsertTestSurfaceRequest = { runnerId, testSurface };
+    return this.post("/test-surfaces", body);
   }
 
-  getTestSuitesByRunner(runnerId: number): Promise<TestSuiteResponse[]> {
-    return this.get(`/test-suites?runnerId=${runnerId}`);
+  getTestSurfacesByRunner(runnerId: number): Promise<TestSurfaceResponse[]> {
+    return this.get(`/test-surfaces?runnerId=${runnerId}`);
   }
 
-  getTestSuite(id: number): Promise<TestSuiteResponse | null> {
-    return this.get(`/test-suites/${id}`);
+  getTestSurface(id: number): Promise<TestSurfaceResponse | null> {
+    return this.get(`/test-surfaces/${id}`);
   }
 
   // ===========================================================================
@@ -590,39 +590,39 @@ export class ApiClient {
   // Ensure (find or create)
   // ===========================================================================
 
-  ensureTestSuiteBundle(
+  ensureTestSurfaceBundle(
     runnerId: number,
     title: string,
     uid?: string
-  ): Promise<TestSuiteBundleResponse> {
-    const body: CreateTestSuiteBundleRequest = { runnerId, title, uid };
-    return this.post("/test-suite-bundles", body);
+  ): Promise<TestSurfaceBundleResponse> {
+    const body: CreateTestSurfaceBundleRequest = { runnerId, title, uid };
+    return this.post("/test-surface-bundles", body);
   }
 
-  ensureTestSuite(
+  ensureTestSurface(
     runnerId: number,
-    testSuite: TestSuite
-  ): Promise<TestSuiteResponse> {
-    const body: InsertTestSuiteRequest = { runnerId, testSuite };
-    return this.post("/test-suites", body);
+    testSurface: TestSurface
+  ): Promise<TestSurfaceResponse> {
+    const body: InsertTestSurfaceRequest = { runnerId, testSurface };
+    return this.post("/test-surfaces", body);
   }
 
-  ensureTestCase(
+  ensureTestElement(
     runnerId: number,
-    testSuiteId: number,
-    testCase: TestCase
-  ): Promise<TestCaseResponse> {
-    const body: InsertTestCaseRequest = { runnerId, testSuiteId, testCase };
-    return this.post("/test-cases", body);
+    testSurfaceId: number,
+    testElement: TestElement
+  ): Promise<TestElementResponse> {
+    const body: InsertTestElementRequest = { runnerId, testSurfaceId, testElement };
+    return this.post("/test-elements", body);
   }
 
-  ensureBundleSuiteLink(
-    testSuiteBundleId: number,
-    testSuiteId: number
-  ): Promise<TestSuiteBundleSuiteLinkResponse> {
-    return this.post("/test-suite-bundle-suites", {
-      testSuiteBundleId,
-      testSuiteId,
+  ensureBundleSurfaceLink(
+    testSurfaceBundleId: number,
+    testSurfaceId: number
+  ): Promise<TestSurfaceBundleSurfaceLinkResponse> {
+    return this.post("/test-surface-bundle-surfaces", {
+      testSurfaceBundleId,
+      testSurfaceId,
     });
   }
 
@@ -644,66 +644,66 @@ export class ApiClient {
   }
 
   // ===========================================================================
-  // Test Suite Runs
+  // Test Surface Runs
   // ===========================================================================
 
-  createTestSuiteRun(
-    request: CreateTestSuiteRunRequest
-  ): Promise<TestSuiteRunResponse> {
-    return this.post("/test-suite-runs", request);
+  createTestSurfaceRun(
+    request: CreateTestSurfaceRunRequest
+  ): Promise<TestSurfaceRunResponse> {
+    return this.post("/test-surface-runs", request);
   }
 
-  completeTestSuiteRun(
+  completeTestSurfaceRun(
     id: number,
-    payload: CompleteTestSuiteRunRequest
+    payload: CompleteTestSurfaceRunRequest
   ): Promise<void> {
-    return this.put(`/test-suite-runs/${id}/complete`, payload);
+    return this.put(`/test-surface-runs/${id}/complete`, payload);
   }
 
   // ===========================================================================
-  // Test Suite Bundle Runs
+  // Test Surface Bundle Runs
   // ===========================================================================
 
-  createTestSuiteBundleRun(
-    request: CreateTestSuiteBundleRunRequest
-  ): Promise<TestSuiteBundleRunResponse> {
-    return this.post("/test-suite-bundle-runs", request);
+  createTestSurfaceBundleRun(
+    request: CreateTestSurfaceBundleRunRequest
+  ): Promise<TestSurfaceBundleRunResponse> {
+    return this.post("/test-surface-bundle-runs", request);
   }
 
-  getTestSuiteBundleRun(
+  getTestSurfaceBundleRun(
     id: number
-  ): Promise<TestSuiteBundleRunResponse | null> {
-    return this.get(`/test-suite-bundle-runs/${id}`);
+  ): Promise<TestSurfaceBundleRunResponse | null> {
+    return this.get(`/test-surface-bundle-runs/${id}`);
   }
 
-  completeTestSuiteBundleRun(
+  completeTestSurfaceBundleRun(
     id: number,
-    payload: CompleteTestSuiteBundleRunRequest
+    payload: CompleteTestSurfaceBundleRunRequest
   ): Promise<void> {
-    return this.put(`/test-suite-bundle-runs/${id}/complete`, payload);
+    return this.put(`/test-surface-bundle-runs/${id}/complete`, payload);
   }
 
   // ===========================================================================
   // Queries for execution loop
   // ===========================================================================
 
-  getTestCasesByTestSuite(testSuiteId: number): Promise<TestCaseResponse[]> {
-    return this.get(`/test-cases?testSuiteId=${testSuiteId}`);
+  getTestElementsByTestSurface(testSurfaceId: number): Promise<TestElementResponse[]> {
+    return this.get(`/test-elements?testSurfaceId=${testSurfaceId}`);
   }
 
-  getTestSuitesByBundle(bundleId: number): Promise<TestSuiteResponse[]> {
-    return this.get(`/test-suite-bundle-suites?bundleId=${bundleId}`);
+  getTestSurfacesByBundle(bundleId: number): Promise<TestSurfaceResponse[]> {
+    return this.get(`/test-surface-bundle-surfaces?bundleId=${bundleId}`);
   }
 
-  getOpenTestCaseRuns(testSuiteRunId: number): Promise<TestCaseRunResponse[]> {
+  getOpenTestElementRuns(testSurfaceRunId: number): Promise<TestElementRunResponse[]> {
     return this.get(
-      `/test-case-runs?testSuiteRunId=${testSuiteRunId}&status=pending`
+      `/test-element-runs?testSurfaceRunId=${testSurfaceRunId}&status=pending`
     );
   }
 
-  getOpenTestSuiteRuns(bundleRunId: number): Promise<TestSuiteRunResponse[]> {
+  getOpenTestSurfaceRuns(bundleRunId: number): Promise<TestSurfaceRunResponse[]> {
     return this.get(
-      `/test-suite-runs?bundleRunId=${bundleRunId}&status=pending`
+      `/test-surface-runs?bundleRunId=${bundleRunId}&status=pending`
     );
   }
 }

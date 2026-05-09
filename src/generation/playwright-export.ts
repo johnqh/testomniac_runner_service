@@ -1,13 +1,13 @@
-import type { TestCase } from "../domain/types";
+import type { TestElement } from "../domain/types";
 
-export function exportAsPlaywrightScript(testCase: TestCase): string {
+export function exportAsPlaywrightScript(testElement: TestElement): string {
   const lines: string[] = [
     "import { test, expect } from '@playwright/test';",
     "",
-    `test('${escapeSingleQuotes(testCase.title)}', async ({ page }) => {`,
+    `test('${escapeSingleQuotes(testElement.title)}', async ({ page }) => {`,
   ];
 
-  for (const step of testCase.steps) {
+  for (const step of testElement.steps) {
     // Emit the action
     lines.push(`  ${step.action.playwrightCode}`);
 

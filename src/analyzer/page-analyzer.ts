@@ -1,11 +1,11 @@
 import type {
-  TestCase,
+  TestElement,
   Expectation,
   ActionableItem,
   SizeClass,
-  TestSuiteResponse,
-  TestSuiteBundleRunResponse,
-  TestSuiteRunResponse,
+  TestSurfaceResponse,
+  TestSurfaceBundleRunResponse,
+  TestSurfaceRunResponse,
   ActionableItemResponse,
 } from "@sudobility/testomniac_types";
 import {
@@ -22,9 +22,9 @@ export interface AnalyzerContext {
   runnerId: number;
   sizeClass: SizeClass;
   uid?: string;
-  currentTestCaseId: number;
-  currentTestSuiteId: number;
-  currentSuiteRunId: number | null;
+  currentTestElementId: number;
+  currentTestSurfaceId: number;
+  currentSurfaceRunId: number | null;
   html: string;
   currentPageStateId: number;
   beginningPageStateId: number;
@@ -33,21 +33,21 @@ export interface AnalyzerContext {
   pageRequiresLogin: boolean;
   scaffolds: DetectedScaffoldRegion[];
   actionableItems: ActionableItem[];
-  navigationSuite: TestSuiteResponse;
-  bundleRun: TestSuiteBundleRunResponse;
+  navigationSurface: TestSurfaceResponse;
+  bundleRun: TestSurfaceBundleRunResponse;
   api: ApiClient;
 }
 
 /**
- * PageAnalyzer generates expectations and discovers new test cases
+ * PageAnalyzer generates expectations and discovers new test elements
  * during discovery mode.
  */
 export class PageAnalyzer {
   /**
-   * Generate baseline expectations for a test case.
+   * Generate baseline expectations for a test element.
    * Called BEFORE expertises evaluate.
    */
-  generateExpectations(testCase: TestCase): Expectation[] {
+  generateExpectations(testElement: TestElement): Expectation[] {
     const expectations: Expectation[] = [
       {
         expectationType: ExpectationType.PageLoaded,
@@ -57,10 +57,10 @@ export class PageAnalyzer {
       },
     ];
 
-    // If test case has only a navigation action, no more expectations
+    // If test element has only a navigation action, no more expectations
     const isNavigationOnly =
-      testCase.steps.length === 1 &&
-      testCase.steps[0].action.actionType === PlaywrightAction.Goto;
+      testElement.steps.length === 1 &&
+      testElement.steps[0].action.actionType === PlaywrightAction.Goto;
 
     if (!isNavigationOnly) {
       expectations.push({
@@ -81,11 +81,11 @@ export class PageAnalyzer {
   }
 
   /**
-   * Generate new test cases for scaffolds and page content.
+   * Generate new test elements for scaffolds and page content.
    * Called AFTER expertises evaluate and the target page state is established.
    */
-  async generateTestCases(
-    testCase: TestCase,
+  async generateTestElements(
+    testElement: TestElement,
     context: AnalyzerContext
   ): Promise<void> {
     const currentPageStateId = await this.ensureTargetPageState(context);
@@ -94,26 +94,26 @@ export class PageAnalyzer {
       currentPageStateId,
     };
 
-    if (this.isHoverOnly(testCase)) {
-      await this.generateHoverFollowUpCases(testCase, resolvedContext);
+    if (this.isHoverOnly(testElement)) {
+      await this.generateHoverFollowUpCases(testElement, resolvedContext);
       return;
     }
 
-    // a. Navigation test cases — for every link on the page
-    await this.generateNavigationTestCases(resolvedContext);
+    // a. Navigation test elements — for every link on the page
+    await this.generateNavigationTestElements(resolvedContext);
 
-    // b. Scaffold test cases — for each scaffold's actionable elements
-    await this.generateScaffoldTestCases(resolvedContext);
+    // b. Scaffold test elements — for each scaffold's actionable elements
+    await this.generateScaffoldTestElements(resolvedContext);
 
-    // c. Content test cases — for non-scaffold actionable elements
-    await this.generateContentTestCases(resolvedContext);
+    // c. Content test elements — for non-scaffold actionable elements
+    await this.generateContentTestElements(resolvedContext);
   }
 
   private async generateHoverFollowUpCases(
-    testCase: TestCase,
+    testElement: TestElement,
     context: AnalyzerContext
   ): Promise<void> {
-    const selector = this.getPrimarySelector(testCase);
+    const selector = this.getPrimarySelector(testElement);
     if (!selector || !context.currentPageStateId) return;
 
     const beginningItems =
@@ -134,68 +134,68 @@ export class PageAnalyzer {
       context.actionableItems.find(item => item.selector === selector) ?? null;
 
     if (revealedItems.length === 0 && hoveredItem) {
-      const clickCase = this.buildClickTestCase(
+      const clickCase = this.buildClickTestElement(
         hoveredItem,
         context.currentPath,
         context.sizeClass,
         context.uid,
         context.currentPageStateId,
-        context.currentTestCaseId
+        context.currentTestElementId
       );
-      const tc = await context.api.ensureTestCase(
+      const tc = await context.api.ensureTestElement(
         context.runnerId,
-        context.currentTestSuiteId,
+        context.currentTestSurfaceId,
         clickCase
       );
-      await context.api.createTestCaseRun({
-        testCaseId: tc.id,
-        testSuiteRunId: context.currentSuiteRunId ?? undefined,
+      await context.api.createTestElementRun({
+        testElementId: tc.id,
+        testSurfaceRunId: context.currentSurfaceRunId ?? undefined,
       });
       return;
     }
 
     for (const item of revealedItems) {
-      const nextHover = this.buildHoverTestCase(
+      const nextHover = this.buildHoverTestElement(
         item,
         context.currentPath,
         context.sizeClass,
         context.uid,
         context.currentPageStateId,
-        context.currentTestCaseId
+        context.currentTestElementId
       );
-      const tc = await context.api.ensureTestCase(
+      const tc = await context.api.ensureTestElement(
         context.runnerId,
-        context.currentTestSuiteId,
+        context.currentTestSurfaceId,
         nextHover
       );
-      await context.api.createTestCaseRun({
-        testCaseId: tc.id,
-        testSuiteRunId: context.currentSuiteRunId ?? undefined,
+      await context.api.createTestElementRun({
+        testElementId: tc.id,
+        testSurfaceRunId: context.currentSurfaceRunId ?? undefined,
       });
     }
   }
 
-  private async generateNavigationTestCases(
+  private async generateNavigationTestElements(
     context: AnalyzerContext
   ): Promise<void> {
     if (context.pageRequiresLogin) return;
 
-    const { api, runnerId, sizeClass, uid, navigationSuite, bundleRun } =
+    const { api, runnerId, sizeClass, uid, navigationSurface, bundleRun } =
       context;
     const links = context.actionableItems.filter(
       item => item.actionKind === "navigate" && item.href && item.visible
     );
 
-    // Ensure navigation suite is in the bundle
-    await api.ensureBundleSuiteLink(
-      bundleRun.testSuiteBundleId,
-      navigationSuite.id
+    // Ensure navigation surface is in the bundle
+    await api.ensureBundleSurfaceLink(
+      bundleRun.testSurfaceBundleId,
+      navigationSurface.id
     );
 
-    // Ensure a suite run exists for the navigation suite under this bundle run
-    const suiteRun = await this.ensureSuiteRun(
+    // Ensure a surface run exists for the navigation surface under this bundle run
+    const surfaceRun = await this.ensureSurfaceRun(
       api,
-      navigationSuite.id,
+      navigationSurface.id,
       bundleRun.id
     );
 
@@ -204,25 +204,25 @@ export class PageAnalyzer {
       const path = this.extractRelativePath(link.href);
       if (!path) continue;
 
-      const testCase = this.buildNavigationTestCase(
+      const testElement = this.buildNavigationTestElement(
         path,
         sizeClass,
         uid,
         context.currentPageStateId
       );
-      const tc = await api.ensureTestCase(
+      const tc = await api.ensureTestElement(
         runnerId,
-        navigationSuite.id,
-        testCase
+        navigationSurface.id,
+        testElement
       );
-      await api.createTestCaseRun({
-        testCaseId: tc.id,
-        testSuiteRunId: suiteRun.id,
+      await api.createTestElementRun({
+        testElementId: tc.id,
+        testSurfaceRunId: surfaceRun.id,
       });
     }
   }
 
-  private async generateScaffoldTestCases(
+  private async generateScaffoldTestElements(
     context: AnalyzerContext
   ): Promise<void> {
     const { api, runnerId, sizeClass, uid, bundleRun } = context;
@@ -234,40 +234,40 @@ export class PageAnalyzer {
       );
       if (scaffoldItems.length === 0) continue;
 
-      // Ensure a test suite for this scaffold
-      const suiteTitle = `Scaffold: ${scaffold.type}`;
-      const suite = await api.ensureTestSuite(runnerId, {
-        title: suiteTitle,
+      // Ensure a test surface for this scaffold
+      const surfaceTitle = `Scaffold: ${scaffold.type}`;
+      const surface = await api.ensureTestSurface(runnerId, {
+        title: surfaceTitle,
         description: `Tests for ${scaffold.type} scaffold`,
         startingPageStateId: context.currentPageStateId,
         startingPath: context.currentPath,
         sizeClass,
         priority: 3,
-        suite_tags: ["scaffold", scaffold.type],
+        surface_tags: ["scaffold", scaffold.type],
         uid,
       });
 
-      await api.ensureBundleSuiteLink(bundleRun.testSuiteBundleId, suite.id);
-      const suiteRun = await this.ensureSuiteRun(api, suite.id, bundleRun.id);
+      await api.ensureBundleSurfaceLink(bundleRun.testSurfaceBundleId, surface.id);
+      const surfaceRun = await this.ensureSurfaceRun(api, surface.id, bundleRun.id);
 
       for (const item of scaffoldItems) {
-        const testCase = this.buildHoverTestCase(
+        const testElement = this.buildHoverTestElement(
           item,
           context.currentPath,
           sizeClass,
           uid,
           context.currentPageStateId
         );
-        const tc = await api.ensureTestCase(runnerId, suite.id, testCase);
-        await api.createTestCaseRun({
-          testCaseId: tc.id,
-          testSuiteRunId: suiteRun.id,
+        const tc = await api.ensureTestElement(runnerId, surface.id, testElement);
+        await api.createTestElementRun({
+          testElementId: tc.id,
+          testSurfaceRunId: surfaceRun.id,
         });
       }
     }
   }
 
-  private async generateContentTestCases(
+  private async generateContentTestElements(
     context: AnalyzerContext
   ): Promise<void> {
     const {
@@ -285,52 +285,52 @@ export class PageAnalyzer {
     );
     if (contentItems.length === 0) return;
 
-    const suiteTitle = `Page: ${context.currentPath}`;
-    const suite = await api.ensureTestSuite(runnerId, {
-      title: suiteTitle,
+    const surfaceTitle = `Page: ${context.currentPath}`;
+    const surface = await api.ensureTestSurface(runnerId, {
+      title: surfaceTitle,
       description: `Tests for page content at ${context.currentPath}`,
       startingPageStateId: context.currentPageStateId,
       startingPath: context.currentPath,
       sizeClass,
       priority: 3,
-      suite_tags: ["page-content"],
+      surface_tags: ["page-content"],
       uid,
     });
 
-    await api.ensureBundleSuiteLink(bundleRun.testSuiteBundleId, suite.id);
-    const suiteRun = await this.ensureSuiteRun(api, suite.id, bundleRun.id);
+    await api.ensureBundleSurfaceLink(bundleRun.testSurfaceBundleId, surface.id);
+    const surfaceRun = await this.ensureSurfaceRun(api, surface.id, bundleRun.id);
 
     for (const item of contentItems) {
-      const testCase = this.buildHoverTestCase(
+      const testElement = this.buildHoverTestElement(
         item,
         context.currentPath,
         sizeClass,
         uid,
         context.currentPageStateId
       );
-      const tc = await api.ensureTestCase(runnerId, suite.id, testCase);
-      await api.createTestCaseRun({
-        testCaseId: tc.id,
-        testSuiteRunId: suiteRun.id,
+      const tc = await api.ensureTestElement(runnerId, surface.id, testElement);
+      await api.createTestElementRun({
+        testElementId: tc.id,
+        testSurfaceRunId: surfaceRun.id,
       });
     }
   }
 
-  private async ensureSuiteRun(
+  private async ensureSurfaceRun(
     api: ApiClient,
-    testSuiteId: number,
+    testSurfaceId: number,
     bundleRunId: number
-  ): Promise<TestSuiteRunResponse> {
-    const openSuiteRuns = await api.getOpenTestSuiteRuns(bundleRunId);
-    const existing = openSuiteRuns.find(
-      suiteRun => suiteRun.testSuiteId === testSuiteId
+  ): Promise<TestSurfaceRunResponse> {
+    const openSurfaceRuns = await api.getOpenTestSurfaceRuns(bundleRunId);
+    const existing = openSurfaceRuns.find(
+      surfaceRun => surfaceRun.testSurfaceId === testSurfaceId
     );
     if (existing) {
       return existing;
     }
-    return api.createTestSuiteRun({
-      testSuiteId,
-      testSuiteBundleRunId: bundleRunId,
+    return api.createTestSurfaceRun({
+      testSurfaceId,
+      testSurfaceBundleRunId: bundleRunId,
     });
   }
 
@@ -351,17 +351,17 @@ export class PageAnalyzer {
     }
   }
 
-  private buildNavigationTestCase(
+  private buildNavigationTestElement(
     path: string,
     sizeClass: SizeClass,
     uid?: string,
     startingPageStateId?: number
-  ): TestCase {
+  ): TestElement {
     return {
       title: `Navigate to ${path}`,
       type: "navigation",
       sizeClass,
-      suite_tags: ["navigation"],
+      surface_tags: ["navigation"],
       priority: 3,
       startingPageStateId,
       startingPath: path,
@@ -383,22 +383,22 @@ export class PageAnalyzer {
     };
   }
 
-  private buildHoverTestCase(
+  private buildHoverTestElement(
     item: ActionableItem,
     startingPath: string,
     sizeClass: SizeClass,
     uid?: string,
     startingPageStateId?: number,
-    dependencyTestCaseId?: number
-  ): TestCase {
+    dependencyTestElementId?: number
+  ): TestElement {
     const label = item.accessibleName || item.textContent || item.selector;
     return {
       title: `Hover over ${label}`,
       type: "interaction",
       sizeClass,
-      suite_tags: ["interaction", "hover"],
+      surface_tags: ["interaction", "hover"],
       priority: 4,
-      dependencyTestCaseId,
+      dependencyTestElementId,
       startingPageStateId,
       startingPath,
       steps: [
@@ -419,22 +419,22 @@ export class PageAnalyzer {
     };
   }
 
-  private buildClickTestCase(
+  private buildClickTestElement(
     item: ActionableItem,
     startingPath: string,
     sizeClass: SizeClass,
     uid?: string,
     startingPageStateId?: number,
-    dependencyTestCaseId?: number
-  ): TestCase {
+    dependencyTestElementId?: number
+  ): TestElement {
     const label = item.accessibleName || item.textContent || item.selector;
     return {
       title: `Click ${label}`,
       type: "interaction",
       sizeClass,
-      suite_tags: ["interaction", "click"],
+      surface_tags: ["interaction", "click"],
       priority: 5,
-      dependencyTestCaseId,
+      dependencyTestElementId,
       startingPageStateId,
       startingPath,
       steps: [
@@ -455,15 +455,15 @@ export class PageAnalyzer {
     };
   }
 
-  private isHoverOnly(testCase: TestCase): boolean {
+  private isHoverOnly(testElement: TestElement): boolean {
     return (
-      testCase.steps.length === 1 &&
-      testCase.steps[0].action.actionType === PlaywrightAction.Hover
+      testElement.steps.length === 1 &&
+      testElement.steps[0].action.actionType === PlaywrightAction.Hover
     );
   }
 
-  private getPrimarySelector(testCase: TestCase): string | null {
-    const step = testCase.steps[0];
+  private getPrimarySelector(testElement: TestElement): string | null {
+    const step = testElement.steps[0];
     return step?.action.path ?? null;
   }
 

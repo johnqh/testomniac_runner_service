@@ -1,6 +1,6 @@
 import type { SizeClass } from "../domain/types";
-import type { LegacyGeneratedTestCase } from "./render";
-import { assignSuiteTags } from "./suite-tagger";
+import type { LegacyGeneratedTestElement } from "./render";
+import { assignSurfaceTags } from "./surface-tagger";
 
 interface NavigationInput {
   fromPageName: string;
@@ -14,14 +14,14 @@ interface NavigationInput {
 
 export function generateNavigationTest(
   input: NavigationInput
-): LegacyGeneratedTestCase {
+): LegacyGeneratedTestElement {
   const pattern = new URL(input.toUrl).pathname;
   return {
-    testCase: {
+    testElement: {
       name: `Navigation — ${input.fromPageName} → ${input.toPageName}`,
       type: "navigation",
       sizeClass: input.sizeClass,
-      suite_tags: assignSuiteTags("navigation", input.priority),
+      surface_tags: assignSurfaceTags("navigation", input.priority),
       priority: input.priority,
     },
     actions: [

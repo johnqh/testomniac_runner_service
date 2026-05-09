@@ -5,14 +5,14 @@ import {
   ExpectationType,
   ExpectationSeverity,
 } from "../domain/types";
-import type { TestCase } from "../domain/types";
+import type { TestElement } from "../domain/types";
 
-function makeTestCase(overrides: Partial<TestCase>): TestCase {
+function makeTestElement(overrides: Partial<TestElement>): TestElement {
   return {
     title: "Test",
     type: "render",
     sizeClass: "desktop",
-    suite_tags: [],
+    surface_tags: [],
     priority: 3,
     startingPageStateId: 1,
     startingPath: "/",
@@ -24,7 +24,7 @@ function makeTestCase(overrides: Partial<TestCase>): TestCase {
 
 describe("exportAsPlaywrightScript", () => {
   it("generates a render test with steps and expectations", () => {
-    const tc = makeTestCase({
+    const tc = makeTestElement({
       title: "Render — Home Page",
       steps: [
         {
@@ -77,7 +77,7 @@ describe("exportAsPlaywrightScript", () => {
   });
 
   it("generates steps with fill + click and expectations", () => {
-    const tc = makeTestCase({
+    const tc = makeTestElement({
       title: "Login flow",
       steps: [
         {

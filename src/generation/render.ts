@@ -1,6 +1,6 @@
 import type {
-  TestCase,
-  LegacyTestCase,
+  TestElement,
+  LegacyTestElement,
   LegacyTestAction,
   TestStep,
   Expectation,
@@ -11,15 +11,15 @@ import {
   ExpectationType,
   ExpectationSeverity,
 } from "../domain/types";
-import { assignSuiteTags } from "./suite-tagger";
+import { assignSurfaceTags } from "./surface-tagger";
 
-export interface GeneratedTestCase {
-  testCase: TestCase;
+export interface GeneratedTestElement {
+  testElement: TestElement;
 }
 
-/** @deprecated Use GeneratedTestCase instead */
-export interface LegacyGeneratedTestCase {
-  testCase: LegacyTestCase;
+/** @deprecated Use GeneratedTestElement instead */
+export interface LegacyGeneratedTestElement {
+  testElement: LegacyTestElement;
   actions: LegacyTestAction[];
 }
 
@@ -42,7 +42,7 @@ interface RenderInput {
   elements: RenderElement[];
 }
 
-export function generateRenderTest(input: RenderInput): GeneratedTestCase {
+export function generateRenderTest(input: RenderInput): GeneratedTestElement {
   const steps: TestStep[] = [];
 
   // Step 1: Navigate
@@ -111,11 +111,11 @@ export function generateRenderTest(input: RenderInput): GeneratedTestCase {
   });
 
   return {
-    testCase: {
+    testElement: {
       title: `Render — ${input.pageName}`,
       type: "render",
       sizeClass: input.sizeClass,
-      suite_tags: assignSuiteTags("render", input.priority),
+      surface_tags: assignSurfaceTags("render", input.priority),
       page_id: input.pageId,
       priority: input.priority,
       startingPageStateId: input.pageStateId,

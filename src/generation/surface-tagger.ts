@@ -6,7 +6,7 @@ export function assignPriority(route: string, title: string): number {
   return HIGH_PRIORITY_KEYWORDS.some(kw => text.includes(kw)) ? 1 : 2;
 }
 
-export function assignSuiteTags(
+export function assignSurfaceTags(
   testType: string,
   priority: number | string
 ): string[] {

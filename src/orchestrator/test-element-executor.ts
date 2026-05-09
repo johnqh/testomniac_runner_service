@@ -1,10 +1,10 @@
 import type { BrowserAdapter } from "../adapter";
 import type { ApiClient } from "../api/client";
 import type {
-  TestCaseRunResponse,
+  TestElementRunResponse,
   TestRunResponse,
-  TestSuiteResponse,
-  TestSuiteBundleRunResponse,
+  TestSurfaceResponse,
+  TestSurfaceBundleRunResponse,
 } from "@sudobility/testomniac_types";
 import type { ScanEventHandler } from "./types";
 import type { Expertise, ExpertiseContext, Outcome } from "../expertise/types";
@@ -14,20 +14,20 @@ import { detectScaffoldRegions } from "../scanner/component-detector";
 import { detectPatternsWithInstances } from "../scanner/pattern-detector";
 
 /**
- * Execute a single test case: run actions, decompose page, evaluate expertises,
- * set outcomes, create findings, and optionally discover new test cases.
+ * Execute a single test element: run actions, decompose page, evaluate expertises,
+ * set outcomes, create findings, and optionally discover new test elements.
  */
-export async function executeTestCase(
+export async function executeTestElement(
   adapter: BrowserAdapter,
-  testCaseRun: TestCaseRunResponse,
+  testElementRun: TestElementRunResponse,
   testRun: TestRunResponse,
   expertises: Expertise[],
   analyzer: PageAnalyzer | null,
   api: ApiClient,
   events: ScanEventHandler,
   discoveryContext?: {
-    navigationSuite: TestSuiteResponse;
-    bundleRun: TestSuiteBundleRunResponse;
+    navigationSurface: TestSurfaceResponse;
+    bundleRun: TestSurfaceBundleRunResponse;
   }
 ): Promise<void> {
   const startTime = Date.now();
@@ -60,32 +60,32 @@ export async function executeTestCase(
   });
 
   try {
-    const allTestCases = await api.getTestCasesByRunner(testRun.runnerId);
-    const testCaseById = new Map(
-      allTestCases.map(testCase => [testCase.id, testCase])
+    const allTestElements = await api.getTestElementsByRunner(testRun.runnerId);
+    const testElementById = new Map(
+      allTestElements.map(testElement => [testElement.id, testElement])
     );
-    const testCase = testCaseById.get(testCaseRun.testCaseId);
-    if (!testCase) {
-      throw new Error(`Test case ${testCaseRun.testCaseId} not found`);
+    const testElement = testElementById.get(testElementRun.testElementId);
+    if (!testElement) {
+      throw new Error(`Test case ${testElementRun.testElementId} not found`);
     }
 
     // Parse steps from JSON
-    const steps = parseStoredSteps(testCase.stepsJson);
-    const dependencyChain = buildDependencyChain(testCase, testCaseById);
+    const steps = parseStoredSteps(testElement.stepsJson);
+    const dependencyChain = buildDependencyChain(testElement, testElementById);
     const setupCases = dependencyChain.slice(0, -1);
 
     // Record beginning page state
     const _beginningUrl = await adapter.getUrl();
-    const beginningPageStateId = testCase.startingPageStateId ?? 0;
+    const beginningPageStateId = testElement.startingPageStateId ?? 0;
 
     // Navigate to starting path if needed
-    if (testCase.startingPath) {
+    if (testElement.startingPath) {
       const baseUrl = testRun.scanUrl
         ? new URL(testRun.scanUrl).origin
         : "http://localhost";
-      const absoluteUrl = testCase.startingPath.startsWith("http")
-        ? testCase.startingPath
-        : new URL(testCase.startingPath, baseUrl).toString();
+      const absoluteUrl = testElement.startingPath.startsWith("http")
+        ? testElement.startingPath
+        : new URL(testElement.startingPath, baseUrl).toString();
       await adapter.goto(absoluteUrl, { waitUntil: "networkidle0" });
     }
 
@@ -110,7 +110,7 @@ export async function executeTestCase(
 
     // Parse global expectations
     const globalExpectations =
-      (testCase.globalExpectationsJson as Array<{
+      (testElement.globalExpectationsJson as Array<{
         expectationType: string;
         elementIdentityId?: number;
         expectedValue?: string;
@@ -122,10 +122,10 @@ export async function executeTestCase(
 
     // If discovery mode: generate baseline expectations
     let expectations = [...globalExpectations];
-    if (analyzer && testCase.stepsJson) {
-      const parsedTestCase = {
-        title: testCase.title,
-        type: testCase.testType as
+    if (analyzer && testElement.stepsJson) {
+      const parsedTestElement = {
+        title: testElement.title,
+        type: testElement.testType as
           | "navigation"
           | "render"
           | "interaction"
@@ -133,15 +133,15 @@ export async function executeTestCase(
           | "form_negative"
           | "password"
           | "e2e",
-        sizeClass: testCase.sizeClass as "desktop" | "mobile",
-        suite_tags: testCase.suiteTags,
-        priority: testCase.priority,
-        startingPageStateId: testCase.startingPageStateId ?? 0,
-        startingPath: testCase.startingPath ?? "",
+        sizeClass: testElement.sizeClass as "desktop" | "mobile",
+        surface_tags: testElement.surfaceTags,
+        priority: testElement.priority,
+        startingPageStateId: testElement.startingPageStateId ?? 0,
+        startingPath: testElement.startingPath ?? "",
         steps: steps as any,
         globalExpectations: globalExpectations as any,
       };
-      const generated = analyzer.generateExpectations(parsedTestCase);
+      const generated = analyzer.generateExpectations(parsedTestElement);
       expectations = [...expectations, ...generated];
     }
 
@@ -165,7 +165,7 @@ export async function executeTestCase(
       for (const outcome of outcomes) {
         if (outcome.result === "warning" || outcome.result === "error") {
           await api.createTestRunFinding({
-            testCaseRunId: testCaseRun.id,
+            testElementRunId: testElementRun.id,
             type: outcome.result === "error" ? "error" : "warning",
             title: `[${expertise.name}] ${outcome.expected}`,
             description: outcome.observed,
@@ -191,9 +191,9 @@ export async function executeTestCase(
         ? "completed"
         : "completed";
 
-    // Complete test case run
+    // Complete test element run
     const durationMs = Date.now() - startTime;
-    await api.completeTestCaseRun(testCaseRun.id, {
+    await api.completeTestElementRun(testElementRun.id, {
       status,
       durationMs,
       expectedOutcome: expectedOutcome || undefined,
@@ -207,12 +207,12 @@ export async function executeTestCase(
         : {}),
     });
 
-    events.onTestCaseRunCompleted({
-      testCaseRunId: testCaseRun.id,
+    events.onTestElementRunCompleted({
+      testElementRunId: testElementRun.id,
       passed: !hasErrors,
     });
 
-    // If discovery mode: generate new test cases
+    // If discovery mode: generate new test elements
     if (analyzer && discoveryContext) {
       const currentUrl = await adapter.getUrl();
       const url = new URL(currentUrl);
@@ -224,9 +224,9 @@ export async function executeTestCase(
         runnerId: testRun.runnerId,
         sizeClass: testRun.sizeClass as "desktop" | "mobile",
         uid: testRun.createdByUserId ?? undefined,
-        currentTestCaseId: testCase.id,
-        currentTestSuiteId: testCase.testSuiteId,
-        currentSuiteRunId: testCaseRun.testSuiteRunId,
+        currentTestElementId: testElement.id,
+        currentTestSurfaceId: testElement.testSurfaceId,
+        currentSurfaceRunId: testElementRun.testSurfaceRunId,
         html,
         currentPageStateId: 0,
         beginningPageStateId: beginningPageStateId,
@@ -235,31 +235,31 @@ export async function executeTestCase(
         pageRequiresLogin: page.requiresLogin ?? false,
         scaffolds,
         actionableItems: items,
-        navigationSuite: discoveryContext.navigationSuite,
+        navigationSurface: discoveryContext.navigationSurface,
         bundleRun: discoveryContext.bundleRun,
         api,
       };
 
-      const parsedTestCase = {
-        title: testCase.title,
-        type: testCase.testType as any,
-        sizeClass: testCase.sizeClass as any,
-        suite_tags: testCase.suiteTags,
-        priority: testCase.priority,
-        startingPageStateId: testCase.startingPageStateId ?? 0,
-        startingPath: testCase.startingPath ?? "",
+      const parsedTestElement = {
+        title: testElement.title,
+        type: testElement.testType as any,
+        sizeClass: testElement.sizeClass as any,
+        surface_tags: testElement.surfaceTags,
+        priority: testElement.priority,
+        startingPageStateId: testElement.startingPageStateId ?? 0,
+        startingPath: testElement.startingPath ?? "",
         steps: steps as any,
         globalExpectations: globalExpectations as any,
       };
 
-      await analyzer.generateTestCases(parsedTestCase, analyzerCtx);
+      await analyzer.generateTestElements(parsedTestElement, analyzerCtx);
     }
   } catch (error) {
     const durationMs = Date.now() - startTime;
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
 
-    await api.completeTestCaseRun(testCaseRun.id, {
+    await api.completeTestElementRun(testElementRun.id, {
       status: "failed",
       durationMs,
       errorMessage,
@@ -268,15 +268,15 @@ export async function executeTestCase(
     });
 
     await api.createTestRunFinding({
-      testCaseRunId: testCaseRun.id,
+      testElementRunId: testElementRun.id,
       type: "error",
       title: `Test execution error`,
       description: errorMessage,
     });
 
     events.onFindingCreated({ type: "error", title: "Test execution error" });
-    events.onTestCaseRunCompleted({
-      testCaseRunId: testCaseRun.id,
+    events.onTestElementRunCompleted({
+      testElementRunId: testElementRun.id,
       passed: false,
     });
   }
@@ -323,41 +323,41 @@ function parseStoredSteps(stepsJson: unknown): Array<{
 }
 
 function buildDependencyChain(
-  testCase: {
+  testElement: {
     id: number;
-    dependencyTestCaseId: number | null;
+    dependencyTestElementId: number | null;
   },
-  testCaseById: Map<
+  testElementById: Map<
     number,
     {
       id: number;
-      dependencyTestCaseId: number | null;
+      dependencyTestElementId: number | null;
       stepsJson: unknown;
     }
   >
 ) {
   const chain: Array<{
     id: number;
-    dependencyTestCaseId: number | null;
+    dependencyTestElementId: number | null;
     stepsJson: unknown;
   }> = [];
   const seen = new Set<number>();
   let current:
     | {
         id: number;
-        dependencyTestCaseId: number | null;
+        dependencyTestElementId: number | null;
         stepsJson: unknown;
       }
-    | undefined = testCaseById.get(testCase.id);
+    | undefined = testElementById.get(testElement.id);
 
   while (current) {
     if (seen.has(current.id)) {
-      throw new Error(`Cyclic test case dependency detected at ${current.id}`);
+      throw new Error(`Cyclic test element dependency detected at ${current.id}`);
     }
     seen.add(current.id);
     chain.unshift(current);
-    current = current.dependencyTestCaseId
-      ? testCaseById.get(current.dependencyTestCaseId)
+    current = current.dependencyTestElementId
+      ? testElementById.get(current.dependencyTestElementId)
       : undefined;
   }
 
