@@ -114,6 +114,21 @@ High-level flow:
 
 This is the execution architecture of the system.
 
+### URL Bootstrap Entry
+
+The API still exposes `POST /api/v1/scan` as the public convenience endpoint
+for "scan this URL".
+
+That route should be understood as bootstrap only:
+
+1. resolve the environment/runner
+2. create the initial persistent coverage objects
+3. create the root `test_run` and its related run records
+4. return the root run id
+
+After that, `runTestRun()` is the only execution loop. `/scan` does not imply a
+second orchestration model.
+
 ## Test Case Execution Boundary
 
 [`src/orchestrator/test-case-executor.ts`](/Users/johnhuang/projects/testomniac_runner_service/src/orchestrator/test-case-executor.ts)

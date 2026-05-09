@@ -118,6 +118,7 @@ export { PageAnalyzer, type AnalyzerContext } from "./analyzer";
 // Expertise system
 export type { Outcome, ExpertiseContext, Expertise } from "./expertise";
 export {
+  createExpertises,
   TesterExpertise,
   SeoExpertise,
   SecurityExpertise,

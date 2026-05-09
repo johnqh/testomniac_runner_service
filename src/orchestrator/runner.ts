@@ -18,28 +18,28 @@ export async function runTestRun(
   events: ScanEventHandler
 ): Promise<ScanResult> {
   const startTime = Date.now();
-  let pagesFound = 0;
-  let pageStatesFound = 0;
-  let testRunsCompleted = 0;
+  const pageIdsFound = new Set<number>();
+  const pageStateIdsFound = new Set<number>();
+  const completedTestElementRunIds = new Set<number>();
   let findingsFound = 0;
 
   // Wrap event handler to track stats
   const wrappedEvents: ScanEventHandler = {
     ...events,
     onPageFound(page) {
-      pagesFound++;
+      pageIdsFound.add(page.pageId);
       events.onPageFound(page);
-      emitStats();
+      void emitStats();
     },
     onPageStateCreated(state) {
-      pageStatesFound++;
+      pageStateIdsFound.add(state.pageStateId);
       events.onPageStateCreated(state);
-      emitStats();
+      void emitStats();
     },
     onTestElementRunCompleted(run) {
-      testRunsCompleted++;
+      completedTestElementRunIds.add(run.testElementRunId);
       events.onTestElementRunCompleted(run);
-      emitStats();
+      void emitStats();
     },
     onTestRunCompleted(run) {
       events.onTestRunCompleted(run);
@@ -47,17 +47,31 @@ export async function runTestRun(
     onFindingCreated(finding) {
       findingsFound++;
       events.onFindingCreated(finding);
-      emitStats();
+      void emitStats();
     },
   };
 
-  function emitStats() {
+  async function emitStats() {
+    const pagesFound = pageIdsFound.size;
+    const pageStatesFound = pageStateIdsFound.size;
+    const testRunsCompleted = completedTestElementRunIds.size;
+
     events.onStatsUpdated({
       pagesFound,
       pageStatesFound,
       testRunsCompleted,
       findingsFound,
     });
+
+    try {
+      await api.updateTestRunStats(config.testRunId, {
+        pagesFound,
+        pageStatesFound,
+        testRunsCompleted,
+      });
+    } catch {
+      // best effort while the run is still in flight
+    }
   }
 
   try {
@@ -164,6 +178,9 @@ export async function runTestRun(
     });
 
     const durationMs = Date.now() - startTime;
+    const pagesFound = pageIdsFound.size;
+    const pageStatesFound = pageStateIdsFound.size;
+    const testRunsCompleted = completedTestElementRunIds.size;
     await api.completeTestRun(config.testRunId, {
       status: "completed",
       totalDurationMs: durationMs,

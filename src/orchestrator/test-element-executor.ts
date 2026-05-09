@@ -219,6 +219,10 @@ export async function executeTestElement(
       const currentPath = `${url.pathname}${url.search}`;
 
       const page = await api.findOrCreatePage(testRun.runnerId, currentPath);
+      events.onPageFound({
+        relativePath: currentPath,
+        pageId: page.id,
+      });
 
       const analyzerCtx: AnalyzerContext = {
         runnerId: testRun.runnerId,
@@ -238,6 +242,7 @@ export async function executeTestElement(
         navigationSurface: discoveryContext.navigationSurface,
         bundleRun: discoveryContext.bundleRun,
         api,
+        events,
       };
 
       const parsedTestElement = {

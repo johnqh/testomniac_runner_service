@@ -17,6 +17,7 @@ import { computeHashes } from "../browser/page-utils";
 import type { ApiClient } from "../api/client";
 import type { DetectedScaffoldRegion } from "../scanner/component-detector";
 import { createHash } from "node:crypto";
+import type { ScanEventHandler } from "../orchestrator/types";
 
 export interface AnalyzerContext {
   runnerId: number;
@@ -36,6 +37,7 @@ export interface AnalyzerContext {
   navigationSurface: TestSurfaceResponse;
   bundleRun: TestSurfaceBundleRunResponse;
   api: ApiClient;
+  events: ScanEventHandler;
 }
 
 /**
@@ -246,6 +248,10 @@ export class PageAnalyzer {
         surface_tags: ["scaffold", scaffold.type],
         uid,
       });
+      context.events.onTestSurfaceCreated({
+        surfaceId: surface.id,
+        title: surface.title,
+      });
 
       await api.ensureBundleSurfaceLink(
         bundleRun.testSurfaceBundleId,
@@ -306,6 +312,10 @@ export class PageAnalyzer {
       priority: 3,
       surface_tags: ["page-content"],
       uid,
+    });
+    context.events.onTestSurfaceCreated({
+      surfaceId: surface.id,
+      title: surface.title,
     });
 
     await api.ensureBundleSurfaceLink(
@@ -499,6 +509,10 @@ export class PageAnalyzer {
     context: AnalyzerContext
   ): Promise<number> {
     if (context.currentPageStateId > 0) {
+      context.events.onPageStateCreated({
+        pageStateId: context.currentPageStateId,
+        pageId: context.pageId,
+      });
       return context.currentPageStateId;
     }
 
@@ -509,6 +523,10 @@ export class PageAnalyzer {
       context.sizeClass
     );
     if (existing) {
+      context.events.onPageStateCreated({
+        pageStateId: existing.id,
+        pageId: context.pageId,
+      });
       return existing.id;
     }
 
@@ -528,6 +546,10 @@ export class PageAnalyzer {
       hashes,
       contentText: context.html.slice(0, 5000),
       contentHtmlElementId: contentElement.id,
+    });
+    context.events.onPageStateCreated({
+      pageStateId: pageState.id,
+      pageId: context.pageId,
     });
 
     return pageState.id;
