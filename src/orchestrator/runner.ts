@@ -124,7 +124,9 @@ export async function runTestRun(
       while (hasOpenCases) {
         if (config.signal?.aborted) break;
 
-        const openCaseRuns = await api.getOpenTestElementRuns(currentSurfaceRun.id);
+        const openCaseRuns = await api.getOpenTestElementRuns(
+          currentSurfaceRun.id
+        );
         if (openCaseRuns.length === 0) {
           hasOpenCases = false;
           break;

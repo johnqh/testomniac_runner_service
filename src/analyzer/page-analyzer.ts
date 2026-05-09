@@ -247,8 +247,15 @@ export class PageAnalyzer {
         uid,
       });
 
-      await api.ensureBundleSurfaceLink(bundleRun.testSurfaceBundleId, surface.id);
-      const surfaceRun = await this.ensureSurfaceRun(api, surface.id, bundleRun.id);
+      await api.ensureBundleSurfaceLink(
+        bundleRun.testSurfaceBundleId,
+        surface.id
+      );
+      const surfaceRun = await this.ensureSurfaceRun(
+        api,
+        surface.id,
+        bundleRun.id
+      );
 
       for (const item of scaffoldItems) {
         const testElement = this.buildHoverTestElement(
@@ -258,7 +265,11 @@ export class PageAnalyzer {
           uid,
           context.currentPageStateId
         );
-        const tc = await api.ensureTestElement(runnerId, surface.id, testElement);
+        const tc = await api.ensureTestElement(
+          runnerId,
+          surface.id,
+          testElement
+        );
         await api.createTestElementRun({
           testElementId: tc.id,
           testSurfaceRunId: surfaceRun.id,
@@ -297,8 +308,15 @@ export class PageAnalyzer {
       uid,
     });
 
-    await api.ensureBundleSurfaceLink(bundleRun.testSurfaceBundleId, surface.id);
-    const surfaceRun = await this.ensureSurfaceRun(api, surface.id, bundleRun.id);
+    await api.ensureBundleSurfaceLink(
+      bundleRun.testSurfaceBundleId,
+      surface.id
+    );
+    const surfaceRun = await this.ensureSurfaceRun(
+      api,
+      surface.id,
+      bundleRun.id
+    );
 
     for (const item of contentItems) {
       const testElement = this.buildHoverTestElement(

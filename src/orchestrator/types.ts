@@ -20,7 +20,10 @@ export interface ScanEventHandler {
     screenshotPath?: string;
   }): void;
   onTestSurfaceCreated(surface: { surfaceId: number; title: string }): void;
-  onTestElementRunCompleted(run: { testElementRunId: number; passed: boolean }): void;
+  onTestElementRunCompleted(run: {
+    testElementRunId: number;
+    passed: boolean;
+  }): void;
   onTestRunCompleted(run: { testRunId: number; passed: boolean }): void;
   onFindingCreated(finding: { type: string; title: string }): void;
   onStatsUpdated(stats: {

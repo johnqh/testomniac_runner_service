@@ -612,7 +612,11 @@ export class ApiClient {
     testSurfaceId: number,
     testElement: TestElement
   ): Promise<TestElementResponse> {
-    const body: InsertTestElementRequest = { runnerId, testSurfaceId, testElement };
+    const body: InsertTestElementRequest = {
+      runnerId,
+      testSurfaceId,
+      testElement,
+    };
     return this.post("/test-elements", body);
   }
 
@@ -687,7 +691,9 @@ export class ApiClient {
   // Queries for execution loop
   // ===========================================================================
 
-  getTestElementsByTestSurface(testSurfaceId: number): Promise<TestElementResponse[]> {
+  getTestElementsByTestSurface(
+    testSurfaceId: number
+  ): Promise<TestElementResponse[]> {
     return this.get(`/test-elements?testSurfaceId=${testSurfaceId}`);
   }
 
@@ -695,13 +701,17 @@ export class ApiClient {
     return this.get(`/test-surface-bundle-surfaces?bundleId=${bundleId}`);
   }
 
-  getOpenTestElementRuns(testSurfaceRunId: number): Promise<TestElementRunResponse[]> {
+  getOpenTestElementRuns(
+    testSurfaceRunId: number
+  ): Promise<TestElementRunResponse[]> {
     return this.get(
       `/test-element-runs?testSurfaceRunId=${testSurfaceRunId}&status=pending`
     );
   }
 
-  getOpenTestSurfaceRuns(bundleRunId: number): Promise<TestSurfaceRunResponse[]> {
+  getOpenTestSurfaceRuns(
+    bundleRunId: number
+  ): Promise<TestSurfaceRunResponse[]> {
     return this.get(
       `/test-surface-runs?bundleRunId=${bundleRunId}&status=pending`
     );

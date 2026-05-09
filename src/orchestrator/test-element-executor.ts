@@ -352,7 +352,9 @@ function buildDependencyChain(
 
   while (current) {
     if (seen.has(current.id)) {
-      throw new Error(`Cyclic test element dependency detected at ${current.id}`);
+      throw new Error(
+        `Cyclic test element dependency detected at ${current.id}`
+      );
     }
     seen.add(current.id);
     chain.unshift(current);
