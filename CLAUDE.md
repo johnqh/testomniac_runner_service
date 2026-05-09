@@ -6,7 +6,7 @@ Shared execution and discovery library used by Testomniac runner clients.
 
 This package owns the active runtime architecture for:
 
-- executing persisted test suites, cases, and case runs
+- executing persisted test surfaces, cases, and element runs
 - analyzing resulting browser states
 - generating discovery-time follow-up coverage
 - evaluating expertises and recording findings
@@ -20,38 +20,38 @@ the runtime entry point.
 
 Persistent coverage:
 
-- `test_suite_bundle`
-- `test_suite`
-- `test_case`
+- `test_surface_bundle`
+- `test_surface`
+- `test_element`
 - `test_action`
 
 Run records:
 
 - `test_run`
-- `test_suite_bundle_run`
-- `test_suite_run`
-- `test_case_run`
+- `test_surface_bundle_run`
+- `test_surface_run`
+- `test_element_run`
 - `test_run_finding`
 
 ## Execution Flow
 
 1. A client calls `runTestRun()`.
 2. The runner claims the `test_run`.
-3. It loads the active bundle run and iterates pending suite runs.
-4. For each suite run, it iterates pending case runs whose dependencies are
+3. It loads the active bundle run and iterates pending surface runs.
+4. For each surface run, it iterates pending element runs whose dependencies are
    ready.
-5. `executeTestCase()` navigates, recreates dependency setup when needed,
+5. `executeTestElement()` navigates, recreates dependency setup when needed,
    executes actions, gathers runtime artifacts, and runs expertises.
 6. If the root run is a discovery run, `PageAnalyzer` creates or resolves the
    target page state and generates follow-up cases and runs.
-7. The runner completes suite runs, bundle runs, and the root test run.
+7. The runner completes surface runs, bundle runs, and the root test run.
 
 ## Discovery Rules
 
-- Every actionable element starts with a hover test case.
+- Every actionable element starts with a hover test element.
 - After hover:
-  - if no new actionable items appear, generate a dependent click test case
-  - if new actionable items appear, generate dependent hover test cases from
+  - if no new actionable items appear, generate a dependent click test element
+  - if new actionable items appear, generate dependent hover test elements from
     the hover target page state
 - `PageAnalyzer` owns target-page-state creation and follow-up case generation.
 - Expertises do not generate coverage.
@@ -61,7 +61,7 @@ Run records:
 - [`src/adapter.ts`](src/adapter.ts): browser abstraction
 - [`src/api/client.ts`](src/api/client.ts): scanner API client
 - [`src/orchestrator/runner.ts`](src/orchestrator/runner.ts): `runTestRun()`
-- [`src/orchestrator/test-case-executor.ts`](src/orchestrator/test-case-executor.ts):
+- [`src/orchestrator/test-element-executor.ts`](src/orchestrator/test-element-executor.ts):
   single-case execution
 - [`src/analyzer/page-analyzer.ts`](src/analyzer/page-analyzer.ts):
   discovery-time target-state and follow-up coverage logic
