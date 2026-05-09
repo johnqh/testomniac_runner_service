@@ -39,6 +39,370 @@ interface GeneratedTestCaseDefinition {
   steps: TestStep[];
 }
 
+const MAX_PAGE_INTERACTION_CASES = 24;
+const MAX_REVERSIBLE_CHAINS = 4;
+const MAX_TAB_CHAINS_PER_GROUP = 2;
+
+function getStateTransitionPriority(item: ActionableItem): number {
+  const role = (item.role || "").toLowerCase();
+  const tagName = (item.tagName || "").toLowerCase();
+  const text =
+    `${item.accessibleName || ""} ${item.textContent || ""}`.toLowerCase();
+  const attributes = item.attributes || {};
+
+  if (role === "tab" || attributes["aria-selected"] != null) {
+    return 100;
+  }
+  if (
+    attributes["aria-expanded"] != null ||
+    attributes["aria-controls"] != null
+  ) {
+    return 95;
+  }
+  if (
+    attributes["aria-haspopup"] === "menu" ||
+    text.includes("menu") ||
+    role === "menuitem"
+  ) {
+    return 90;
+  }
+  if (
+    tagName === "summary" ||
+    text.includes("accordion") ||
+    text.includes("expand") ||
+    text.includes("collapse")
+  ) {
+    return 85;
+  }
+  if (
+    text.includes("open") ||
+    text.includes("details") ||
+    text.includes("show") ||
+    text.includes("more")
+  ) {
+    return 80;
+  }
+  return 0;
+}
+
+function prioritizeItemsForExploration(
+  items: ActionableItem[]
+): ActionableItem[] {
+  return [...items].sort((left, right) => {
+    const delta =
+      getStateTransitionPriority(right) - getStateTransitionPriority(left);
+    if (delta !== 0) {
+      return delta;
+    }
+    return (left.selector || "").localeCompare(right.selector || "");
+  });
+}
+
+function escapeSelector(selector: string): string {
+  return selector.replace(/'/g, "\\'");
+}
+
+function buildExpectation() {
+  return {
+    expectationType: ExpectationType.NoConsoleErrors,
+    severity: ExpectationSeverity.ShouldPass,
+    description: "No console errors after interaction",
+    playwrightCode: "expect(consoleErrors).toHaveLength(0);",
+  };
+}
+
+function buildClickStep(
+  item: ActionableItem,
+  pageStateId: number,
+  description: string
+): TestStep {
+  return {
+    action: {
+      actionType: PlaywrightAction.Click,
+      pageStateId,
+      path: item.selector!,
+      playwrightCode: `await page.click('${escapeSelector(item.selector!)}');`,
+      description,
+    },
+    expectations: [buildExpectation()],
+    description,
+    continueOnFailure: false,
+  };
+}
+
+function isTabLike(item: ActionableItem): boolean {
+  const role = (item.role || "").toLowerCase();
+  const attributes = item.attributes || {};
+  return role === "tab" || attributes["aria-selected"] != null;
+}
+
+function isSelfReversibleStateControl(item: ActionableItem): boolean {
+  const tagName = (item.tagName || "").toLowerCase();
+  const text =
+    `${item.accessibleName || ""} ${item.textContent || ""}`.toLowerCase();
+  const attributes = item.attributes || {};
+
+  return (
+    attributes["aria-expanded"] != null ||
+    attributes["aria-haspopup"] === "menu" ||
+    attributes["aria-controls"] != null ||
+    tagName === "summary" ||
+    text.includes("open") ||
+    text.includes("close") ||
+    text.includes("details") ||
+    text.includes("show") ||
+    text.includes("more")
+  );
+}
+
+function isExplicitCloseControl(item: ActionableItem): boolean {
+  const text =
+    `${item.accessibleName || ""} ${item.textContent || ""}`.toLowerCase();
+  return (
+    text.includes("close") ||
+    text.includes("dismiss") ||
+    text.includes("cancel") ||
+    text.includes("hide") ||
+    text.includes("done")
+  );
+}
+
+async function resolveCloseControl(
+  adapter: BrowserAdapter,
+  item: ActionableItem,
+  items: ActionableItem[]
+): Promise<ActionableItem | null> {
+  const controlledId =
+    typeof item.attributes?.["aria-controls"] === "string"
+      ? String(item.attributes["aria-controls"])
+      : null;
+  const closeCandidates = items.filter(
+    candidate =>
+      candidate.selector &&
+      candidate.selector !== item.selector &&
+      candidate.visible &&
+      !candidate.disabled &&
+      isExplicitCloseControl(candidate)
+  );
+
+  if (closeCandidates.length === 0 || !controlledId) {
+    return null;
+  }
+
+  const selectors = closeCandidates.map(candidate => candidate.selector!);
+  const matchingSelector = await adapter.evaluate(
+    (...args: unknown[]) => {
+      const triggerSelector = args[0] as string;
+      const targetId = args[1] as string;
+      const candidateSelectors = args[2] as string[];
+
+      try {
+        const trigger = document.querySelector(triggerSelector);
+        const controlled =
+          document.getElementById(targetId) ||
+          document.querySelector(
+            `[aria-labelledby="${targetId}"], [data-panel="${targetId}"]`
+          );
+        if (!trigger || !controlled) return null;
+
+        for (const selector of candidateSelectors) {
+          const candidate = document.querySelector(selector);
+          if (
+            candidate &&
+            (controlled.contains(candidate) ||
+              candidate.closest(`[id="${targetId}"]`))
+          ) {
+            return selector;
+          }
+        }
+      } catch {
+        return null;
+      }
+
+      return null;
+    },
+    item.selector!,
+    controlledId,
+    selectors
+  );
+
+  if (!matchingSelector) {
+    return null;
+  }
+
+  return (
+    closeCandidates.find(
+      candidate => candidate.selector === matchingSelector
+    ) ?? null
+  );
+}
+
+async function buildStateTransitionDefinitions(
+  adapter: BrowserAdapter,
+  items: ActionableItem[],
+  pageStateId: number
+): Promise<GeneratedTestCaseDefinition[]> {
+  const definitions: GeneratedTestCaseDefinition[] = [];
+  const seenTitles = new Set<string>();
+
+  const reversibleItems = items
+    .filter(
+      item =>
+        isSelfReversibleStateControl(item) && !isExplicitCloseControl(item)
+    )
+    .slice(0, MAX_REVERSIBLE_CHAINS);
+  for (const item of reversibleItems) {
+    const label =
+      item.accessibleName ||
+      item.textContent ||
+      item.tagName ||
+      item.selector?.slice(0, 30) ||
+      "element";
+    const title = `state chain: ${label}`;
+    if (seenTitles.has(title)) continue;
+    seenTitles.add(title);
+    const explicitCloseControl = await resolveCloseControl(
+      adapter,
+      item,
+      items
+    );
+    definitions.push({
+      title,
+      actionType: "state_chain",
+      item,
+      steps: [
+        buildClickStep(item, pageStateId, `open ${label}`),
+        buildClickStep(
+          explicitCloseControl ?? item,
+          pageStateId,
+          `close ${label}`
+        ),
+      ],
+    });
+  }
+
+  const tabItems = items.filter(isTabLike);
+  const tabGroups = await resolveTabGroups(adapter, tabItems);
+  for (const group of tabGroups) {
+    for (
+      let index = 0;
+      index < Math.min(group.length - 1, MAX_TAB_CHAINS_PER_GROUP);
+      index += 1
+    ) {
+      const first = group[index];
+      const second = group[index + 1];
+      const firstLabel =
+        first.accessibleName || first.textContent || first.selector || "tab";
+      const secondLabel =
+        second.accessibleName || second.textContent || second.selector || "tab";
+      const title = `tab chain: ${firstLabel} -> ${secondLabel}`;
+      if (seenTitles.has(title)) continue;
+      seenTitles.add(title);
+      definitions.push({
+        title,
+        actionType: "tab_chain",
+        item: first,
+        steps: [
+          buildClickStep(first, pageStateId, `activate ${firstLabel}`),
+          buildClickStep(second, pageStateId, `activate ${secondLabel}`),
+        ],
+      });
+    }
+  }
+
+  return definitions;
+}
+
+async function resolveTabGroups(
+  adapter: BrowserAdapter,
+  items: ActionableItem[]
+): Promise<ActionableItem[][]> {
+  if (items.length < 2) {
+    return items.length > 0 ? [items] : [];
+  }
+
+  const metadata = await adapter.evaluate(
+    (...args: unknown[]) => {
+      const selectors = args[0] as string[];
+      return selectors.map((selector, index) => {
+        try {
+          const el = document.querySelector(selector);
+          if (!el) {
+            return { selector, groupKey: "__missing__", order: index };
+          }
+          const container =
+            el.closest('[role="tablist"]') ||
+            el.closest("[data-tabs]") ||
+            el.closest(".tabs") ||
+            el.closest('[role="toolbar"]') ||
+            el.parentElement;
+          const groupKey =
+            container?.getAttribute("id") ||
+            container?.getAttribute("aria-label") ||
+            container?.getAttribute("data-tabs") ||
+            container?.tagName ||
+            "__ungrouped__";
+          const siblings = container
+            ? Array.from(
+                container.querySelectorAll(
+                  '[role="tab"], [aria-selected], button, a'
+                )
+              )
+            : [];
+          const order = siblings.findIndex(candidate => candidate === el);
+          return {
+            selector,
+            groupKey,
+            order: order >= 0 ? order : index,
+          };
+        } catch {
+          return { selector, groupKey: "__error__", order: index };
+        }
+      });
+    },
+    items.map(item => item.selector!)
+  );
+
+  const itemBySelector = new Map(items.map(item => [item.selector!, item]));
+  const groups = new Map<
+    string,
+    Array<{ item: ActionableItem; order: number }>
+  >();
+
+  for (const entry of metadata as Array<{
+    selector: string;
+    groupKey: string;
+    order: number;
+  }>) {
+    const item = itemBySelector.get(entry.selector);
+    if (!item) continue;
+    const bucket = groups.get(entry.groupKey) ?? [];
+    bucket.push({ item, order: entry.order });
+    groups.set(entry.groupKey, bucket);
+  }
+
+  return Array.from(groups.values())
+    .map(group =>
+      group
+        .sort((left, right) => left.order - right.order)
+        .map(entry => entry.item)
+    )
+    .filter(group => group.length >= 2);
+}
+
+function dedupeDefinitions(
+  definitions: GeneratedTestCaseDefinition[]
+): GeneratedTestCaseDefinition[] {
+  const seen = new Set<string>();
+  const deduped: GeneratedTestCaseDefinition[] = [];
+  for (const definition of definitions) {
+    if (seen.has(definition.title)) continue;
+    seen.add(definition.title);
+    deduped.push(definition);
+  }
+  return deduped;
+}
+
 function inferFillValue(item: ActionableItem): string {
   const inputType = (item.inputType || "").toLowerCase();
   const label =
@@ -118,12 +482,12 @@ async function buildGeneratedTestCase(
   if (actionKind === "navigate" || actionKind === "click") {
     actionType = "click";
     playwrightAction = PlaywrightAction.Click;
-    playwrightCode = `await page.click('${item.selector!.replace(/'/g, "\\'")}');`;
+    playwrightCode = `await page.click('${escapeSelector(item.selector!)}');`;
   } else if (actionKind === "fill") {
     actionType = "fill";
     playwrightAction = PlaywrightAction.Fill;
     value = inferFillValue(item);
-    playwrightCode = `await page.fill('${item.selector!.replace(/'/g, "\\'")}', '${value.replace(/'/g, "\\'")}');`;
+    playwrightCode = `await page.fill('${escapeSelector(item.selector!)}', '${value.replace(/'/g, "\\'")}');`;
   } else if (actionKind === "select") {
     actionType = "select";
     playwrightAction = PlaywrightAction.SelectOption;
@@ -131,15 +495,15 @@ async function buildGeneratedTestCase(
     if (!value) {
       return null;
     }
-    playwrightCode = `await page.selectOption('${item.selector!.replace(/'/g, "\\'")}', '${value.replace(/'/g, "\\'")}');`;
+    playwrightCode = `await page.selectOption('${escapeSelector(item.selector!)}', '${value.replace(/'/g, "\\'")}');`;
   } else if (actionKind === "radio_select") {
     actionType = "radio_select";
     playwrightAction = PlaywrightAction.Click;
-    playwrightCode = `await page.click('${item.selector!.replace(/'/g, "\\'")}');`;
+    playwrightCode = `await page.click('${escapeSelector(item.selector!)}');`;
   } else {
     actionType = "click";
     playwrightAction = PlaywrightAction.Click;
-    playwrightCode = `await page.click('${item.selector!.replace(/'/g, "\\'")}');`;
+    playwrightCode = `await page.click('${escapeSelector(item.selector!)}');`;
   }
 
   const steps: TestStep[] = [
@@ -152,14 +516,7 @@ async function buildGeneratedTestCase(
         playwrightCode,
         description: `${actionType} on ${label}`,
       },
-      expectations: [
-        {
-          expectationType: ExpectationType.NoConsoleErrors,
-          severity: ExpectationSeverity.ShouldPass,
-          description: "No console errors after interaction",
-          playwrightCode: "expect(consoleErrors).toHaveLength(0);",
-        },
-      ],
+      expectations: [buildExpectation()],
       description: `${actionType} on ${label}`,
       continueOnFailure: false,
     },
@@ -401,15 +758,25 @@ export async function processDecompositionJob(
   // Generate one test case per actionable item (cap at 20 to avoid explosion)
   const createdIds: number[] = [];
 
-  const pageDefinitions = (
+  const prioritizedPageItems = prioritizeItemsForExploration(pageItems);
+  const pageChainDefinitions = await buildStateTransitionDefinitions(
+    adapter,
+    prioritizedPageItems,
+    pageState.id
+  );
+  const pageSingleDefinitions = (
     await Promise.all(
-      pageItems
-        .slice(0, 20)
+      prioritizedPageItems
+        .slice(0, MAX_PAGE_INTERACTION_CASES)
         .map(item => buildGeneratedTestCase(adapter, item, pageState.id))
     )
   ).filter((definition): definition is GeneratedTestCaseDefinition =>
     Boolean(definition)
   );
+  const pageDefinitions = dedupeDefinitions([
+    ...pageChainDefinitions,
+    ...pageSingleDefinitions,
+  ]).slice(0, MAX_PAGE_INTERACTION_CASES);
 
   if (pageDefinitions.length > 0) {
     const pageSuite = await api.insertTestSuite(config.runnerId, {
@@ -501,15 +868,26 @@ export async function processDecompositionJob(
       events.onTestSuiteCreated({ suiteId: suite.id, title: suite.title });
     }
 
-    const scaffoldDefinitions = (
+    const prioritizedScaffoldItems =
+      prioritizeItemsForExploration(itemsForScaffold);
+    const scaffoldChainDefinitions = await buildStateTransitionDefinitions(
+      adapter,
+      prioritizedScaffoldItems,
+      pageState.id
+    );
+    const scaffoldSingleDefinitions = (
       await Promise.all(
-        itemsForScaffold
-          .slice(0, 20)
+        prioritizedScaffoldItems
+          .slice(0, MAX_PAGE_INTERACTION_CASES)
           .map(item => buildGeneratedTestCase(adapter, item, pageState.id))
       )
     ).filter((definition): definition is GeneratedTestCaseDefinition =>
       Boolean(definition)
     );
+    const scaffoldDefinitions = dedupeDefinitions([
+      ...scaffoldChainDefinitions,
+      ...scaffoldSingleDefinitions,
+    ]).slice(0, MAX_PAGE_INTERACTION_CASES);
 
     for (const definition of scaffoldDefinitions) {
       const duplicate = existingCases.find(

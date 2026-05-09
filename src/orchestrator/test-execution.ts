@@ -23,9 +23,9 @@ function checkAbort(signal?: AbortSignal): void {
 }
 
 /**
- * After each action, check if we navigated to a new page (different path).
- * Only new pages trigger decomposition jobs. Same-page DOM changes from
- * clicks/hovers are ignored — they don't generate new test work.
+ * After each action, capture the current same-origin state. New paths are
+ * discovered once, but same-path DOM transitions can still generate new page
+ * states and decomposition work when their structural hashes change.
  */
 async function captureCurrentPageState(
   config: ScanConfig,
@@ -44,14 +44,9 @@ async function captureCurrentPageState(
   }
 
   const relativePath = toRelativePath(currentUrl);
-
-  // Already seen this page path — no new work
-  if (hasCapturedPagePath(relativePath)) {
-    return false;
-  }
   const captureResult = await captureCurrentPage(adapter, config, api, events, {
     testRunId,
-    markDiscovered: true,
+    markDiscovered: !hasCapturedPagePath(relativePath),
     createDecompositionJob: true,
   });
   if (!captureResult?.createdNewState) {

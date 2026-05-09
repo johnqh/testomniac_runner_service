@@ -1,5 +1,5 @@
 // Browser abstraction
-export type { BrowserAdapter } from "./adapter";
+export type { BrowserAdapter, RuntimeArtifacts } from "./adapter";
 
 // Scanner modules (existing)
 export * from "./scanner/issue-detector";

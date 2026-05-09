@@ -1,6 +1,16 @@
 /**
  * Abstract browser interface that both Puppeteer (server) and Chrome APIs (extension) implement.
  */
+export interface RuntimeArtifacts {
+  consoleLogs: string[];
+  networkLogs: Array<{
+    method: string;
+    url: string;
+    status: number;
+    contentType: string;
+  }>;
+}
+
 export interface BrowserAdapter {
   /** Navigate to a URL */
   goto(
@@ -63,7 +73,7 @@ export interface BrowserAdapter {
   on(
     event: "console" | "response",
     handler: (...args: unknown[]) => void
-  ): void;
+  ): () => void;
 
   /** Get the current URL (async — needed by adapters that require async I/O for URL lookup) */
   getUrl(): Promise<string>;
@@ -73,4 +83,10 @@ export interface BrowserAdapter {
 
   /** Close any tabs/windows opened during interaction, keeping only the original */
   closeOtherTabs?(): Promise<void>;
+
+  /** Return buffered runtime artifacts, when supported by the adapter. */
+  getRuntimeArtifacts?(): RuntimeArtifacts;
+
+  /** Clear any buffered runtime artifacts, when supported by the adapter. */
+  resetRuntimeArtifacts?(): void;
 }

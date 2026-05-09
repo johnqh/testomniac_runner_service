@@ -114,19 +114,21 @@ export async function executePageExpertises(
   const html = await adapter.content();
   const scaffolds = await detectScaffoldRegions(adapter);
   const patterns = await detectPatternsWithInstances(adapter);
-
-  const context: ExpertiseContext = {
-    html,
-    scaffolds,
-    patterns,
-    consoleLogs: [],
-    networkLogs: [],
-    expectations: buildDefaultExpectations() as any,
-  };
-
   const expertises = createDefaultExpertises();
 
   for (const expertise of expertises) {
+    const runtimeArtifacts = adapter.getRuntimeArtifacts?.() ?? {
+      consoleLogs: [],
+      networkLogs: [],
+    };
+    const context: ExpertiseContext = {
+      html,
+      scaffolds,
+      patterns,
+      consoleLogs: runtimeArtifacts.consoleLogs,
+      networkLogs: runtimeArtifacts.networkLogs as any,
+      expectations: buildDefaultExpectations() as any,
+    };
     const suiteId = await ensureExpertiseSuite(
       api,
       config,
@@ -181,6 +183,9 @@ export async function executePageExpertises(
         durationMs: Date.now() - startedAt,
         expectedOutcome,
         observedOutcome,
+        consoleLog: runtimeArtifacts.consoleLogs.join("\n") || undefined,
+        networkLog:
+          JSON.stringify(runtimeArtifacts.networkLogs ?? []) || undefined,
       });
       await api.completeTestRun(testRun.id, {
         status,
@@ -197,6 +202,9 @@ export async function executePageExpertises(
         status: "failed",
         durationMs: Date.now() - startedAt,
         errorMessage: message,
+        consoleLog: runtimeArtifacts.consoleLogs.join("\n") || undefined,
+        networkLog:
+          JSON.stringify(runtimeArtifacts.networkLogs ?? []) || undefined,
       });
       await api.completeTestRun(testRun.id, {
         status: "failed",
@@ -216,6 +224,8 @@ export async function executePageExpertises(
         testRunId: testRun.id,
         passed: false,
       });
+    } finally {
+      adapter.resetRuntimeArtifacts?.();
     }
   }
 }

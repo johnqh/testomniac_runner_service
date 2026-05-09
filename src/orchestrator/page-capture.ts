@@ -22,18 +22,30 @@ export interface CapturePageResult {
   matchedExistingState: boolean;
 }
 
-const capturedPagePaths = new Set<string>();
+const discoveredPagePaths = new Set<string>();
+const capturedStateKeys = new Set<string>();
+
+function toStateKey(
+  relativePath: string,
+  hashes: {
+    normalizedHtmlHash: string;
+    actionableHash: string;
+  }
+): string {
+  return `${relativePath}:${hashes.normalizedHtmlHash}:${hashes.actionableHash}`;
+}
 
 export function resetCapturedPagePaths(): void {
-  capturedPagePaths.clear();
+  discoveredPagePaths.clear();
+  capturedStateKeys.clear();
 }
 
 export function seedCapturedPagePath(relativePath: string): void {
-  capturedPagePaths.add(relativePath);
+  discoveredPagePaths.add(relativePath);
 }
 
 export function hasCapturedPagePath(relativePath: string): boolean {
-  return capturedPagePaths.has(relativePath);
+  return discoveredPagePaths.has(relativePath);
 }
 
 export async function captureCurrentPage(
@@ -55,13 +67,18 @@ export async function captureCurrentPage(
   const page = await api.findOrCreatePage(config.runnerId, relativePath);
 
   if (options.markDiscovered) {
-    events.onPageFound({ relativePath, pageId: page.id });
+    const firstTimeDiscovered = !hasCapturedPagePath(relativePath);
+    if (firstTimeDiscovered) {
+      events.onPageFound({ relativePath, pageId: page.id });
 
-    if (config.testEnvironmentId) {
-      await api.createDiscoveredPages({
-        testEnvironmentId: config.testEnvironmentId,
-        pages: [{ relativePath, isPublic: true }],
-      });
+      if (config.testEnvironmentId) {
+        await api.createDiscoveredPages({
+          testEnvironmentId: config.testEnvironmentId,
+          pages: [{ relativePath, isPublic: true }],
+        });
+      }
+
+      seedCapturedPagePath(relativePath);
     }
 
     if (config.testEnvironmentId && options.testRunId) {
@@ -72,15 +89,6 @@ export async function captureCurrentPage(
         status: "visited",
       });
     }
-  }
-
-  if (hasCapturedPagePath(relativePath)) {
-    return {
-      pageId: page.id,
-      relativePath,
-      createdNewState: false,
-      matchedExistingState: false,
-    };
   }
 
   if (options.captureState === false) {
@@ -95,6 +103,17 @@ export async function captureCurrentPage(
   const html = await adapter.content();
   const items = await extractActionableItems(adapter);
   const hashes = await computeHashes(html, items);
+  const stateKey = toStateKey(relativePath, hashes);
+
+  if (capturedStateKeys.has(stateKey)) {
+    return {
+      pageId: page.id,
+      relativePath,
+      createdNewState: false,
+      matchedExistingState: false,
+    };
+  }
+
   const existingState = await api.findMatchingPageState(
     page.id,
     hashes,
@@ -102,7 +121,7 @@ export async function captureCurrentPage(
   );
 
   if (existingState) {
-    seedCapturedPagePath(relativePath);
+    capturedStateKeys.add(stateKey);
     return {
       pageId: page.id,
       relativePath,
@@ -119,7 +138,7 @@ export async function captureCurrentPage(
     contentText: html.slice(0, 5000),
     createdByTestRunId: options.testRunId,
   });
-  seedCapturedPagePath(relativePath);
+  capturedStateKeys.add(stateKey);
 
   events.onPageStateCreated({
     pageStateId: pageState.id,
