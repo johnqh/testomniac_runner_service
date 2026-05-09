@@ -33,6 +33,7 @@ export interface AnalyzerContext {
   pageId: number;
   pageRequiresLogin: boolean;
   scaffolds: DetectedScaffoldRegion[];
+  scaffoldSelectorByItemSelector: Record<string, string>;
   actionableItems: ActionableItem[];
   navigationSurface: TestSurfaceResponse;
   bundleRun: TestSurfaceBundleRunResponse;
@@ -54,8 +55,14 @@ export class PageAnalyzer {
       {
         expectationType: ExpectationType.PageLoaded,
         severity: ExpectationSeverity.MustPass,
-        description: "Page should load with valid HTML and no HTTP error",
+        description: "Page should load with valid HTML",
         playwrightCode: "await expect(page).not.toHaveTitle(/error/i)",
+      },
+      {
+        expectationType: ExpectationType.NoNetworkErrors,
+        severity: ExpectationSeverity.MustPass,
+        description: "No network errors during page load or interaction",
+        playwrightCode: "// checked by TesterExpertise",
       },
     ];
 
@@ -69,12 +76,6 @@ export class PageAnalyzer {
         expectationType: ExpectationType.NoConsoleErrors,
         severity: ExpectationSeverity.ShouldPass,
         description: "No console errors during test execution",
-        playwrightCode: "// checked by TesterExpertise",
-      });
-      expectations.push({
-        expectationType: ExpectationType.NoNetworkErrors,
-        severity: ExpectationSeverity.ShouldPass,
-        description: "No network errors during test execution",
         playwrightCode: "// checked by TesterExpertise",
       });
     }
@@ -508,7 +509,26 @@ export class PageAnalyzer {
   private async ensureTargetPageState(
     context: AnalyzerContext
   ): Promise<number> {
+    const scaffoldIdsBySelector = await this.ensureScaffolds(context);
+
+    for (const item of context.actionableItems) {
+      if (!item.selector) continue;
+      const scaffoldSelector =
+        context.scaffoldSelectorByItemSelector[item.selector] ?? null;
+      if (!scaffoldSelector) continue;
+      const scaffoldId = scaffoldIdsBySelector.get(scaffoldSelector);
+      if (scaffoldId) {
+        item.scaffoldId = scaffoldId;
+      }
+    }
+
     if (context.currentPageStateId > 0) {
+      if (scaffoldIdsBySelector.size > 0) {
+        await context.api.linkPageStateScaffolds(
+          context.currentPageStateId,
+          Array.from(new Set(scaffoldIdsBySelector.values()))
+        );
+      }
       context.events.onPageStateCreated({
         pageStateId: context.currentPageStateId,
         pageId: context.pageId,
@@ -523,6 +543,12 @@ export class PageAnalyzer {
       context.sizeClass
     );
     if (existing) {
+      if (scaffoldIdsBySelector.size > 0) {
+        await context.api.linkPageStateScaffolds(
+          existing.id,
+          Array.from(new Set(scaffoldIdsBySelector.values()))
+        );
+      }
       context.events.onPageStateCreated({
         pageStateId: existing.id,
         pageId: context.pageId,
@@ -552,6 +578,31 @@ export class PageAnalyzer {
       pageId: context.pageId,
     });
 
+    if (scaffoldIdsBySelector.size > 0) {
+      await context.api.linkPageStateScaffolds(
+        pageState.id,
+        Array.from(new Set(scaffoldIdsBySelector.values()))
+      );
+    }
+
     return pageState.id;
+  }
+
+  private async ensureScaffolds(
+    context: AnalyzerContext
+  ): Promise<Map<string, number>> {
+    const scaffoldIdsBySelector = new Map<string, number>();
+
+    for (const scaffold of context.scaffolds) {
+      const result = await context.api.findOrCreateScaffold({
+        runnerId: context.runnerId,
+        type: scaffold.type,
+        html: scaffold.outerHtml,
+        hash: scaffold.hash,
+      });
+      scaffoldIdsBySelector.set(scaffold.selector, result.id);
+    }
+
+    return scaffoldIdsBySelector;
   }
 }

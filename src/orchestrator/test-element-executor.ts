@@ -107,6 +107,11 @@ export async function executeTestElement(
     const scaffolds = await detectScaffoldRegions(adapter);
     const patterns = await detectPatternsWithInstances(adapter);
     const items = await extractActionableItems(adapter);
+    const scaffoldSelectorByItemSelector = await mapItemsToScaffolds(
+      adapter,
+      scaffolds,
+      items
+    );
 
     // Parse global expectations
     const globalExpectations =
@@ -238,6 +243,7 @@ export async function executeTestElement(
         pageId: page.id,
         pageRequiresLogin: page.requiresLogin ?? false,
         scaffolds,
+        scaffoldSelectorByItemSelector,
         actionableItems: items,
         navigationSurface: discoveryContext.navigationSurface,
         bundleRun: discoveryContext.bundleRun,
@@ -285,6 +291,56 @@ export async function executeTestElement(
       passed: false,
     });
   }
+}
+
+async function mapItemsToScaffolds(
+  adapter: BrowserAdapter,
+  scaffolds: Array<{
+    selector: string;
+  }>,
+  items: Array<{
+    selector: string;
+  }>
+): Promise<Record<string, string>> {
+  const scaffoldSelectors = scaffolds.map(scaffold => scaffold.selector);
+  const itemSelectors = items.map(item => item.selector).filter(Boolean);
+
+  if (scaffoldSelectors.length === 0 || itemSelectors.length === 0) {
+    return {};
+  }
+
+  return adapter.evaluate(
+    (...args: unknown[]) => {
+      const rawScaffoldSelectors = args[0] as string[];
+      const rawItemSelectors = args[1] as string[];
+      const assignments: Record<string, string> = {};
+
+      for (const itemSelector of rawItemSelectors) {
+        let itemEl: Element | null = null;
+        try {
+          itemEl = document.querySelector(itemSelector);
+        } catch {
+          itemEl = null;
+        }
+        if (!itemEl) continue;
+
+        for (const scaffoldSelector of rawScaffoldSelectors) {
+          try {
+            if (itemEl.closest(scaffoldSelector)) {
+              assignments[itemSelector] = scaffoldSelector;
+              break;
+            }
+          } catch {
+            // Ignore invalid selectors and continue matching.
+          }
+        }
+      }
+
+      return assignments;
+    },
+    scaffoldSelectors,
+    itemSelectors
+  );
 }
 
 function parseStoredSteps(stepsJson: unknown): Array<{

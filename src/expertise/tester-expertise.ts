@@ -48,20 +48,6 @@ export class TesterExpertise implements Expertise {
     description: string
   ): Outcome {
     const hasHtml = context.html.length > 0 && context.html.includes("<");
-    const hasHttpError = context.networkLogs.some(
-      log => log.status >= 400 && log.url === context.networkLogs[0]?.url
-    );
-
-    if (hasHttpError) {
-      const errorLog = context.networkLogs.find(
-        log => log.status >= 400 && log.url === context.networkLogs[0]?.url
-      );
-      return {
-        expected: description,
-        observed: `HTTP ${errorLog?.status} error on page load`,
-        result: "error",
-      };
-    }
 
     if (!hasHtml) {
       return {
