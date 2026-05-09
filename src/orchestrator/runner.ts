@@ -6,8 +6,7 @@ import { PageAnalyzer } from "../analyzer";
 import { executeTestCase } from "./test-case-executor";
 
 /**
- * Main entry point for the new runner execution loop.
- * Replaces the old runScan/processDecompositionJob/executeTestCases orchestrator.
+ * Main entry point for the runner execution loop.
  *
  * Execution: bundle → iterate suites → iterate cases → run case
  */
@@ -96,10 +95,14 @@ export async function runTestRun(
       navigationSuite =
         suites.find(
           s =>
-            s.title === "Navigation" &&
+            s.title === "Direct Navigations" &&
             (config.uid ? s.uid === config.uid : s.uid == null)
         ) ?? null;
     }
+
+    const bundleRun = testRun.testSuiteBundleRunId
+      ? await api.getTestSuiteBundleRun(testRun.testSuiteBundleRunId)
+      : null;
 
     // Execution loop: iterate open suite runs in the bundle
     let hasOpenSuites = true;
@@ -138,17 +141,10 @@ export async function runTestRun(
           analyzer,
           api,
           wrappedEvents,
-          navigationSuite && testRun.testSuiteBundleRunId
+          navigationSuite && bundleRun
             ? {
                 navigationSuite,
-                bundleRun: {
-                  id: testRun.testSuiteBundleRunId,
-                  testSuiteBundleId: 0, // will be resolved by API
-                  status: "running",
-                  startedAt: null,
-                  completedAt: null,
-                  createdAt: null,
-                },
+                bundleRun,
               }
             : undefined
         );

@@ -12,15 +12,6 @@ export interface RunConfig {
   signal?: AbortSignal;
 }
 
-/** @deprecated Use RunConfig */
-export type ScanConfig = RunConfig & {
-  scanId: number;
-  scanUrl: string;
-  openaiApiKey?: string;
-  openaiModel?: string;
-  testWorkerCount?: number;
-};
-
 export interface ScanEventHandler {
   onPageFound(page: { relativePath: string; pageId: number }): void;
   onPageStateCreated(state: {
@@ -28,8 +19,6 @@ export interface ScanEventHandler {
     pageId: number;
     screenshotPath?: string;
   }): void;
-  onDecompositionJobCreated(job: { jobId: number; pageStateId: number }): void;
-  onDecompositionJobCompleted(job: { jobId: number }): void;
   onTestSuiteCreated(suite: { suiteId: number; title: string }): void;
   onTestCaseRunCompleted(run: { testCaseRunId: number; passed: boolean }): void;
   onTestRunCompleted(run: { testRunId: number; passed: boolean }): void;

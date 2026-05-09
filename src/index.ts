@@ -112,12 +112,6 @@ export type {
   ScanResult,
 } from "./orchestrator/types";
 
-// Orchestrator (deprecated — use runTestRun)
-export { runScan } from "./orchestrator/orchestrator";
-export { processDecompositionJob } from "./orchestrator/decomposition";
-export { executeTestCases } from "./orchestrator/test-execution";
-export type { ScanConfig } from "./orchestrator/types";
-
 // Analyzer
 export { PageAnalyzer, type AnalyzerContext } from "./analyzer";
 

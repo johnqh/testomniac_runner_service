@@ -10,7 +10,6 @@ import type { ScanEventHandler } from "./types";
 import type { Expertise, ExpertiseContext, Outcome } from "../expertise/types";
 import type { PageAnalyzer, AnalyzerContext } from "../analyzer";
 import { extractActionableItems } from "../extractors";
-import { computeHashes } from "../browser/page-utils";
 import { detectScaffoldRegions } from "../scanner/component-detector";
 import { detectPatternsWithInstances } from "../scanner/pattern-detector";
 
@@ -61,32 +60,19 @@ export async function executeTestCase(
   });
 
   try {
-    const tc = await api.getTestCasesByRunner(testRun.runnerId);
-    const testCase = tc.find(c => c.id === testCaseRun.testCaseId);
+    const allTestCases = await api.getTestCasesByRunner(testRun.runnerId);
+    const testCaseById = new Map(
+      allTestCases.map(testCase => [testCase.id, testCase])
+    );
+    const testCase = testCaseById.get(testCaseRun.testCaseId);
     if (!testCase) {
       throw new Error(`Test case ${testCaseRun.testCaseId} not found`);
     }
 
     // Parse steps from JSON
-    const steps =
-      (testCase.stepsJson as Array<{
-        action: {
-          actionType: string;
-          path?: string;
-          value?: string;
-          playwrightCode: string;
-          description: string;
-        };
-        expectations: Array<{
-          expectationType: string;
-          expectedValue?: string;
-          severity: string;
-          description: string;
-          playwrightCode: string;
-        }>;
-        description: string;
-        continueOnFailure: boolean;
-      }>) ?? [];
+    const steps = parseStoredSteps(testCase.stepsJson);
+    const dependencyChain = buildDependencyChain(testCase, testCaseById);
+    const setupCases = dependencyChain.slice(0, -1);
 
     // Record beginning page state
     const _beginningUrl = await adapter.getUrl();
@@ -101,6 +87,14 @@ export async function executeTestCase(
         ? testCase.startingPath
         : new URL(testCase.startingPath, baseUrl).toString();
       await adapter.goto(absoluteUrl, { waitUntil: "networkidle0" });
+    }
+
+    // Recreate the dependent target state before running this case itself.
+    for (const setupCase of setupCases) {
+      const setupSteps = parseStoredSteps(setupCase.stepsJson);
+      for (const step of setupSteps) {
+        await executeAction(adapter, step.action, testRun);
+      }
     }
 
     // Execute test actions
@@ -221,13 +215,8 @@ export async function executeTestCase(
     // If discovery mode: generate new test cases
     if (analyzer && discoveryContext) {
       const currentUrl = await adapter.getUrl();
-      const currentPath = new URL(currentUrl).pathname;
-      const currentHashes = await computeHashes(html, items);
-      const currentPageState = await api.findMatchingPageState(
-        0, // pageId not needed for state comparison
-        currentHashes,
-        testRun.sizeClass
-      );
+      const url = new URL(currentUrl);
+      const currentPath = `${url.pathname}${url.search}`;
 
       const page = await api.findOrCreatePage(testRun.runnerId, currentPath);
 
@@ -235,7 +224,11 @@ export async function executeTestCase(
         runnerId: testRun.runnerId,
         sizeClass: testRun.sizeClass as "desktop" | "mobile",
         uid: testRun.createdByUserId ?? undefined,
-        currentPageStateId: currentPageState?.id ?? 0,
+        currentTestCaseId: testCase.id,
+        currentTestSuiteId: testCase.testSuiteId,
+        currentSuiteRunId: testCaseRun.testSuiteRunId,
+        html,
+        currentPageStateId: 0,
         beginningPageStateId: beginningPageStateId,
         currentPath,
         pageId: page.id,
@@ -287,6 +280,88 @@ export async function executeTestCase(
       passed: false,
     });
   }
+}
+
+function parseStoredSteps(stepsJson: unknown): Array<{
+  action: {
+    actionType: string;
+    path?: string;
+    value?: string;
+    playwrightCode: string;
+    description: string;
+  };
+  expectations: Array<{
+    expectationType: string;
+    expectedValue?: string;
+    severity: string;
+    description: string;
+    playwrightCode: string;
+  }>;
+  description: string;
+  continueOnFailure: boolean;
+}> {
+  return (
+    (stepsJson as Array<{
+      action: {
+        actionType: string;
+        path?: string;
+        value?: string;
+        playwrightCode: string;
+        description: string;
+      };
+      expectations: Array<{
+        expectationType: string;
+        expectedValue?: string;
+        severity: string;
+        description: string;
+        playwrightCode: string;
+      }>;
+      description: string;
+      continueOnFailure: boolean;
+    }>) ?? []
+  );
+}
+
+function buildDependencyChain(
+  testCase: {
+    id: number;
+    dependencyTestCaseId: number | null;
+  },
+  testCaseById: Map<
+    number,
+    {
+      id: number;
+      dependencyTestCaseId: number | null;
+      stepsJson: unknown;
+    }
+  >
+) {
+  const chain: Array<{
+    id: number;
+    dependencyTestCaseId: number | null;
+    stepsJson: unknown;
+  }> = [];
+  const seen = new Set<number>();
+  let current:
+    | {
+        id: number;
+        dependencyTestCaseId: number | null;
+        stepsJson: unknown;
+      }
+    | undefined = testCaseById.get(testCase.id);
+
+  while (current) {
+    if (seen.has(current.id)) {
+      throw new Error(`Cyclic test case dependency detected at ${current.id}`);
+    }
+    seen.add(current.id);
+    chain.unshift(current);
+    current = current.dependencyTestCaseId
+      ? testCaseById.get(current.dependencyTestCaseId)
+      : undefined;
+  }
+
+  return chain;
 }
 
 async function executeAction(

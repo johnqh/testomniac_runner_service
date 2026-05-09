@@ -6,19 +6,26 @@ import type {
   TestSuiteResponse,
   TestSuiteBundleRunResponse,
   TestSuiteRunResponse,
+  ActionableItemResponse,
 } from "@sudobility/testomniac_types";
 import {
   PlaywrightAction,
   ExpectationType,
   ExpectationSeverity,
 } from "@sudobility/testomniac_types";
+import { computeHashes } from "../browser/page-utils";
 import type { ApiClient } from "../api/client";
 import type { DetectedScaffoldRegion } from "../scanner/component-detector";
+import { createHash } from "node:crypto";
 
 export interface AnalyzerContext {
   runnerId: number;
   sizeClass: SizeClass;
   uid?: string;
+  currentTestCaseId: number;
+  currentTestSuiteId: number;
+  currentSuiteRunId: number | null;
+  html: string;
   currentPageStateId: number;
   beginningPageStateId: number;
   currentPath: string;
@@ -75,58 +82,95 @@ export class PageAnalyzer {
 
   /**
    * Generate new test cases for scaffolds and page content.
-   * Called AFTER expertises evaluate and test case run results are set.
-   *
-   * Also performs mouse-over fixup: if a hover had no visible effect,
-   * adds a click action.
+   * Called AFTER expertises evaluate and the target page state is established.
    */
   async generateTestCases(
     testCase: TestCase,
     context: AnalyzerContext
   ): Promise<void> {
-    const {
-      api: _api,
-      runnerId: _runnerId,
-      sizeClass: _sizeClass,
-      uid: _uid,
-    } = context;
+    const currentPageStateId = await this.ensureTargetPageState(context);
+    const resolvedContext: AnalyzerContext = {
+      ...context,
+      currentPageStateId,
+    };
 
-    // Mouse-over fixup
-    await this.mouseOverFixup(testCase, context);
+    if (this.isHoverOnly(testCase)) {
+      await this.generateHoverFollowUpCases(testCase, resolvedContext);
+      return;
+    }
 
     // a. Navigation test cases — for every link on the page
-    await this.generateNavigationTestCases(context);
+    await this.generateNavigationTestCases(resolvedContext);
 
     // b. Scaffold test cases — for each scaffold's actionable elements
-    await this.generateScaffoldTestCases(context);
+    await this.generateScaffoldTestCases(resolvedContext);
 
     // c. Content test cases — for non-scaffold actionable elements
-    await this.generateContentTestCases(context);
+    await this.generateContentTestCases(resolvedContext);
   }
 
-  private async mouseOverFixup(
+  private async generateHoverFollowUpCases(
     testCase: TestCase,
     context: AnalyzerContext
   ): Promise<void> {
-    const isHoverOnly =
-      testCase.steps.length === 1 &&
-      testCase.steps[0].action.actionType === PlaywrightAction.Hover;
+    const selector = this.getPrimarySelector(testCase);
+    if (!selector || !context.currentPageStateId) return;
 
-    if (
-      isHoverOnly &&
-      context.currentPageStateId === context.beginningPageStateId
-    ) {
-      // Hover had no visible effect — add a click action
-      const hoverStep = testCase.steps[0];
-      testCase.steps.push({
-        action: {
-          ...hoverStep.action,
-          actionType: PlaywrightAction.Click,
-          description: hoverStep.action.description.replace("Hover", "Click"),
-        },
-        expectations: [],
-        description: `Click ${hoverStep.description.replace("Hover over ", "")} (hover had no effect)`,
-        continueOnFailure: true,
+    const beginningItems =
+      context.beginningPageStateId > 0
+        ? await context.api.getItemsByPageState(context.beginningPageStateId)
+        : [];
+    const beginningKeys = new Set(
+      beginningItems.map(item => this.getItemKey(item)).filter(Boolean)
+    );
+
+    const revealedItems = context.actionableItems.filter(item => {
+      if (!this.isMouseActionable(item)) return false;
+      const key = this.getItemKey(item);
+      return Boolean(key) && !beginningKeys.has(key);
+    });
+
+    const hoveredItem =
+      context.actionableItems.find(item => item.selector === selector) ?? null;
+
+    if (revealedItems.length === 0 && hoveredItem) {
+      const clickCase = this.buildClickTestCase(
+        hoveredItem,
+        context.currentPath,
+        context.sizeClass,
+        context.uid,
+        context.currentPageStateId,
+        context.currentTestCaseId
+      );
+      const tc = await context.api.ensureTestCase(
+        context.runnerId,
+        context.currentTestSuiteId,
+        clickCase
+      );
+      await context.api.createTestCaseRun({
+        testCaseId: tc.id,
+        testSuiteRunId: context.currentSuiteRunId ?? undefined,
+      });
+      return;
+    }
+
+    for (const item of revealedItems) {
+      const nextHover = this.buildHoverTestCase(
+        item,
+        context.currentPath,
+        context.sizeClass,
+        context.uid,
+        context.currentPageStateId,
+        context.currentTestCaseId
+      );
+      const tc = await context.api.ensureTestCase(
+        context.runnerId,
+        context.currentTestSuiteId,
+        nextHover
+      );
+      await context.api.createTestCaseRun({
+        testCaseId: tc.id,
+        testSuiteRunId: context.currentSuiteRunId ?? undefined,
       });
     }
   }
@@ -160,7 +204,12 @@ export class PageAnalyzer {
       const path = this.extractRelativePath(link.href);
       if (!path) continue;
 
-      const testCase = this.buildNavigationTestCase(path, sizeClass, uid);
+      const testCase = this.buildNavigationTestCase(
+        path,
+        sizeClass,
+        uid,
+        context.currentPageStateId
+      );
       const tc = await api.ensureTestCase(
         runnerId,
         navigationSuite.id,
@@ -206,7 +255,8 @@ export class PageAnalyzer {
           item,
           context.currentPath,
           sizeClass,
-          uid
+          uid,
+          context.currentPageStateId
         );
         const tc = await api.ensureTestCase(runnerId, suite.id, testCase);
         await api.createTestCaseRun({
@@ -255,7 +305,8 @@ export class PageAnalyzer {
         item,
         context.currentPath,
         sizeClass,
-        uid
+        uid,
+        context.currentPageStateId
       );
       const tc = await api.ensureTestCase(runnerId, suite.id, testCase);
       await api.createTestCaseRun({
@@ -270,7 +321,13 @@ export class PageAnalyzer {
     testSuiteId: number,
     bundleRunId: number
   ): Promise<TestSuiteRunResponse> {
-    // Create a new suite run under this bundle run
+    const openSuiteRuns = await api.getOpenTestSuiteRuns(bundleRunId);
+    const existing = openSuiteRuns.find(
+      suiteRun => suiteRun.testSuiteId === testSuiteId
+    );
+    if (existing) {
+      return existing;
+    }
     return api.createTestSuiteRun({
       testSuiteId,
       testSuiteBundleRunId: bundleRunId,
@@ -297,7 +354,8 @@ export class PageAnalyzer {
   private buildNavigationTestCase(
     path: string,
     sizeClass: SizeClass,
-    uid?: string
+    uid?: string,
+    startingPageStateId?: number
   ): TestCase {
     return {
       title: `Navigate to ${path}`,
@@ -305,7 +363,7 @@ export class PageAnalyzer {
       sizeClass,
       suite_tags: ["navigation"],
       priority: 3,
-      startingPageStateId: 0,
+      startingPageStateId,
       startingPath: path,
       steps: [
         {
@@ -329,7 +387,9 @@ export class PageAnalyzer {
     item: ActionableItem,
     startingPath: string,
     sizeClass: SizeClass,
-    uid?: string
+    uid?: string,
+    startingPageStateId?: number,
+    dependencyTestCaseId?: number
   ): TestCase {
     const label = item.accessibleName || item.textContent || item.selector;
     return {
@@ -338,12 +398,14 @@ export class PageAnalyzer {
       sizeClass,
       suite_tags: ["interaction", "hover"],
       priority: 4,
-      startingPageStateId: 0,
+      dependencyTestCaseId,
+      startingPageStateId,
       startingPath,
       steps: [
         {
           action: {
             actionType: PlaywrightAction.Hover,
+            path: item.selector ?? undefined,
             playwrightCode: `await page.hover('${item.selector}')`,
             description: `Hover over ${label}`,
           },
@@ -355,5 +417,101 @@ export class PageAnalyzer {
       globalExpectations: [],
       uid,
     };
+  }
+
+  private buildClickTestCase(
+    item: ActionableItem,
+    startingPath: string,
+    sizeClass: SizeClass,
+    uid?: string,
+    startingPageStateId?: number,
+    dependencyTestCaseId?: number
+  ): TestCase {
+    const label = item.accessibleName || item.textContent || item.selector;
+    return {
+      title: `Click ${label}`,
+      type: "interaction",
+      sizeClass,
+      suite_tags: ["interaction", "click"],
+      priority: 5,
+      dependencyTestCaseId,
+      startingPageStateId,
+      startingPath,
+      steps: [
+        {
+          action: {
+            actionType: PlaywrightAction.Click,
+            path: item.selector ?? undefined,
+            playwrightCode: `await page.click('${item.selector}')`,
+            description: `Click ${label}`,
+          },
+          expectations: [],
+          description: `Click ${label}`,
+          continueOnFailure: false,
+        },
+      ],
+      globalExpectations: [],
+      uid,
+    };
+  }
+
+  private isHoverOnly(testCase: TestCase): boolean {
+    return (
+      testCase.steps.length === 1 &&
+      testCase.steps[0].action.actionType === PlaywrightAction.Hover
+    );
+  }
+
+  private getPrimarySelector(testCase: TestCase): string | null {
+    const step = testCase.steps[0];
+    return step?.action.path ?? null;
+  }
+
+  private getItemKey(
+    item:
+      | Pick<ActionableItem, "stableKey" | "selector">
+      | ActionableItemResponse
+  ): string | null {
+    const stableKey = "stableKey" in item ? item.stableKey : null;
+    const selector = item.selector;
+    return stableKey ?? selector ?? null;
+  }
+
+  private async ensureTargetPageState(
+    context: AnalyzerContext
+  ): Promise<number> {
+    if (context.currentPageStateId > 0) {
+      return context.currentPageStateId;
+    }
+
+    const hashes = await computeHashes(context.html, context.actionableItems);
+    const existing = await context.api.findMatchingPageState(
+      context.pageId,
+      hashes,
+      context.sizeClass
+    );
+    if (existing) {
+      return existing.id;
+    }
+
+    const contentHash = createHash("sha256").update(context.html).digest("hex");
+    const contentElement = await context.api.findOrCreateHtmlElement(
+      context.html,
+      contentHash
+    );
+    await context.api.insertActionableItems(
+      contentElement.id,
+      context.actionableItems
+    );
+
+    const pageState = await context.api.createPageState({
+      pageId: context.pageId,
+      sizeClass: context.sizeClass,
+      hashes,
+      contentText: context.html.slice(0, 5000),
+      contentHtmlElementId: contentElement.id,
+    });
+
+    return pageState.id;
   }
 }

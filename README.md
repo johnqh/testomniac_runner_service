@@ -26,16 +26,12 @@ designed to support server-side runners as well.
   Browser runtime contract
 - [src/index.ts](/Users/johnhuang/projects/testomniac_runner_service/src/index.ts)
   Package exports
-- [src/orchestrator/orchestrator.ts](/Users/johnhuang/projects/testomniac_runner_service/src/orchestrator/orchestrator.ts)
-  Legacy discovery-oriented scan loop exported as `runScan`
 - [src/orchestrator/runner.ts](/Users/johnhuang/projects/testomniac_runner_service/src/orchestrator/runner.ts)
   Suite/bundle execution loop exported as `runTestRun`
-- [src/orchestrator/decomposition.ts](/Users/johnhuang/projects/testomniac_runner_service/src/orchestrator/decomposition.ts)
-  Generates coverage from captured page states
-- [src/orchestrator/test-execution.ts](/Users/johnhuang/projects/testomniac_runner_service/src/orchestrator/test-execution.ts)
-  Executes generated test cases and captures newly reached states
 - [src/orchestrator/test-case-executor.ts](/Users/johnhuang/projects/testomniac_runner_service/src/orchestrator/test-case-executor.ts)
   Executes a single persisted test case in the newer runner
+- [src/analyzer/page-analyzer.ts](/Users/johnhuang/projects/testomniac_runner_service/src/analyzer/page-analyzer.ts)
+  Owns discovery-time target page state creation and follow-up case generation
 
 ## Coverage Model
 
@@ -44,8 +40,8 @@ The package creates coverage in two complementary ways:
 1. Direct navigation coverage
    Every discovered same-origin path gets a navigation case
 2. Stateful interaction coverage
-   Captured page states are decomposed into actionable interactions, forms,
-   scaffold-driven flows, and page-content flows
+   `PageAnalyzer` uses observed target page states to generate actionable
+   interaction coverage, scaffold-driven flows, and page-content flows
 
 As test actions execute, newly reached states are captured and turned into more
 coverage.

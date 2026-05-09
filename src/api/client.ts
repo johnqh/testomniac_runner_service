@@ -48,8 +48,6 @@ import type {
   InsertPageStatePatternsRequest,
   PageStatePatternResponse,
   UiPattern,
-  CreateDecompositionJobRequest,
-  DecompositionJobResponse,
   CreateTestActionRequest,
   TestActionResponse,
   CreateTestRunFindingRequest,
@@ -417,33 +415,6 @@ export class ApiClient {
   }
 
   // ===========================================================================
-  // AI Decomposition Jobs
-  // ===========================================================================
-
-  createDecompositionJob(
-    testRunId: number,
-    pageStateId: number,
-    personaId?: number
-  ): Promise<DecompositionJobResponse> {
-    const body: CreateDecompositionJobRequest = {
-      testRunId,
-      pageStateId,
-      personaId,
-    };
-    return this.post("/ai-decomposition-jobs", body);
-  }
-
-  getPendingDecompositionJobs(
-    testRunId: number
-  ): Promise<DecompositionJobResponse[]> {
-    return this.get(`/ai-decomposition-jobs/pending?testRunId=${testRunId}`);
-  }
-
-  completeDecompositionJob(jobId: number): Promise<void> {
-    return this.put(`/ai-decomposition-jobs/${jobId}/complete`);
-  }
-
-  // ===========================================================================
   // Test Actions (persisted)
   // ===========================================================================
 
@@ -697,6 +668,12 @@ export class ApiClient {
     request: CreateTestSuiteBundleRunRequest
   ): Promise<TestSuiteBundleRunResponse> {
     return this.post("/test-suite-bundle-runs", request);
+  }
+
+  getTestSuiteBundleRun(
+    id: number
+  ): Promise<TestSuiteBundleRunResponse | null> {
+    return this.get(`/test-suite-bundle-runs/${id}`);
   }
 
   completeTestSuiteBundleRun(
