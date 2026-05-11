@@ -5,9 +5,10 @@ export async function generateRenderTestElements(
   context: AnalyzerContext
 ): Promise<void> {
   const { api, runnerId, sizeClass, uid, bundleRun } = context;
+  const surfaceTitle = `Render: ${context.currentPath}`;
 
   const surface = await api.ensureTestSurface(runnerId, {
-    title: `Render: ${context.currentPath}`,
+    title: surfaceTitle,
     description: `Render validation for ${context.currentPath}`,
     startingPageStateId: context.currentPageStateId,
     startingPath: context.currentPath,
@@ -39,5 +40,11 @@ export async function generateRenderTestElements(
   await api.createTestElementRun({
     testElementId: tc.id,
     testSurfaceRunId: surfaceRun.id,
+  });
+
+  await analyzer.reconcileGeneratedSurfaceElements(context, {
+    surfaceId: surface.id,
+    surfaceTitle,
+    desiredTitles: [testElement.title],
   });
 }

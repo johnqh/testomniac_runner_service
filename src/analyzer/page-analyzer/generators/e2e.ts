@@ -4,12 +4,19 @@ export async function generateE2ETestElements(
   analyzer: any,
   context: AnalyzerContext
 ): Promise<void> {
-  if (context.journeySteps.length < 2) return;
+  const surfaceTitle = `Dependency Journeys: ${context.currentPath}`;
+  if (context.journeySteps.length < 2) {
+    await analyzer.reconcileGeneratedSurfaceElements(context, {
+      surfaceTitle,
+      desiredTitles: [],
+    });
+    return;
+  }
 
   const { api, runnerId, sizeClass, uid, bundleRun } = context;
   const surface = await api.ensureTestSurface(runnerId, {
-    title: `Journeys: ${context.currentPath}`,
-    description: `End-to-end journeys reaching ${context.currentPath}`,
+    title: surfaceTitle,
+    description: `Dependency-derived journeys reaching ${context.currentPath}`,
     startingPageStateId: context.currentPageStateId,
     startingPath: context.currentPath,
     sizeClass,
@@ -40,5 +47,11 @@ export async function generateE2ETestElements(
   await api.createTestElementRun({
     testElementId: tc.id,
     testSurfaceRunId: surfaceRun.id,
+  });
+
+  await analyzer.reconcileGeneratedSurfaceElements(context, {
+    surfaceId: surface.id,
+    surfaceTitle,
+    desiredTitles: [e2e.title],
   });
 }

@@ -12,9 +12,14 @@ export async function generateContentTestElements(
         item.scaffoldId == null && analyzer.isSurfaceCandidate(item)
     )
   );
-  if (contentItems.length === 0) return;
-
   const surfaceTitle = `Page: ${context.currentPath}`;
+  if (contentItems.length === 0) {
+    await analyzer.reconcileGeneratedSurfaceElements(context, {
+      surfaceTitle,
+      desiredTitles: [],
+    });
+    return;
+  }
   const surface = await api.ensureTestSurface(runnerId, {
     title: surfaceTitle,
     description: `Tests for page content at ${context.currentPath}`,
@@ -37,6 +42,7 @@ export async function generateContentTestElements(
     bundleRun.id
   );
 
+  const desiredTitles: string[] = [];
   for (const item of contentItems) {
     const testElement = analyzer.shouldUseDirectControlInteraction(item)
       ? analyzer.buildControlInteractionTestElement(
@@ -53,10 +59,17 @@ export async function generateContentTestElements(
           uid,
           context.currentPageStateId
         );
+    desiredTitles.push(testElement.title);
     const tc = await api.ensureTestElement(runnerId, surface.id, testElement);
     await api.createTestElementRun({
       testElementId: tc.id,
       testSurfaceRunId: surfaceRun.id,
     });
   }
+
+  await analyzer.reconcileGeneratedSurfaceElements(context, {
+    surfaceId: surface.id,
+    surfaceTitle,
+    desiredTitles,
+  });
 }

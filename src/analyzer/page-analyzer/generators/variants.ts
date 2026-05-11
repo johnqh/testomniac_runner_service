@@ -5,11 +5,18 @@ export async function generateVariantTestElements(
   context: AnalyzerContext
 ): Promise<void> {
   const tests = analyzer.buildVariantTestElements(context);
-  if (tests.length === 0) return;
+  const surfaceTitle = `Variants: ${context.currentPath}`;
+  if (tests.length === 0) {
+    await analyzer.reconcileGeneratedSurfaceElements(context, {
+      surfaceTitle,
+      desiredTitles: [],
+    });
+    return;
+  }
 
   const { api, runnerId, bundleRun } = context;
   const surface = await api.ensureTestSurface(runnerId, {
-    title: `Variants: ${context.currentPath}`,
+    title: surfaceTitle,
     description: `Variant and option state checks for ${context.currentPath}`,
     startingPageStateId: context.currentPageStateId,
     startingPath: context.currentPath,
@@ -37,4 +44,10 @@ export async function generateVariantTestElements(
       testSurfaceRunId: surfaceRun.id,
     });
   }
+
+  await analyzer.reconcileGeneratedSurfaceElements(context, {
+    surfaceId: surface.id,
+    surfaceTitle,
+    desiredTitles: tests.map((test: any) => test.title),
+  });
 }

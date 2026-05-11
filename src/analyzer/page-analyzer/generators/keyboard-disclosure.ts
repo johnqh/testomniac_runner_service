@@ -5,11 +5,18 @@ export async function generateKeyboardAndDisclosureTestElements(
   context: AnalyzerContext
 ): Promise<void> {
   const tests = analyzer.buildKeyboardAndDisclosureTestElements(context);
-  if (tests.length === 0) return;
+  const surfaceTitle = `Keyboard: ${context.currentPath}`;
+  if (tests.length === 0) {
+    await analyzer.reconcileGeneratedSurfaceElements(context, {
+      surfaceTitle,
+      desiredTitles: [],
+    });
+    return;
+  }
 
   const { api, runnerId, bundleRun } = context;
   const surface = await api.ensureTestSurface(runnerId, {
-    title: `Keyboard: ${context.currentPath}`,
+    title: surfaceTitle,
     description: `Keyboard parity and disclosure checks for ${context.currentPath}`,
     startingPageStateId: context.currentPageStateId,
     startingPath: context.currentPath,
@@ -37,4 +44,10 @@ export async function generateKeyboardAndDisclosureTestElements(
       testSurfaceRunId: surfaceRun.id,
     });
   }
+
+  await analyzer.reconcileGeneratedSurfaceElements(context, {
+    surfaceId: surface.id,
+    surfaceTitle,
+    desiredTitles: tests.map((test: any) => test.title),
+  });
 }

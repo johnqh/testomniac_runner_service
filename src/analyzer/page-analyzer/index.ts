@@ -117,6 +117,58 @@ export class PageAnalyzer {
     await generateVariantTestElements(this, resolvedContext);
   }
 
+  async reconcileGeneratedSurfaceElements(
+    context: AnalyzerContext,
+    params: {
+      surfaceId?: number | null;
+      surfaceTitle: string;
+      desiredTitles: string[];
+      dependencyTestElementId?: number;
+    }
+  ): Promise<void> {
+    const surface =
+      params.surfaceId != null
+        ? { id: params.surfaceId, title: params.surfaceTitle }
+        : await this.findExistingSurfaceByTitle(context, params.surfaceTitle);
+    if (!surface) return;
+
+    const existing = await context.api.getTestElementsByTestSurface(
+      surface.id,
+      true
+    );
+    const desiredTitles = new Set(params.desiredTitles);
+    const obsoleteIds = existing
+      .filter(testElement => {
+        const isGenerated = Boolean((testElement as any).isGenerated);
+        const isActive = (testElement as any).isActive !== false;
+        if (!isGenerated || !isActive) return false;
+        if (testElement.startingPageStateId !== context.currentPageStateId)
+          return false;
+        if (
+          (testElement.dependencyTestElementId ?? null) !==
+          (params.dependencyTestElementId ?? null)
+        ) {
+          return false;
+        }
+        return !desiredTitles.has(testElement.title);
+      })
+      .map(testElement => testElement.id);
+
+    if (obsoleteIds.length === 0) return;
+    await context.api.retireTestElements(obsoleteIds);
+  }
+
+  private async findExistingSurfaceByTitle(
+    context: AnalyzerContext,
+    title: string
+  ): Promise<{ id: number; title: string } | null> {
+    const surfaces = await context.api.getTestSurfacesByRunner(
+      context.runnerId
+    );
+    const surface = surfaces.find(candidate => candidate.title === title);
+    return surface ? { id: surface.id, title: surface.title } : null;
+  }
+
   private getScaffoldSurfaceItems(
     context: AnalyzerContext,
     scaffold: DetectedScaffoldRegion

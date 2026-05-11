@@ -5,7 +5,14 @@ export async function generateDialogLifecycleTestElements(
   analyzer: any,
   context: AnalyzerContext
 ): Promise<void> {
-  if (!analyzer.pageHasOpenDialog(context.html)) return;
+  const surfaceTitle = `Dialogs: ${context.currentPath}`;
+  if (!analyzer.pageHasOpenDialog(context.html)) {
+    await analyzer.reconcileGeneratedSurfaceElements(context, {
+      surfaceTitle,
+      desiredTitles: [],
+    });
+    return;
+  }
 
   const closeCandidates = analyzer.selectRepresentativeItems(
     context.actionableItems.filter(
@@ -40,7 +47,7 @@ export async function generateDialogLifecycleTestElements(
 
   const { api, runnerId, bundleRun } = context;
   const surface = await api.ensureTestSurface(runnerId, {
-    title: `Dialogs: ${context.currentPath}`,
+    title: surfaceTitle,
     description: `Dialog lifecycle checks for ${context.currentPath}`,
     startingPageStateId: context.currentPageStateId,
     startingPath: context.currentPath,
@@ -61,6 +68,7 @@ export async function generateDialogLifecycleTestElements(
     bundleRun.id
   );
 
+  const desiredTitles = tests.map((test: TestElement) => test.title);
   for (const test of tests) {
     const tc = await api.ensureTestElement(runnerId, surface.id, test);
     await api.createTestElementRun({
@@ -68,4 +76,10 @@ export async function generateDialogLifecycleTestElements(
       testSurfaceRunId: surfaceRun.id,
     });
   }
+
+  await analyzer.reconcileGeneratedSurfaceElements(context, {
+    surfaceId: surface.id,
+    surfaceTitle,
+    desiredTitles,
+  });
 }

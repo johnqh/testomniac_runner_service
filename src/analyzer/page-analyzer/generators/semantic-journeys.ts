@@ -5,11 +5,18 @@ export async function generateSemanticJourneyTestElements(
   context: AnalyzerContext
 ): Promise<void> {
   const journeys = analyzer.buildSemanticJourneyTestElements(context);
-  if (journeys.length === 0) return;
+  const surfaceTitle = `Journeys: ${context.currentPath}`;
+  if (journeys.length === 0) {
+    await analyzer.reconcileGeneratedSurfaceElements(context, {
+      surfaceTitle,
+      desiredTitles: [],
+    });
+    return;
+  }
 
   const { api, runnerId, bundleRun } = context;
   const surface = await api.ensureTestSurface(runnerId, {
-    title: `Journeys: ${context.currentPath}`,
+    title: surfaceTitle,
     description: `Semantic multi-step journeys from ${context.currentPath}`,
     startingPageStateId: context.currentPageStateId,
     startingPath: context.currentPath,
@@ -37,4 +44,10 @@ export async function generateSemanticJourneyTestElements(
       testSurfaceRunId: surfaceRun.id,
     });
   }
+
+  await analyzer.reconcileGeneratedSurfaceElements(context, {
+    surfaceId: surface.id,
+    surfaceTitle,
+    desiredTitles: journeys.map((journey: any) => journey.title),
+  });
 }

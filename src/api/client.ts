@@ -63,6 +63,9 @@ import type {
 } from "@sudobility/testomniac_types";
 
 type CompleteRunPayload = CompleteTestRunRequest;
+type InsertTestElementRequestCompat = InsertTestElementRequest & {
+  isGenerated?: boolean;
+};
 
 export class ApiClient {
   private baseUrl: string;
@@ -619,12 +622,17 @@ export class ApiClient {
     testSurfaceId: number,
     testElement: TestElement
   ): Promise<TestElementResponse> {
-    const body: InsertTestElementRequest = {
+    const body: InsertTestElementRequestCompat = {
       runnerId,
       testSurfaceId,
       testElement,
+      isGenerated: true,
     };
     return this.post("/test-elements", body);
+  }
+
+  retireTestElements(testElementIds: number[]): Promise<void> {
+    return this.put("/test-elements/retire", { testElementIds });
   }
 
   ensureBundleSurfaceLink(
@@ -699,9 +707,12 @@ export class ApiClient {
   // ===========================================================================
 
   getTestElementsByTestSurface(
-    testSurfaceId: number
+    testSurfaceId: number,
+    includeInactive = false
   ): Promise<TestElementResponse[]> {
-    return this.get(`/test-elements?testSurfaceId=${testSurfaceId}`);
+    return this.get(
+      `/test-elements?testSurfaceId=${testSurfaceId}&includeInactive=${includeInactive ? "true" : "false"}`
+    );
   }
 
   getTestSurfacesByBundle(bundleId: number): Promise<TestSurfaceResponse[]> {

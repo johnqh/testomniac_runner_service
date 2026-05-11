@@ -4,7 +4,14 @@ export async function generateNavigationTestElements(
   analyzer: any,
   context: AnalyzerContext
 ): Promise<void> {
-  if (context.pageRequiresLogin) return;
+  if (context.pageRequiresLogin) {
+    await analyzer.reconcileGeneratedSurfaceElements(context, {
+      surfaceId: context.navigationSurface.id,
+      surfaceTitle: context.navigationSurface.title,
+      desiredTitles: [],
+    });
+    return;
+  }
 
   const { api, runnerId, sizeClass, uid, navigationSurface, bundleRun } =
     context;
@@ -25,6 +32,7 @@ export async function generateNavigationTestElements(
     bundleRun.id
   );
 
+  const desiredTitles: string[] = [];
   for (const link of links) {
     if (!link.href) continue;
     const path = analyzer.extractRelativePath(link.href);
@@ -36,6 +44,7 @@ export async function generateNavigationTestElements(
       uid,
       context.currentPageStateId
     );
+    desiredTitles.push(testElement.title);
     const tc = await api.ensureTestElement(
       runnerId,
       navigationSurface.id,
@@ -46,4 +55,10 @@ export async function generateNavigationTestElements(
       testSurfaceRunId: surfaceRun.id,
     });
   }
+
+  await analyzer.reconcileGeneratedSurfaceElements(context, {
+    surfaceId: navigationSurface.id,
+    surfaceTitle: navigationSurface.title,
+    desiredTitles,
+  });
 }
