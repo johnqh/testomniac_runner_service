@@ -1243,6 +1243,10 @@ export class PageAnalyzer {
           }
         ),
         this.makeExpectation(
+          "feedback_not_duplicated",
+          `Submitting ${formLabel} should not show duplicate feedback messages`
+        ),
+        this.makeExpectation(
           "field_error_clears_after_fix",
           `Validation errors on ${formLabel} should clear once the fields are corrected`
         ),
@@ -1364,6 +1368,10 @@ export class PageAnalyzer {
             ],
             forbiddenTextTokens: ["error", "required", "invalid"],
           }
+        ),
+        this.makeExpectation(
+          "feedback_not_duplicated",
+          `Form ${formLabel} should not show duplicate feedback after correction`
         ),
       ],
       uid,
@@ -1927,6 +1935,10 @@ export class PageAnalyzer {
                 }
               ),
               this.makeExpectation(
+                "feedback_not_duplicated",
+                "Adding an item should not show duplicate feedback messages"
+              ),
+              this.makeExpectation(
                 "loading_completes",
                 "Cart update should complete loading"
               ),
@@ -1989,6 +2001,13 @@ export class PageAnalyzer {
                 "Removing an item should update the cart summary"
               ),
               this.makeExpectation(
+                "row_count_changed",
+                "Removing an item should change the visible row or item count",
+                {
+                  expectedCountDelta: -1,
+                }
+              ),
+              this.makeExpectation(
                 ExpectationType.NetworkRequestMade,
                 "Removing an item should trigger a backend mutation request",
                 {
@@ -2007,6 +2026,10 @@ export class PageAnalyzer {
                   expectedTextTokens: ["removed", "updated", "cart", "bag"],
                   forbiddenTextTokens: ["error", "failed"],
                 }
+              ),
+              this.makeExpectation(
+                "feedback_not_duplicated",
+                "Removing an item should not show duplicate feedback messages"
               ),
               this.makeExpectation(
                 "loading_completes",
@@ -2196,6 +2219,33 @@ export class PageAnalyzer {
               this.makeExpectation(
                 "loading_completes",
                 "Sort update should complete loading"
+              ),
+            ]),
+          ]
+        )
+      );
+    }
+
+    const paginationAction = items.find(item => this.isPaginationAction(item));
+    if (paginationAction) {
+      journeys.push(
+        this.buildJourneyTestElement(
+          "Pagination journey",
+          ["list", "pagination"],
+          context,
+          [
+            this.buildJourneyAction(paginationAction, "Paginate list", [
+              this.makeExpectation(
+                ExpectationType.NavigationOrStateChanged,
+                "Pagination should change the visible list state"
+              ),
+              this.makeExpectation(
+                "row_count_changed",
+                "Pagination should change the visible rows or items"
+              ),
+              this.makeExpectation(
+                ExpectationType.LoadingCompletes,
+                "Pagination should complete loading"
               ),
             ]),
           ]
@@ -3108,6 +3158,12 @@ export class PageAnalyzer {
 
   private isSortAction(item: ActionableItem): boolean {
     return /\b(sort|order by|best selling|price low|price high|newest|featured)\b/.test(
+      this.semanticText(item)
+    );
+  }
+
+  private isPaginationAction(item: ActionableItem): boolean {
+    return /\b(next|previous|prev|page \d+|load more|show more|older|newer)\b/.test(
       this.semanticText(item)
     );
   }

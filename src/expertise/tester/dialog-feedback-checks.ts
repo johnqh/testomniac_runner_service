@@ -113,3 +113,43 @@ export function checkFeedbackVisible(
     result: "warning",
   };
 }
+
+export function checkFeedbackNotDuplicated(
+  expectation: { description: string },
+  context: ExpertiseContext
+): Outcome {
+  const texts = context.finalUiSnapshot.feedbackTexts
+    .map(text => text.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (texts.length <= 1) {
+    return {
+      expected: expectation.description,
+      observed: "No duplicate visible feedback messages were detected",
+      result: "pass",
+    };
+  }
+
+  const duplicates = new Set<string>();
+  const seen = new Set<string>();
+  for (const text of texts) {
+    if (seen.has(text)) {
+      duplicates.add(text);
+    }
+    seen.add(text);
+  }
+
+  if (duplicates.size > 0) {
+    return {
+      expected: expectation.description,
+      observed: `Duplicate feedback messages detected: ${Array.from(duplicates).join(", ")}`,
+      result: "error",
+    };
+  }
+
+  return {
+    expected: expectation.description,
+    observed: "Multiple distinct feedback messages were visible at once",
+    result: "warning",
+  };
+}

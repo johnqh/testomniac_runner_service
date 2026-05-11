@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   checkDialogClosed,
+  checkFeedbackNotDuplicated,
   checkFeedbackVisible,
   checkFocusReturned,
 } from "./dialog-feedback-checks";
@@ -77,5 +78,20 @@ describe("dialog and feedback checks", () => {
     );
 
     expect(result.result).toBe("pass");
+  });
+
+  it("fails when identical feedback messages are duplicated", () => {
+    const result = checkFeedbackNotDuplicated(
+      { description: "Feedback should not be duplicated" },
+      createContext(
+        createUiSnapshot({ toastCount: 0 }),
+        createUiSnapshot({
+          toastCount: 2,
+          feedbackTexts: ["Saved successfully", "Saved successfully"],
+        })
+      )
+    );
+
+    expect(result.result).toBe("error");
   });
 });

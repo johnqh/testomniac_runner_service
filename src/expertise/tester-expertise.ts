@@ -41,8 +41,10 @@ import {
 } from "./tester/search-checks";
 import { checkResultsRestored } from "./tester/search-restore-checks";
 import { checkVariantStateChanged } from "./tester/variant-checks";
+import { checkRowCountChanged } from "./tester/list-workflow-checks";
 import {
   checkDialogClosed,
+  checkFeedbackNotDuplicated,
   checkFeedbackVisible,
   checkFocusReturned,
 } from "./tester/dialog-feedback-checks";
@@ -111,6 +113,8 @@ export class TesterExpertise implements Expertise {
         return checkCartSummaryChanged(expectation, context);
       case "count_changed":
         return checkCountChanged(expectation, context);
+      case "row_count_changed":
+        return checkRowCountChanged(expectation, context);
       case "network_request_made":
         return checkNetworkRequestMade(expectation, context);
       case "no_duplicate_mutation_requests":
@@ -121,6 +125,8 @@ export class TesterExpertise implements Expertise {
         return checkFocusReturned(expectation, context);
       case "feedback_visible":
         return checkFeedbackVisible(expectation, context);
+      case "feedback_not_duplicated":
+        return checkFeedbackNotDuplicated(expectation, context);
       case "state_persists_after_reload":
         return checkStatePersistsAfterReload(expectation, context);
       case "back_navigation_restores_state":
