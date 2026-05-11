@@ -1,6 +1,11 @@
 import type { BrowserAdapter } from "../adapter";
 import type { ApiClient } from "../api/client";
-import type { RunConfig, ScanEventHandler, ScanResult } from "./types";
+import type {
+  RunCheckpoint,
+  RunConfig,
+  ScanEventHandler,
+  ScanResult,
+} from "./types";
 import type { Expertise } from "../expertise/types";
 import { PageAnalyzer } from "../analyzer";
 import { executeTestElement } from "./test-element-executor";
@@ -74,8 +79,18 @@ export async function runTestRun(
     }
   }
 
+  async function waitForCheckpoint(checkpoint: RunCheckpoint): Promise<void> {
+    if (config.signal?.aborted) {
+      throw createAbortError();
+    }
+    await config.waitForCheckpoint?.(checkpoint);
+    if (config.signal?.aborted) {
+      throw createAbortError();
+    }
+  }
+
   try {
-    // Claim the test run
+    await waitForCheckpoint("before_claim");
     const claimed = await api.claimTestRun(
       config.testRunId,
       config.runnerInstanceId,
@@ -121,7 +136,7 @@ export async function runTestRun(
     // Execution loop: iterate open surface runs in the bundle
     let hasOpenSurfaces = true;
     while (hasOpenSurfaces) {
-      if (config.signal?.aborted) break;
+      await waitForCheckpoint("before_surface");
 
       const openSurfaceRuns = await api.getOpenTestSurfaceRuns(
         testRun.testSurfaceBundleRunId
@@ -136,7 +151,7 @@ export async function runTestRun(
       // Iterate open element runs in this surface
       let hasOpenCases = true;
       while (hasOpenCases) {
-        if (config.signal?.aborted) break;
+        await waitForCheckpoint("before_test_element");
 
         const openCaseRuns = await api.getOpenTestElementRuns(
           currentSurfaceRun.id
@@ -164,6 +179,8 @@ export async function runTestRun(
               }
             : undefined
         );
+
+        await waitForCheckpoint("after_test_element");
       }
 
       // All elements done in this surface — mark surface run completed
@@ -171,6 +188,8 @@ export async function runTestRun(
         status: "completed",
       });
     }
+
+    await waitForCheckpoint("before_completion");
 
     // All surfaces done — mark bundle run and test run completed
     await api.completeTestSurfaceBundleRun(testRun.testSurfaceBundleRunId, {
@@ -226,4 +245,10 @@ export async function runTestRun(
 
     throw error;
   }
+}
+
+function createAbortError(): Error {
+  const error = new Error("Run aborted");
+  error.name = "AbortError";
+  return error;
 }

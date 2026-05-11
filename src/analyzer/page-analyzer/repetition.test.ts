@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ActionableItem } from "@sudobility/testomniac_types";
-import { PageAnalyzer } from "./page-analyzer";
-import type { DetectedScaffoldRegion } from "../scanner/component-detector";
+import { PageAnalyzer } from ".";
+import type { DetectedScaffoldRegion } from "../../scanner/component-detector";
 
 function createItem(
   selector: string,

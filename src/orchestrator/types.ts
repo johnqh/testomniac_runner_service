@@ -9,8 +9,16 @@ export interface RunConfig {
   uid?: string;
   runnerInstanceId: string;
   runnerInstanceName: string;
+  waitForCheckpoint?: (checkpoint: RunCheckpoint) => Promise<void>;
   signal?: AbortSignal;
 }
+
+export type RunCheckpoint =
+  | "before_claim"
+  | "before_surface"
+  | "before_test_element"
+  | "after_test_element"
+  | "before_completion";
 
 export interface ScanEventHandler {
   onPageFound(page: { relativePath: string; pageId: number }): void;
