@@ -51,6 +51,7 @@ export class PageAnalyzer {
    * Called BEFORE expertises evaluate.
    */
   generateExpectations(testElement: TestElement): Expectation[] {
+    const steps = Array.isArray(testElement.steps) ? testElement.steps : [];
     const expectations: Expectation[] = [
       {
         expectationType: ExpectationType.PageLoaded,
@@ -68,8 +69,8 @@ export class PageAnalyzer {
 
     // If test element has only a navigation action, no more expectations
     const isNavigationOnly =
-      testElement.steps.length === 1 &&
-      testElement.steps[0].action.actionType === PlaywrightAction.Goto;
+      steps.length === 1 &&
+      steps[0]?.action?.actionType === PlaywrightAction.Goto;
 
     if (!isNavigationOnly) {
       expectations.push({
@@ -91,9 +92,11 @@ export class PageAnalyzer {
     testElement: TestElement,
     context: AnalyzerContext
   ): Promise<void> {
-    const currentPageStateId = await this.ensureTargetPageState(context);
+    const normalizedContext = this.normalizeContext(context);
+    const currentPageStateId =
+      await this.ensureTargetPageState(normalizedContext);
     const resolvedContext: AnalyzerContext = {
-      ...context,
+      ...normalizedContext,
       currentPageStateId,
     };
 
@@ -118,14 +121,16 @@ export class PageAnalyzer {
     context: AnalyzerContext,
     scaffold: DetectedScaffoldRegion
   ): ActionableItem[] {
-    return context.actionableItems.filter(item => {
-      if (!this.isSurfaceCandidate(item) || !item.selector) return false;
+    return this.normalizeActionableItems(context.actionableItems).filter(
+      item => {
+        if (!this.isSurfaceCandidate(item) || !item.selector) return false;
 
-      return (
-        context.scaffoldSelectorByItemSelector[item.selector] ===
-        scaffold.selector
-      );
-    });
+        return (
+          context.scaffoldSelectorByItemSelector[item.selector] ===
+          scaffold.selector
+        );
+      }
+    );
   }
 
   private async ensureSurfaceRun(
@@ -276,14 +281,16 @@ export class PageAnalyzer {
   }
 
   private isHoverOnly(testElement: TestElement): boolean {
+    const steps = Array.isArray(testElement.steps) ? testElement.steps : [];
     return (
-      testElement.steps.length === 1 &&
-      testElement.steps[0].action.actionType === PlaywrightAction.Hover
+      steps.length === 1 &&
+      steps[0]?.action?.actionType === PlaywrightAction.Hover
     );
   }
 
   private getPrimarySelector(testElement: TestElement): string | null {
-    const step = testElement.steps[0];
+    const steps = Array.isArray(testElement.steps) ? testElement.steps : [];
+    const step = steps[0];
     return step?.action.path ?? null;
   }
 
@@ -405,12 +412,13 @@ export class PageAnalyzer {
     pageStateId: number,
     context: AnalyzerContext
   ): Promise<void> {
-    if (context.forms.length === 0) return;
+    const forms = this.normalizeForms(context.forms);
+    if (forms.length === 0) return;
 
     const existing = await context.api.getFormsByPageState(pageStateId);
     const existingSelectors = new Set(existing.map(form => form.selector));
 
-    for (const form of context.forms) {
+    for (const form of forms) {
       if (existingSelectors.has(form.selector)) continue;
       await context.api.insertForm(
         pageStateId,
@@ -418,6 +426,34 @@ export class PageAnalyzer {
         this.identifyFormType(form, context.currentPath)
       );
     }
+  }
+
+  private normalizeContext(context: AnalyzerContext): AnalyzerContext {
+    return {
+      ...context,
+      html: typeof context.html === "string" ? context.html : "",
+      scaffolds: Array.isArray(context.scaffolds) ? context.scaffolds : [],
+      scaffoldSelectorByItemSelector:
+        context.scaffoldSelectorByItemSelector &&
+        typeof context.scaffoldSelectorByItemSelector === "object"
+          ? context.scaffoldSelectorByItemSelector
+          : {},
+      actionableItems: this.normalizeActionableItems(context.actionableItems),
+      forms: this.normalizeForms(context.forms),
+      journeySteps: Array.isArray(context.journeySteps)
+        ? context.journeySteps
+        : [],
+    };
+  }
+
+  private normalizeActionableItems(
+    items: AnalyzerContext["actionableItems"]
+  ): ActionableItem[] {
+    return Array.isArray(items) ? items : [];
+  }
+
+  private normalizeForms(forms: AnalyzerContext["forms"]): FormInfo[] {
+    return Array.isArray(forms) ? forms : [];
   }
 
   private buildRenderTestElement(

@@ -103,4 +103,81 @@ describe("buildExpectationEvaluationGroups", () => {
     );
     expect(groups[1]?.snapshot.html).toBe("<div>Thanks for submitting</div>");
   });
+
+  it("normalizes malformed snapshots and missing generated expectations", () => {
+    const groups = buildExpectationEvaluationGroups({
+      stepExecutions: [
+        {
+          step: {
+            action: {
+              actionType: "click",
+              path: "#submit",
+              playwrightCode: "",
+              description: "Submit",
+            },
+            expectations: [
+              {
+                expectationType: "page_loaded",
+                severity: "must_pass",
+                description: "Page should load",
+                playwrightCode: "",
+              },
+            ],
+            description: "Submit",
+            continueOnFailure: false,
+          },
+          startedAtMs: 1000,
+          endedAtMs: 1100,
+          beforeSnapshot: {
+            html: null as unknown as string,
+            url: null as unknown as string,
+            uiSnapshot: {
+              dialogCount: 0,
+              toastCount: 0,
+              feedbackTexts: [],
+            },
+            controlStates: null as unknown as [],
+          },
+          afterSnapshot: {
+            html: null as unknown as string,
+            url: "https://example.com/result",
+            uiSnapshot: {
+              dialogCount: 0,
+              toastCount: 0,
+              feedbackTexts: [],
+            },
+            controlStates: null as unknown as [],
+          },
+        },
+      ],
+      generatedExpectations: null as unknown as [],
+      networkLogs: [],
+      initialSnapshot: {
+        html: null as unknown as string,
+        url: null as unknown as string,
+        uiSnapshot: {
+          dialogCount: 0,
+          toastCount: 0,
+          feedbackTexts: [],
+        },
+        controlStates: null as unknown as [],
+      },
+      finalSnapshot: {
+        html: null as unknown as string,
+        url: null as unknown as string,
+        uiSnapshot: {
+          dialogCount: 0,
+          toastCount: 0,
+          feedbackTexts: [],
+        },
+        controlStates: null as unknown as [],
+      },
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.previousSnapshot.html).toBe("");
+    expect(groups[0]?.previousSnapshot.url).toBe("");
+    expect(groups[0]?.previousSnapshot.controlStates).toEqual([]);
+    expect(groups[0]?.snapshot.html).toBe("");
+  });
 });

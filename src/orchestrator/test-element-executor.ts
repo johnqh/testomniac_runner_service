@@ -14,7 +14,7 @@ import type { PageAnalyzer, AnalyzerContext } from "../analyzer";
 import { extractActionableItems } from "../extractors";
 import { extractForms } from "../extractors/form-extractor";
 import { captureControlStates } from "../browser/control-snapshot";
-import { captureUiSnapshot } from "../browser/ui-snapshot";
+import { captureUiSnapshot, type UiSnapshot } from "../browser/ui-snapshot";
 import { detectScaffoldRegions } from "../scanner/component-detector";
 import { detectPatternsWithInstances } from "../scanner/pattern-detector";
 
@@ -70,6 +70,8 @@ type ExpectationEvaluationGroup = {
   previousSnapshot: ExecutionSnapshot;
 };
 
+type SnapshotLike = Partial<ExecutionSnapshot> | null | undefined;
+
 /**
  * Execute a single test element: run actions, decompose page, evaluate expertises,
  * set outcomes, create findings, and optionally discover new test elements.
@@ -90,6 +92,7 @@ export async function executeTestElement(
   const startTime = Date.now();
   const consoleLogs: string[] = [];
   const networkLogs: NetworkLogEntry[] = [];
+  let currentPhase = "initialization";
 
   // Listen for console and network events
   adapter.on("console", (...args: unknown[]) => {
@@ -118,6 +121,7 @@ export async function executeTestElement(
   });
 
   try {
+    currentPhase = "loading-test-elements";
     const allTestElements = await api.getTestElementsByRunner(testRun.runnerId);
     const testElementById = new Map(
       allTestElements.map(testElement => [testElement.id, testElement])
@@ -158,10 +162,12 @@ export async function executeTestElement(
       }
     }
 
+    currentPhase = "capturing-initial-snapshot";
     const initialSnapshot = await captureExecutionSnapshot(adapter);
     const stepExecutions: StepExecution[] = [];
     let previousSnapshot = initialSnapshot;
 
+    currentPhase = "executing-steps";
     // Execute test actions
     for (const step of steps) {
       const startedAtMs = Date.now();
@@ -197,13 +203,16 @@ export async function executeTestElement(
     }
 
     // Decompose the page using local detectors
-    const html = await adapter.content();
-    const scaffolds = await detectScaffoldRegions(adapter);
-    const patterns = await detectPatternsWithInstances(adapter);
-    const items = await extractActionableItems(adapter);
-    const forms = await extractForms(adapter);
-    const finalUiSnapshot = await captureUiSnapshot(adapter);
-    const finalControlStates = await captureControlStates(adapter);
+    currentPhase = "decomposing-page";
+    const html = normalizeHtml(await adapter.content());
+    const scaffolds = ensureArray(await detectScaffoldRegions(adapter));
+    const patterns = ensureArray(await detectPatternsWithInstances(adapter));
+    const items = ensureArray(await extractActionableItems(adapter));
+    const forms = ensureArray(await extractForms(adapter));
+    const finalUiSnapshot = normalizeUiSnapshot(
+      await captureUiSnapshot(adapter)
+    );
+    const finalControlStates = ensureArray(await captureControlStates(adapter));
     const scaffoldSelectorByItemSelector = await mapItemsToScaffolds(
       adapter,
       scaffolds,
@@ -211,8 +220,9 @@ export async function executeTestElement(
     );
 
     // Parse global expectations
-    const globalExpectations =
-      (testElement.globalExpectationsJson as StoredExpectation[]) ?? [];
+    const globalExpectations = parseStoredExpectations(
+      testElement.globalExpectationsJson
+    );
     const stepExpectations = steps.flatMap(step => step.expectations ?? []);
 
     // If discovery mode: generate baseline expectations
@@ -281,12 +291,13 @@ export async function executeTestElement(
       },
     });
 
+    currentPhase = "evaluating-expectations";
     for (const expertise of expertises) {
       for (const group of expectationGroups) {
         const outcomes = expertise.evaluate({
           ...expertiseBaseContext,
-          html: group.snapshot.html,
-          initialHtml: group.previousSnapshot.html,
+          html: normalizeHtml(group.snapshot.html),
+          initialHtml: normalizeHtml(group.previousSnapshot.html),
           expectations: group.expectations as any,
           networkLogs: group.networkLogs,
           initialUrl: group.previousSnapshot.url,
@@ -355,6 +366,7 @@ export async function executeTestElement(
     });
 
     // If discovery mode: generate new test elements
+    currentPhase = "discovering-follow-up-tests";
     if (analyzer && discoveryContext) {
       const currentUrl = await adapter.getUrl();
       const url = new URL(currentUrl);
@@ -373,7 +385,7 @@ export async function executeTestElement(
         currentTestElementId: testElement.id,
         currentTestSurfaceId: testElement.testSurfaceId,
         currentSurfaceRunId: testElementRun.testSurfaceRunId,
-        html,
+        html: normalizeHtml(html),
         currentPageStateId: 0,
         beginningPageStateId: beginningPageStateId,
         currentPath,
@@ -381,9 +393,9 @@ export async function executeTestElement(
         pageRequiresLogin: page.requiresLogin ?? false,
         scaffolds,
         scaffoldSelectorByItemSelector,
-        actionableItems: items,
-        forms,
-        journeySteps: journeySteps as any,
+        actionableItems: ensureArray(items),
+        forms: ensureArray(forms),
+        journeySteps: ensureArray(journeySteps) as any,
         navigationSurface: discoveryContext.navigationSurface,
         bundleRun: discoveryContext.bundleRun,
         api,
@@ -406,8 +418,13 @@ export async function executeTestElement(
     }
   } catch (error) {
     const durationMs = Date.now() - startTime;
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error";
+    const detail =
+      error instanceof Error
+        ? error.stack || error.message
+        : typeof error === "string"
+          ? error
+          : JSON.stringify(error);
+    const errorMessage = `Phase: ${currentPhase}\n${detail}`;
 
     await api.completeTestElementRun(testElementRun.id, {
       status: "failed",
@@ -483,7 +500,52 @@ async function mapItemsToScaffolds(
 }
 
 function parseStoredSteps(stepsJson: unknown): StoredStep[] {
-  return (stepsJson as StoredStep[]) ?? [];
+  if (!Array.isArray(stepsJson)) {
+    return [];
+  }
+
+  return stepsJson
+    .filter((step): step is Partial<StoredStep> => Boolean(step))
+    .map(step => ({
+      action: {
+        actionType:
+          typeof step.action?.actionType === "string"
+            ? step.action.actionType
+            : "waitForTimeout",
+        path:
+          typeof step.action?.path === "string" ? step.action.path : undefined,
+        value:
+          typeof step.action?.value === "string"
+            ? step.action.value
+            : undefined,
+        playwrightCode:
+          typeof step.action?.playwrightCode === "string"
+            ? step.action.playwrightCode
+            : "",
+        description:
+          typeof step.action?.description === "string"
+            ? step.action.description
+            : "",
+      },
+      expectations: parseStoredExpectations(step.expectations),
+      description: typeof step.description === "string" ? step.description : "",
+      continueOnFailure: Boolean(step.continueOnFailure),
+    }));
+}
+
+function parseStoredExpectations(value: unknown): StoredExpectation[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((expectation): expectation is StoredExpectation =>
+    Boolean(
+      expectation &&
+      typeof expectation === "object" &&
+      "expectationType" in expectation &&
+      "description" in expectation
+    )
+  );
 }
 
 function buildDependencyChain(
@@ -573,16 +635,18 @@ export function buildExpectationEvaluationGroups(params: {
         stepExecution.endedAtMs,
         stepExecution.step.expectations
       ),
-      snapshot: stepExecution.afterSnapshot,
-      previousSnapshot: stepExecution.beforeSnapshot,
+      snapshot: normalizeExecutionSnapshot(stepExecution.afterSnapshot),
+      previousSnapshot: normalizeExecutionSnapshot(
+        stepExecution.beforeSnapshot
+      ),
     }));
 
-  if (params.generatedExpectations.length > 0) {
+  if ((params.generatedExpectations?.length ?? 0) > 0) {
     groups.push({
       expectations: params.generatedExpectations,
       networkLogs: params.networkLogs,
-      snapshot: params.finalSnapshot,
-      previousSnapshot: params.initialSnapshot,
+      snapshot: normalizeExecutionSnapshot(params.finalSnapshot),
+      previousSnapshot: normalizeExecutionSnapshot(params.initialSnapshot),
     });
   }
 
@@ -699,10 +763,10 @@ async function executeAction(
 async function captureExecutionSnapshot(
   adapter: BrowserAdapter
 ): Promise<ExecutionSnapshot> {
-  const html = await adapter.content();
-  const url = await adapter.getUrl();
+  const html = normalizeHtml(await adapter.content());
+  const url = normalizeString(await adapter.getUrl());
   const uiSnapshot = await captureUiSnapshot(adapter);
-  const controlStates = await captureControlStates(adapter);
+  const controlStates = ensureArray(await captureControlStates(adapter));
 
   return {
     html,
@@ -719,6 +783,51 @@ async function captureExecutionSnapshotSafe(
   try {
     return await captureExecutionSnapshot(adapter);
   } catch {
-    return fallback;
+    return normalizeExecutionSnapshot(fallback);
   }
+}
+
+function ensureArray<T>(value: T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function normalizeString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function normalizeHtml(value: unknown): string {
+  return normalizeString(value);
+}
+
+function normalizeExecutionSnapshot(snapshot: SnapshotLike): ExecutionSnapshot {
+  return {
+    html: normalizeHtml(snapshot?.html),
+    url: normalizeString(snapshot?.url),
+    uiSnapshot: normalizeUiSnapshot(snapshot?.uiSnapshot),
+    controlStates: ensureArray(snapshot?.controlStates),
+  };
+}
+
+function normalizeUiSnapshot(
+  snapshot: Partial<UiSnapshot> | null | undefined
+): UiSnapshot {
+  const feedbackTexts = Array.isArray(snapshot?.feedbackTexts)
+    ? snapshot.feedbackTexts.filter(
+        (text): text is string => typeof text === "string"
+      )
+    : [];
+
+  return {
+    activeElementSelector:
+      typeof snapshot?.activeElementSelector === "string"
+        ? snapshot.activeElementSelector
+        : undefined,
+    dialogCount:
+      typeof snapshot?.dialogCount === "number" ? snapshot.dialogCount : 0,
+    toastCount:
+      typeof snapshot?.toastCount === "number"
+        ? snapshot.toastCount
+        : feedbackTexts.length,
+    feedbackTexts,
+  };
 }

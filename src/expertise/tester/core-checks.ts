@@ -4,7 +4,8 @@ export function checkPageLoaded(
   context: ExpertiseContext,
   description: string
 ): Outcome {
-  const hasHtml = context.html.length > 0 && context.html.includes("<");
+  const html = typeof context.html === "string" ? context.html : "";
+  const hasHtml = html.length > 0 && html.includes("<");
 
   if (!hasHtml) {
     return {
