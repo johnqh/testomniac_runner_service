@@ -236,6 +236,8 @@ export async function buildDomSnapshot(
       if (autocomplete) attrs.autocomplete = autocomplete;
       const pattern = el.getAttribute("pattern");
       if (pattern) attrs.pattern = pattern;
+      const ariaExpanded = el.getAttribute("aria-expanded");
+      if (ariaExpanded != null) attrs["aria-expanded"] = ariaExpanded;
       if (
         el instanceof HTMLInputElement ||
         el instanceof HTMLTextAreaElement ||
@@ -265,6 +267,13 @@ export async function buildDomSnapshot(
           ) {
             attrs.labelText = prev.textContent?.trim().slice(0, 80) || "";
           }
+        }
+        if (el instanceof HTMLSelectElement) {
+          attrs.options = JSON.stringify(
+            Array.from(el.options)
+              .map(option => option.value)
+              .filter(Boolean)
+          );
         }
       }
 

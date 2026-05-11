@@ -1,5 +1,6 @@
 import type { BrowserAdapter } from "../adapter";
 import type { ApiClient } from "../api/client";
+import { ExpectationSeverity } from "@sudobility/testomniac_types";
 import type {
   TestElementRunResponse,
   TestRunResponse,
@@ -10,6 +11,9 @@ import type { ScanEventHandler } from "./types";
 import type { Expertise, ExpertiseContext, Outcome } from "../expertise/types";
 import type { PageAnalyzer, AnalyzerContext } from "../analyzer";
 import { extractActionableItems } from "../extractors";
+import { extractForms } from "../extractors/form-extractor";
+import { captureControlStates } from "../browser/control-snapshot";
+import { captureUiSnapshot } from "../browser/ui-snapshot";
 import { detectScaffoldRegions } from "../scanner/component-detector";
 import { detectPatternsWithInstances } from "../scanner/pattern-detector";
 
@@ -73,6 +77,9 @@ export async function executeTestElement(
     const steps = parseStoredSteps(testElement.stepsJson);
     const dependencyChain = buildDependencyChain(testElement, testElementById);
     const setupCases = dependencyChain.slice(0, -1);
+    const journeySteps = dependencyChain.flatMap(item =>
+      parseStoredSteps(item.stepsJson)
+    );
 
     // Record beginning page state
     const _beginningUrl = await adapter.getUrl();
@@ -97,9 +104,20 @@ export async function executeTestElement(
       }
     }
 
+    const initialHtml = await adapter.content();
+    const initialUrl = await adapter.getUrl();
+    const initialUiSnapshot = await captureUiSnapshot(adapter);
+    const initialControlStates = await captureControlStates(adapter);
+
     // Execute test actions
     for (const step of steps) {
-      await executeAction(adapter, step.action, testRun);
+      try {
+        await executeAction(adapter, step.action, testRun);
+      } catch (error) {
+        if (!step.continueOnFailure) {
+          throw error;
+        }
+      }
     }
 
     // Decompose the page using local detectors
@@ -107,6 +125,9 @@ export async function executeTestElement(
     const scaffolds = await detectScaffoldRegions(adapter);
     const patterns = await detectPatternsWithInstances(adapter);
     const items = await extractActionableItems(adapter);
+    const forms = await extractForms(adapter);
+    const finalUiSnapshot = await captureUiSnapshot(adapter);
+    const finalControlStates = await captureControlStates(adapter);
     const scaffoldSelectorByItemSelector = await mapItemsToScaffolds(
       adapter,
       scaffolds,
@@ -124,9 +145,10 @@ export async function executeTestElement(
         description: string;
         playwrightCode: string;
       }>) ?? [];
+    const stepExpectations = steps.flatMap(step => step.expectations ?? []);
 
     // If discovery mode: generate baseline expectations
-    let expectations = [...globalExpectations];
+    let expectations = [...stepExpectations, ...globalExpectations];
     if (analyzer && testElement.stepsJson) {
       const parsedTestElement = {
         title: testElement.title,
@@ -153,11 +175,19 @@ export async function executeTestElement(
     // Build expertise context
     const expertiseContext: ExpertiseContext = {
       html,
+      initialHtml,
       scaffolds,
       patterns,
       consoleLogs,
       networkLogs,
       expectations: expectations as any,
+      initialUrl,
+      currentUrl: await adapter.getUrl(),
+      startingPath: testElement.startingPath ?? undefined,
+      initialUiSnapshot,
+      finalUiSnapshot,
+      initialControlStates,
+      finalControlStates,
     };
 
     // Evaluate all expertises
@@ -166,17 +196,18 @@ export async function executeTestElement(
       const outcomes = expertise.evaluate(expertiseContext);
       allOutcomes.push(...outcomes);
 
-      // Create findings for warnings and errors
+      // Create findings for unmet expectations based on configured severity.
       for (const outcome of outcomes) {
-        if (outcome.result === "warning" || outcome.result === "error") {
+        const findingType = getFindingTypeForOutcome(outcome);
+        if (findingType) {
           await api.createTestRunFinding({
             testElementRunId: testElementRun.id,
-            type: outcome.result === "error" ? "error" : "warning",
+            type: findingType,
             title: `[${expertise.name}] ${outcome.expected}`,
             description: outcome.observed,
           });
           events.onFindingCreated({
-            type: outcome.result,
+            type: findingType,
             title: `[${expertise.name}] ${outcome.expected}`,
           });
         }
@@ -186,10 +217,13 @@ export async function executeTestElement(
     // Aggregate outcomes
     const expectedOutcome = allOutcomes.map(o => o.expected).join("\n");
     const observedOutcome = allOutcomes
-      .map(o => `[${o.result}] ${o.observed}`)
+      .map(
+        o =>
+          `[${getFindingTypeForOutcome(o) ?? o.result}/${o.severity ?? "unknown"}] ${o.observed}`
+      )
       .join("\n");
-    const hasErrors = allOutcomes.some(o => o.result === "error");
-    const hasWarnings = allOutcomes.some(o => o.result === "warning");
+    const hasErrors = allOutcomes.some(isMustPassFailure);
+    const hasWarnings = allOutcomes.some(isNonBlockingFailure);
     const status = hasErrors
       ? "failed"
       : hasWarnings
@@ -245,6 +279,8 @@ export async function executeTestElement(
         scaffolds,
         scaffoldSelectorByItemSelector,
         actionableItems: items,
+        forms,
+        journeySteps: journeySteps as any,
         navigationSurface: discoveryContext.navigationSurface,
         bundleRun: discoveryContext.bundleRun,
         api,
@@ -427,6 +463,25 @@ function buildDependencyChain(
   return chain;
 }
 
+function getFindingTypeForOutcome(
+  outcome: Outcome
+): "warning" | "error" | null {
+  if (outcome.result === "pass") {
+    return null;
+  }
+
+  const severity = outcome.severity ?? ExpectationSeverity.MustPass;
+  return severity === ExpectationSeverity.MustPass ? "error" : "warning";
+}
+
+function isMustPassFailure(outcome: Outcome): boolean {
+  return getFindingTypeForOutcome(outcome) === "error";
+}
+
+function isNonBlockingFailure(outcome: Outcome): boolean {
+  return getFindingTypeForOutcome(outcome) === "warning";
+}
+
 async function executeAction(
   adapter: BrowserAdapter,
   action: {
@@ -450,6 +505,15 @@ async function executeAction(
       await adapter.goto(url, { waitUntil: "networkidle0" });
       break;
     }
+    case "reload":
+      await adapter.goto(await adapter.getUrl(), { waitUntil: "networkidle0" });
+      break;
+    case "goBack":
+      await adapter.pressKey("Alt+Left");
+      break;
+    case "goForward":
+      await adapter.pressKey("Alt+Right");
+      break;
     case "waitForLoadState":
       try {
         await adapter.waitForNavigation({
@@ -470,7 +534,12 @@ async function executeAction(
       if (action.path && action.value != null)
         await adapter.type(action.path, action.value);
       break;
+    case "type":
+      if (action.path && action.value != null)
+        await adapter.type(action.path, action.value);
+      break;
     case "select":
+    case "selectOption":
       if (action.path && action.value != null)
         await adapter.select(action.path, action.value);
       break;
@@ -482,11 +551,19 @@ async function executeAction(
     case "hover":
       if (action.path) await adapter.hover(action.path);
       break;
+    case "focus":
+      if (action.path) await adapter.click(action.path);
+      break;
     case "press":
       if (action.value) await adapter.pressKey(action.value);
       break;
     case "screenshot":
       await adapter.screenshot({ type: "png" });
+      break;
+    case "waitForTimeout":
+      await new Promise(resolve =>
+        setTimeout(resolve, Number.parseInt(action.value ?? "500", 10) || 500)
+      );
       break;
     default:
       break;

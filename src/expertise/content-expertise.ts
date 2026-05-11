@@ -19,6 +19,7 @@ export class ContentExpertise implements Expertise {
     outcomes.push(this.checkSingleH1(context.html));
     outcomes.push(this.checkPlaceholderContent(context.html));
     outcomes.push(this.checkImageAltCoverage(context.html));
+    outcomes.push(this.checkLanguageConsistency(context.html));
 
     return outcomes;
   }
@@ -114,6 +115,49 @@ export class ContentExpertise implements Expertise {
     return {
       expected: "Images should provide alt text",
       observed: `All ${images.length} image(s) include alt text`,
+      result: "pass",
+    };
+  }
+
+  private checkLanguageConsistency(html: string): Outcome {
+    const langMatch = html.match(/<html\b[^>]*\blang=["']([^"']+)["']/i);
+    const lang = (langMatch?.[1] ?? "").toLowerCase();
+    const text = stripHtml(html);
+    const lower = text.toLowerCase();
+
+    const englishSignals = [
+      "add to cart",
+      "checkout",
+      "search",
+      "contact",
+      "sign in",
+      "register",
+      "account",
+    ].filter(token => lower.includes(token)).length;
+    const foreignSignals = [
+      "revisa",
+      "comprar",
+      "enviar",
+      "buscar",
+      "connexion",
+      "anmelden",
+      "registrarse",
+    ].filter(token => lower.includes(token));
+
+    if (
+      (lang.startsWith("en") || englishSignals >= 2) &&
+      foreignSignals.length > 0
+    ) {
+      return {
+        expected: "Primary UI text should stay in a consistent language",
+        observed: `Detected unexpected non-English UI tokens: ${foreignSignals.join(", ")}`,
+        result: "warning",
+      };
+    }
+
+    return {
+      expected: "Primary UI text should stay in a consistent language",
+      observed: "No obvious mixed-language UI tokens were detected",
       result: "pass",
     };
   }
