@@ -405,6 +405,31 @@ export class PageAnalyzer {
       const formLabel = this.describeForm(form, index);
 
       const validValues = this.planFormValues(form, context.actionableItems);
+      if (this.isSearchForm(form)) {
+        const searchTests = this.buildSearchTestElements(
+          form,
+          formLabel,
+          context.currentPath,
+          sizeClass,
+          uid,
+          context.currentPageStateId,
+          validValues
+        );
+
+        for (const searchTest of searchTests) {
+          const searchElement = await api.ensureTestElement(
+            runnerId,
+            surface.id,
+            searchTest
+          );
+          await api.createTestElementRun({
+            testElementId: searchElement.id,
+            testSurfaceRunId: surfaceRun.id,
+          });
+        }
+        continue;
+      }
+
       const positive = this.buildFormTestElement(
         form,
         formLabel,
@@ -1148,6 +1173,13 @@ export class PageAnalyzer {
           `Form ${formLabel} should submit without client-side errors`
         ),
         this.makeExpectation(
+          ExpectationType.NetworkRequestMade,
+          `Submitting ${formLabel} should trigger a backend mutation request`,
+          {
+            expectedValue: "mutation",
+          }
+        ),
+        this.makeExpectation(
           "feedback_visible",
           `Submitting ${formLabel} should provide visible user feedback`,
           {
@@ -1258,6 +1290,13 @@ export class PageAnalyzer {
         this.makeExpectation(
           ExpectationType.FormSubmittedSuccessfully,
           `Form ${formLabel} should submit after correcting ${this.fieldLabel(correctedField)}`
+        ),
+        this.makeExpectation(
+          ExpectationType.NetworkRequestMade,
+          `Submitting ${formLabel} after correction should trigger a backend mutation request`,
+          {
+            expectedValue: "mutation",
+          }
         ),
         this.makeExpectation(
           "feedback_visible",
@@ -1609,6 +1648,124 @@ export class PageAnalyzer {
     return "other";
   }
 
+  private isSearchForm(form: FormInfo): boolean {
+    if (String(form.method || "").toUpperCase() === "GET") {
+      return true;
+    }
+
+    return form.fields.some(field => this.isSearchField(field));
+  }
+
+  private isSearchField(field: FormField): boolean {
+    const text = [
+      field.type,
+      field.label,
+      field.name,
+      field.placeholder,
+      field.selector,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return field.type === "search" || /\bsearch\b/.test(text);
+  }
+
+  private buildSearchTestElements(
+    form: FormInfo,
+    formLabel: string,
+    currentPath: string,
+    sizeClass: SizeClass,
+    uid: string | undefined,
+    startingPageStateId: number,
+    validValues: Record<string, string>
+  ): TestElement[] {
+    const searchField = form.fields.find(field => this.isSearchField(field));
+    if (!searchField) return [];
+
+    const searchValues = {
+      ...validValues,
+      [searchField.selector]: "test",
+    };
+    const noResultsValues = {
+      ...validValues,
+      [searchField.selector]: this.improbableSearchQuery(),
+    };
+
+    return [
+      {
+        title: `Search — ${formLabel}`,
+        type: "form",
+        sizeClass,
+        surface_tags: ["form", "search"],
+        priority: 2,
+        startingPageStateId,
+        startingPath: currentPath,
+        steps: this.buildFormSteps(form, searchValues, undefined),
+        globalExpectations: [
+          ...this.defaultFlowExpectations(`Search flow ${formLabel}`),
+          this.makeExpectation(
+            ExpectationType.NetworkRequestMade,
+            `Searching via ${formLabel} should issue a GET request`,
+            {
+              expectedValue: "GET",
+              expectedTextTokens: ["search", "q=", "query", "term"],
+            }
+          ),
+          this.makeExpectation(
+            ExpectationType.NavigationOrStateChanged,
+            `Searching via ${formLabel} should change the page or result state`
+          ),
+          this.makeExpectation(
+            ExpectationType.ResultsChanged,
+            `Searching via ${formLabel} should change the visible results`
+          ),
+          this.makeExpectation(
+            ExpectationType.LoadingCompletes,
+            `Search results for ${formLabel} should finish loading`
+          ),
+        ],
+        uid,
+      },
+      {
+        title: `Search Empty State — ${formLabel}`,
+        type: "form",
+        sizeClass,
+        surface_tags: ["form", "search", "empty-state"],
+        priority: 3,
+        startingPageStateId,
+        startingPath: currentPath,
+        steps: this.buildFormSteps(form, noResultsValues, undefined),
+        globalExpectations: [
+          ...this.defaultFlowExpectations(
+            `Empty-state search flow ${formLabel}`
+          ),
+          this.makeExpectation(
+            ExpectationType.NetworkRequestMade,
+            `No-result search via ${formLabel} should still issue a GET request`,
+            {
+              expectedValue: "GET",
+              expectedTextTokens: ["search", "q=", "query", "term"],
+            }
+          ),
+          this.makeExpectation(
+            ExpectationType.NavigationOrStateChanged,
+            `No-result search via ${formLabel} should change the page or result state`
+          ),
+          this.makeExpectation(
+            ExpectationType.EmptyStateVisible,
+            `No-result search via ${formLabel} should show an empty state`
+          ),
+          this.makeExpectation(
+            ExpectationType.LoadingCompletes,
+            `No-result search for ${formLabel} should finish loading`
+          ),
+        ],
+        uid,
+      },
+    ];
+  }
+
   private describeForm(form: FormInfo, index: number): string {
     const namedField = form.fields.find(field => field.label || field.name);
     const descriptor =
@@ -1650,6 +1807,13 @@ export class PageAnalyzer {
                 "Adding an item should update the cart summary"
               ),
               this.makeExpectation(
+                ExpectationType.NetworkRequestMade,
+                "Adding an item should trigger a backend mutation request",
+                {
+                  expectedValue: "mutation",
+                }
+              ),
+              this.makeExpectation(
                 "feedback_visible",
                 "Adding an item should provide visible feedback",
                 {
@@ -1671,6 +1835,14 @@ export class PageAnalyzer {
               this.makeExpectation(
                 "navigation_or_state_changed",
                 "Proceeding to checkout should change the page state"
+              ),
+              this.makeExpectation(
+                ExpectationType.NetworkRequestMade,
+                "Proceeding to checkout should trigger a network request or document transition",
+                {
+                  expectedValue: "ANY",
+                  expectedTextTokens: ["checkout"],
+                }
               ),
               this.makeExpectation(
                 "loading_completes",
@@ -1709,6 +1881,13 @@ export class PageAnalyzer {
               this.makeExpectation(
                 "cart_summary_changed",
                 "Removing an item should update the cart summary"
+              ),
+              this.makeExpectation(
+                ExpectationType.NetworkRequestMade,
+                "Removing an item should trigger a backend mutation request",
+                {
+                  expectedValue: "mutation",
+                }
               ),
               this.makeExpectation(
                 "feedback_visible",
@@ -1811,6 +1990,13 @@ export class PageAnalyzer {
               this.makeExpectation(
                 "cart_summary_changed",
                 "Adjusting quantity should update the summary values"
+              ),
+              this.makeExpectation(
+                ExpectationType.NetworkRequestMade,
+                "Adjusting quantity should trigger a backend mutation request",
+                {
+                  expectedValue: "mutation",
+                }
               ),
               this.makeExpectation(
                 "loading_completes",
@@ -2842,6 +3028,10 @@ export class PageAnalyzer {
 
   private fieldLabel(field: FormField): string {
     return field.label || field.name || field.selector;
+  }
+
+  private improbableSearchQuery(): string {
+    return "zzzz-no-results-testomniac";
   }
 
   private slugify(value: string): string {

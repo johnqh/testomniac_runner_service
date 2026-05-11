@@ -15,7 +15,6 @@ import {
   checkCartSummaryChanged,
   checkCollectionOrderChanged,
   checkCountChanged,
-  checkResultsChanged,
 } from "./tester/commerce-checks";
 import {
   checkNavigationOrStateChanged,
@@ -32,6 +31,11 @@ import {
   checkFieldErrorClearsAfterFix,
   checkRequiredErrorShownForField,
 } from "./tester/validation-checks";
+import { checkNetworkRequestMade } from "./tester/network-intent-checks";
+import {
+  checkEmptyStateVisible,
+  checkResultsChanged,
+} from "./tester/search-checks";
 import {
   checkDialogClosed,
   checkFeedbackVisible,
@@ -102,6 +106,8 @@ export class TesterExpertise implements Expertise {
         return checkCartSummaryChanged(expectation, context);
       case "count_changed":
         return checkCountChanged(expectation, context);
+      case "network_request_made":
+        return checkNetworkRequestMade(expectation, context);
       case "dialog_closed":
         return checkDialogClosed(expectation, context);
       case "focus_returned":
@@ -120,6 +126,8 @@ export class TesterExpertise implements Expertise {
         return checkResultsChanged(expectation, context);
       case "collection_order_changed":
         return checkCollectionOrderChanged(expectation, context);
+      case "empty_state_visible":
+        return checkEmptyStateVisible(expectation, context);
       case "url_unchanged":
         return checkUrlUnchanged(expectation, context);
       case "navigation_or_state_changed":

@@ -85,42 +85,6 @@ export function checkCartSummaryChanged(
   };
 }
 
-export function checkResultsChanged(
-  expectation: {
-    description: string;
-    expectedTextTokens?: string[];
-  },
-  context: ExpertiseContext
-): Outcome {
-  const tokens = expectation.expectedTextTokens?.length
-    ? expectation.expectedTextTokens
-    : ["results", "products", "items", "matches", "showing"];
-  const initialSummary = extractRelevantSummary(context.initialHtml, tokens);
-  const finalSummary = extractRelevantSummary(context.html, tokens);
-
-  if (!initialSummary || !finalSummary) {
-    return {
-      expected: expectation.description,
-      observed: "Could not find a results-like summary region in page text",
-      result: "warning",
-    };
-  }
-
-  if (normalizeText(initialSummary) === normalizeText(finalSummary)) {
-    return {
-      expected: expectation.description,
-      observed: "Results-like summary text did not change after the action",
-      result: "error",
-    };
-  }
-
-  return {
-    expected: expectation.description,
-    observed: "Results-like summary text changed after the action",
-    result: "pass",
-  };
-}
-
 export function checkCollectionOrderChanged(
   expectation: { description: string },
   context: ExpertiseContext

@@ -3,8 +3,8 @@ import {
   checkCartSummaryChanged,
   checkCollectionOrderChanged,
   checkCountChanged,
-  checkResultsChanged,
 } from "./commerce-checks";
+import { checkResultsChanged } from "./search-checks";
 import type { ExpertiseContext } from "../types";
 import type { UiSnapshot } from "../../browser/ui-snapshot";
 
