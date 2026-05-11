@@ -141,6 +141,9 @@ export class PageAnalyzer {
 
     // i. Keyboard/disclosure cases
     await this.generateKeyboardAndDisclosureTestElements(resolvedContext);
+
+    // j. Variant/option cases
+    await this.generateVariantTestElements(resolvedContext);
   }
 
   private async generateHoverFollowUpCases(
@@ -413,7 +416,8 @@ export class PageAnalyzer {
           sizeClass,
           uid,
           context.currentPageStateId,
-          validValues
+          validValues,
+          context.actionableItems
         );
 
         for (const searchTest of searchTests) {
@@ -694,6 +698,47 @@ export class PageAnalyzer {
       sizeClass: context.sizeClass,
       priority: 3,
       surface_tags: ["keyboard", "disclosure"],
+      uid: context.uid,
+    });
+    context.events.onTestSurfaceCreated({
+      surfaceId: surface.id,
+      title: surface.title,
+    });
+
+    await api.ensureBundleSurfaceLink(
+      bundleRun.testSurfaceBundleId,
+      surface.id
+    );
+    const surfaceRun = await this.ensureSurfaceRun(
+      api,
+      surface.id,
+      bundleRun.id
+    );
+
+    for (const test of tests) {
+      const tc = await api.ensureTestElement(runnerId, surface.id, test);
+      await api.createTestElementRun({
+        testElementId: tc.id,
+        testSurfaceRunId: surfaceRun.id,
+      });
+    }
+  }
+
+  private async generateVariantTestElements(
+    context: AnalyzerContext
+  ): Promise<void> {
+    const tests = this.buildVariantTestElements(context);
+    if (tests.length === 0) return;
+
+    const { api, runnerId, bundleRun } = context;
+    const surface = await api.ensureTestSurface(runnerId, {
+      title: `Variants: ${context.currentPath}`,
+      description: `Variant and option state checks for ${context.currentPath}`,
+      startingPageStateId: context.currentPageStateId,
+      startingPath: context.currentPath,
+      sizeClass: context.sizeClass,
+      priority: 2,
+      surface_tags: ["variant", "option"],
       uid: context.uid,
     });
     context.events.onTestSurfaceCreated({
@@ -1686,7 +1731,8 @@ export class PageAnalyzer {
     sizeClass: SizeClass,
     uid: string | undefined,
     startingPageStateId: number,
-    validValues: Record<string, string>
+    validValues: Record<string, string>,
+    actionableItems: ActionableItem[]
   ): TestElement[] {
     const searchField = form.fields.find(field => this.isSearchField(field));
     if (!searchField) return [];
@@ -1700,7 +1746,7 @@ export class PageAnalyzer {
       [searchField.selector]: this.improbableSearchQuery(),
     };
 
-    return [
+    const tests: TestElement[] = [
       {
         title: `Search — ${formLabel}`,
         type: "form",
@@ -1774,6 +1820,50 @@ export class PageAnalyzer {
         uid,
       },
     ];
+
+    const clearAction = actionableItems.find(item =>
+      this.isSearchClearItem(item)
+    );
+    if (clearAction) {
+      const clearSteps = this.buildFormSteps(form, searchValues, undefined);
+      clearSteps.push(
+        this.buildJourneyAction(clearAction, "Clear search", [
+          this.makeExpectation(
+            ExpectationType.ResultsRestored,
+            `Clearing ${formLabel} should restore the baseline results`
+          ),
+          this.makeExpectation(
+            ExpectationType.InputValue,
+            `Clearing ${formLabel} should empty the search field`,
+            {
+              targetPath: searchField.selector,
+              expectedValue: "",
+            }
+          ),
+        ])
+      );
+
+      tests.push({
+        title: `Search Clear Restore — ${formLabel}`,
+        type: "form",
+        sizeClass,
+        surface_tags: ["form", "search", "restore"],
+        priority: 3,
+        startingPageStateId,
+        startingPath: currentPath,
+        steps: clearSteps,
+        globalExpectations: [
+          ...this.defaultFlowExpectations(`Search clear flow ${formLabel}`),
+          this.makeExpectation(
+            ExpectationType.ResultsRestored,
+            `Clearing ${formLabel} should restore the initial results baseline`
+          ),
+        ],
+        uid,
+      });
+    }
+
+    return tests;
   }
 
   private describeForm(form: FormInfo, index: number): string {
@@ -2442,6 +2532,74 @@ export class PageAnalyzer {
     return tests;
   }
 
+  private buildVariantTestElements(context: AnalyzerContext): TestElement[] {
+    const items = context.actionableItems.filter(
+      item =>
+        item.visible &&
+        !item.disabled &&
+        Boolean(item.selector) &&
+        this.isVariantSelector(item)
+    );
+
+    return items
+      .map(item => this.buildVariantTestElement(item, context))
+      .filter((item): item is TestElement => Boolean(item));
+  }
+
+  private buildVariantTestElement(
+    item: ActionableItem,
+    context: AnalyzerContext
+  ): TestElement | null {
+    const plannedValue = this.extractSelectableValue(item);
+    if (!plannedValue || !item.selector) return null;
+
+    const label = this.describeActionableItem(item);
+    return {
+      title: `Variant selection ${label}`,
+      type: "interaction",
+      sizeClass: context.sizeClass,
+      surface_tags: ["variant", "selection"],
+      priority: 2,
+      startingPageStateId: context.currentPageStateId,
+      startingPath: context.currentPath,
+      steps: [
+        {
+          action: {
+            actionType: PlaywrightAction.SelectOption,
+            path: item.selector,
+            value: plannedValue,
+            playwrightCode: `await page.locator('${item.selector}').selectOption('${this.escapeSingleQuotes(plannedValue)}')`,
+            description: `Select variant ${label}`,
+          },
+          expectations: [
+            this.makeExpectation(
+              ExpectationType.InputValue,
+              `Selecting ${label} should update the chosen variant option`,
+              {
+                targetPath: item.selector,
+                expectedValue: plannedValue,
+              }
+            ),
+            this.makeExpectation(
+              ExpectationType.VariantStateChanged,
+              `Selecting ${label} should change product state`,
+              {
+                targetPath: item.selector,
+                expectedValue: plannedValue,
+              }
+            ),
+          ],
+          description: `Select variant ${label}`,
+          continueOnFailure: false,
+        },
+      ],
+      globalExpectations: this.defaultFlowExpectations(
+        "Variant selection should complete without runtime errors"
+      ),
+      uid: context.uid,
+    };
+  }
+
   private buildDisclosureToggleTestElement(
     item: ActionableItem,
     startingPath: string,
@@ -2942,8 +3100,24 @@ export class PageAnalyzer {
     );
   }
 
+  private isSearchClearItem(item: ActionableItem): boolean {
+    return /\b(clear search|clear results|reset search|reset filters|clear|reset)\b/.test(
+      this.semanticText(item)
+    );
+  }
+
   private isSortAction(item: ActionableItem): boolean {
     return /\b(sort|order by|best selling|price low|price high|newest|featured)\b/.test(
+      this.semanticText(item)
+    );
+  }
+
+  private isVariantSelector(item: ActionableItem): boolean {
+    if (item.actionKind !== "select") {
+      return false;
+    }
+
+    return /\b(variant|option|size|color|colour|style|material|finish|width|length)\b/.test(
       this.semanticText(item)
     );
   }

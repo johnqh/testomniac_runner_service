@@ -39,6 +39,8 @@ import {
   checkEmptyStateVisible,
   checkResultsChanged,
 } from "./tester/search-checks";
+import { checkResultsRestored } from "./tester/search-restore-checks";
+import { checkVariantStateChanged } from "./tester/variant-checks";
 import {
   checkDialogClosed,
   checkFeedbackVisible,
@@ -129,8 +131,12 @@ export class TesterExpertise implements Expertise {
         return checkExpandedStateChanged(expectation, context);
       case "results_changed":
         return checkResultsChanged(expectation, context);
+      case "results_restored":
+        return checkResultsRestored(expectation, context);
       case "collection_order_changed":
         return checkCollectionOrderChanged(expectation, context);
+      case "variant_state_changed":
+        return checkVariantStateChanged(expectation, context);
       case "empty_state_visible":
         return checkEmptyStateVisible(expectation, context);
       case "url_unchanged":
