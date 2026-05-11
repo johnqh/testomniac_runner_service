@@ -141,6 +141,118 @@ export async function buildDomSnapshot(
       );
     }
 
+    function normalizeText(value: string | null | undefined): string {
+      return (value || "").replace(/\s+/g, " ").trim();
+    }
+
+    function cssTokenSummary(el: Element): string {
+      const classTokens = Array.from(el.classList)
+        .filter(token => token && token.length < 40)
+        .slice(0, 4)
+        .map(token => token.toLowerCase())
+        .sort();
+      return classTokens.join(".");
+    }
+
+    function findRepeatedContainer(el: Element): Element | null {
+      let current = el.parentElement;
+
+      while (current && current !== document.body) {
+        const classSummary = cssTokenSummary(current);
+        const looksLikeCard =
+          current.tagName === "LI" ||
+          current.tagName === "ARTICLE" ||
+          current.tagName === "SECTION" ||
+          /\b(product|card|tile|item|result|grid|column)\b/i.test(
+            `${current.className} ${current.id}`
+          );
+        const siblingCount = current.parentElement
+          ? Array.from(current.parentElement.children).filter(
+              sibling =>
+                sibling.tagName === current?.tagName &&
+                cssTokenSummary(sibling) === classSummary
+            ).length
+          : 0;
+
+        if (looksLikeCard && siblingCount >= 2) {
+          return current;
+        }
+
+        current = current.parentElement;
+      }
+
+      return null;
+    }
+
+    function extractContainerTitle(container: Element): string {
+      const titleEl =
+        container.querySelector("h1,h2,h3,h4,h5,h6") ||
+        container.querySelector("a[title]") ||
+        container.querySelector("a");
+      return normalizeText(
+        titleEl?.textContent || titleEl?.getAttribute("title") || ""
+      ).slice(0, 80);
+    }
+
+    function extractContainerPrice(container: Element): string {
+      const text = normalizeText(container.textContent).slice(0, 300);
+      const match = text.match(
+        /(?:[$€£]\s?\d[\d,.]*|\d[\d,.]*\s?(?:usd|eur|gbp|cad|aud))/i
+      );
+      return match?.[0]?.trim().toLowerCase() || "";
+    }
+
+    function extractContainerCtaStyle(container: Element): string {
+      const ctaTexts = Array.from(
+        container.querySelectorAll(
+          "button, a[href], input[type='submit'], input[type='button'], [role='button']"
+        )
+      )
+        .map(candidate =>
+          normalizeText(
+            candidate.textContent ||
+              candidate.getAttribute("value") ||
+              candidate.getAttribute("aria-label")
+          )
+            .toLowerCase()
+            .slice(0, 60)
+        )
+        .filter(Boolean);
+
+      const unique = Array.from(new Set(ctaTexts));
+      return unique
+        .filter(text =>
+          /\b(add to cart|checkout now|login for pricing|select options|buy now|view details|details)\b/.test(
+            text
+          )
+        )
+        .slice(0, 3)
+        .join("|");
+    }
+
+    function buildContainerFingerprint(container: Element): string {
+      const classSummary =
+        cssTokenSummary(container) || container.tagName.toLowerCase();
+      const titleShape = extractContainerTitle(container)
+        .toLowerCase()
+        .replace(/[a-z0-9]/g, "x");
+      const pricePresent = extractContainerPrice(container)
+        ? "price"
+        : "no-price";
+      const ctaStyle = extractContainerCtaStyle(container) || "no-cta";
+      const imageCount =
+        container.querySelectorAll("img").length > 0 ? "img" : "no-img";
+
+      return [
+        container.tagName.toLowerCase(),
+        classSummary,
+        titleShape.slice(0, 18),
+        pricePresent,
+        imageCount,
+        ctaStyle,
+      ].join("|");
+    }
+
     interface SnapshotEntry {
       selector: string;
       tagName: string;
@@ -348,6 +460,17 @@ export async function buildDomSnapshot(
           formEl.getAttribute("id") ||
           formEl.getAttribute("name") ||
           undefined;
+      }
+
+      const repeatedContainer = findRepeatedContainer(el);
+      if (repeatedContainer) {
+        attrs._containerFingerprint = buildContainerFingerprint(
+          repeatedContainer
+        ).slice(0, 180);
+        const containerTitle = extractContainerTitle(repeatedContainer);
+        if (containerTitle) attrs._containerTitle = containerTitle;
+        const containerCtaStyle = extractContainerCtaStyle(repeatedContainer);
+        if (containerCtaStyle) attrs._containerCtaStyle = containerCtaStyle;
       }
 
       entries.push({

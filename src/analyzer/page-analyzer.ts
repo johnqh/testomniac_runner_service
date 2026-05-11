@@ -161,11 +161,13 @@ export class PageAnalyzer {
       beginningItems.map(item => this.getItemKey(item)).filter(Boolean)
     );
 
-    const revealedItems = context.actionableItems.filter(item => {
-      if (!this.isMouseActionable(item)) return false;
-      const key = this.getItemKey(item);
-      return Boolean(key) && !beginningKeys.has(key);
-    });
+    const revealedItems = this.selectRepresentativeItems(
+      context.actionableItems.filter(item => {
+        if (!this.isMouseActionable(item)) return false;
+        const key = this.getItemKey(item);
+        return Boolean(key) && !beginningKeys.has(key);
+      })
+    );
 
     const hoveredItem =
       context.actionableItems.find(item => item.selector === selector) ?? null;
@@ -219,8 +221,10 @@ export class PageAnalyzer {
 
     const { api, runnerId, sizeClass, uid, navigationSurface, bundleRun } =
       context;
-    const links = context.actionableItems.filter(
-      item => item.actionKind === "navigate" && item.href && item.visible
+    const links = this.selectRepresentativeItems(
+      context.actionableItems.filter(
+        item => item.actionKind === "navigate" && item.href && item.visible
+      )
     );
 
     // Ensure navigation surface is in the bundle
@@ -265,9 +269,8 @@ export class PageAnalyzer {
     const { api, runnerId, sizeClass, uid, bundleRun } = context;
 
     for (const scaffold of context.scaffolds) {
-      // Find actionable items belonging to this scaffold
-      const scaffoldItems = context.actionableItems.filter(
-        item => item.scaffoldId != null && this.isSurfaceCandidate(item)
+      const scaffoldItems = this.selectRepresentativeItems(
+        this.getScaffoldSurfaceItems(context, scaffold)
       );
       if (scaffoldItems.length === 0) continue;
 
@@ -325,6 +328,20 @@ export class PageAnalyzer {
         });
       }
     }
+  }
+
+  private getScaffoldSurfaceItems(
+    context: AnalyzerContext,
+    scaffold: DetectedScaffoldRegion
+  ): ActionableItem[] {
+    return context.actionableItems.filter(item => {
+      if (!this.isSurfaceCandidate(item) || !item.selector) return false;
+
+      return (
+        context.scaffoldSelectorByItemSelector[item.selector] ===
+        scaffold.selector
+      );
+    });
   }
 
   private async generateRenderTestElements(
@@ -619,12 +636,14 @@ export class PageAnalyzer {
   ): Promise<void> {
     if (!this.pageHasOpenDialog(context.html)) return;
 
-    const closeCandidates = context.actionableItems.filter(
-      item =>
-        item.visible &&
-        !item.disabled &&
-        item.selector &&
-        this.isDialogCloseItem(item)
+    const closeCandidates = this.selectRepresentativeItems(
+      context.actionableItems.filter(
+        item =>
+          item.visible &&
+          !item.disabled &&
+          item.selector &&
+          this.isDialogCloseItem(item)
+      )
     );
 
     const tests: TestElement[] = [];
@@ -778,8 +797,10 @@ export class PageAnalyzer {
     } = context;
 
     // Content items are those NOT in a scaffold
-    const contentItems = context.actionableItems.filter(
-      item => item.scaffoldId == null && this.isSurfaceCandidate(item)
+    const contentItems = this.selectRepresentativeItems(
+      context.actionableItems.filter(
+        item => item.scaffoldId == null && this.isSurfaceCandidate(item)
+      )
     );
     if (contentItems.length === 0) return;
 
@@ -2043,8 +2064,10 @@ export class PageAnalyzer {
   private buildSemanticJourneyTestElements(
     context: AnalyzerContext
   ): TestElement[] {
-    const items = context.actionableItems.filter(
-      item => item.visible && !item.disabled && Boolean(item.selector)
+    const items = this.selectRepresentativeItems(
+      context.actionableItems.filter(
+        item => item.visible && !item.disabled && Boolean(item.selector)
+      )
     );
     const journeys: TestElement[] = [];
     const collectionCount = this.estimateCollectionCount(context.html);
@@ -2928,8 +2951,10 @@ export class PageAnalyzer {
   private buildKeyboardAndDisclosureTestElements(
     context: AnalyzerContext
   ): TestElement[] {
-    const items = context.actionableItems.filter(
-      item => item.visible && !item.disabled && Boolean(item.selector)
+    const items = this.selectRepresentativeItems(
+      context.actionableItems.filter(
+        item => item.visible && !item.disabled && Boolean(item.selector)
+      )
     );
     const tests: TestElement[] = [];
 
@@ -3035,12 +3060,14 @@ export class PageAnalyzer {
   }
 
   private buildVariantTestElements(context: AnalyzerContext): TestElement[] {
-    const items = context.actionableItems.filter(
-      item =>
-        item.visible &&
-        !item.disabled &&
-        Boolean(item.selector) &&
-        this.isVariantSelector(item)
+    const items = this.selectRepresentativeItems(
+      context.actionableItems.filter(
+        item =>
+          item.visible &&
+          !item.disabled &&
+          Boolean(item.selector) &&
+          this.isVariantSelector(item)
+      )
     );
 
     const tests = items
@@ -3751,6 +3778,7 @@ export class PageAnalyzer {
     return (
       item.accessibleName ||
       item.textContent ||
+      String(item.attributes?._containerTitle ?? "") ||
       String(item.attributes?.labelText ?? "") ||
       String(item.attributes?.placeholder ?? "") ||
       item.selector
@@ -3765,11 +3793,103 @@ export class PageAnalyzer {
       String(item.attributes?.placeholder ?? ""),
       String(item.attributes?.name ?? ""),
       String(item.attributes?.id ?? ""),
+      String(item.attributes?._containerTitle ?? ""),
+      String(item.attributes?._containerCtaStyle ?? ""),
       item.href || "",
       item.selector,
     ]
       .join(" ")
       .toLowerCase();
+  }
+
+  private selectRepresentativeItems(items: ActionableItem[]): ActionableItem[] {
+    const groups = new Map<string, ActionableItem[]>();
+    const passthrough: ActionableItem[] = [];
+
+    for (const item of items) {
+      const containerFingerprint = String(
+        item.attributes?._containerFingerprint ?? ""
+      ).trim();
+      if (!containerFingerprint) {
+        passthrough.push(item);
+        continue;
+      }
+
+      const key = `${containerFingerprint}|${this.representativeActionStyle(item)}`;
+      const bucket = groups.get(key) ?? [];
+      bucket.push(item);
+      groups.set(key, bucket);
+    }
+
+    const representatives = Array.from(groups.values()).map(group =>
+      this.pickRepresentativeItem(group)
+    );
+
+    return [...passthrough, ...representatives];
+  }
+
+  private representativeActionStyle(item: ActionableItem): string {
+    const text = this.semanticText(item);
+    const sourceHints = String(
+      item.attributes?._sourceHints ?? ""
+    ).toLowerCase();
+    const containerTitle = String(
+      item.attributes?._containerTitle ?? ""
+    ).toLowerCase();
+
+    if (
+      sourceHints.includes("promoted-target") ||
+      sourceHints.includes("cursor-pointer")
+    ) {
+      return "tile-click";
+    }
+
+    if (
+      item.actionKind === "navigate" &&
+      containerTitle &&
+      (text.includes(containerTitle) ||
+        (item.href && !this.isCheckoutItem(item)))
+    ) {
+      return "tile-click";
+    }
+
+    if (this.isAddToCartItem(item)) return "cta:add-to-cart";
+    if (/\blogin for pricing\b/.test(text)) return "cta:login-for-pricing";
+    if (/\bselect options\b/.test(text)) return "cta:select-options";
+    if (this.isCheckoutItem(item)) return "cta:checkout";
+    if (this.isRemoveItemAction(item)) return "cta:remove";
+    if (item.actionKind === "navigate") return "navigate";
+    if (item.actionKind === "select") return "select";
+    if (item.actionKind === "fill") return "fill";
+
+    return `${item.actionKind}:${text
+      .replace(/\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/g, "email")
+      .replace(/\$\s?\d[\d,.]*/g, "price")
+      .replace(/\d+/g, "n")
+      .slice(0, 80)}`;
+  }
+
+  private pickRepresentativeItem(items: ActionableItem[]): ActionableItem {
+    return [...items].sort((left, right) => {
+      const leftScore = this.representativePriority(left);
+      const rightScore = this.representativePriority(right);
+      if (leftScore !== rightScore) return rightScore - leftScore;
+      return (left.selector?.length ?? 0) - (right.selector?.length ?? 0);
+    })[0] as ActionableItem;
+  }
+
+  private representativePriority(item: ActionableItem): number {
+    let score = 0;
+    const sourceHints = String(
+      item.attributes?._sourceHints ?? ""
+    ).toLowerCase();
+    if (sourceHints.includes("promoted-target")) score += 4;
+    if (sourceHints.includes("cursor-pointer")) score += 3;
+    if (item.actionKind === "navigate") score += 2;
+    if (item.actionKind === "click") score += 1;
+    if (String(item.attributes?._testId ?? "")) score += 1;
+    if (item.accessibleName) score += 1;
+    return score;
   }
 
   private isAddToCartItem(item: ActionableItem): boolean {

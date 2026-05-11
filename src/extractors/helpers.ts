@@ -21,6 +21,9 @@ export function createCandidate(
     visible: entry.visible,
     attributes: {
       ...entry.attributes,
+      ...(entry.sourceHints?.length
+        ? { _sourceHints: entry.sourceHints.join("|") }
+        : {}),
       ...(entry.groupName ? { _groupName: entry.groupName } : {}),
       ...(entry.headingContext
         ? { _headingContext: entry.headingContext }
