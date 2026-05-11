@@ -1213,6 +1213,24 @@ export class PageAnalyzer {
         ...this.defaultFlowExpectations(
           `Form ${formLabel} should execute cleanly`
         ),
+        ...(formType === "login" || formType === "signup"
+          ? [
+              this.makeExpectation(
+                ExpectationType.NavigationOrStateChanged,
+                `${formLabel} should advance authentication state after a successful submit`,
+                {
+                  severity: ExpectationSeverity.ShouldPass,
+                }
+              ),
+              this.makeExpectation(
+                ExpectationType.ErrorStateCleared,
+                `${formLabel} should not leave a visible error state after a successful authentication submit`,
+                {
+                  severity: ExpectationSeverity.ShouldPass,
+                }
+              ),
+            ]
+          : []),
         this.makeExpectation(
           ExpectationType.FormSubmittedSuccessfully,
           `Form ${formLabel} should submit without client-side errors`
@@ -1266,7 +1284,16 @@ export class PageAnalyzer {
     startingPageStateId: number,
     validValues: Record<string, string>
   ): TestElement {
-    const steps = this.buildFormSteps(form, validValues, omittedField.selector);
+    const steps = this.buildFormSteps(
+      form,
+      validValues,
+      omittedField.selector,
+      this.buildValuePreservationExpectations(
+        form,
+        validValues,
+        omittedField.selector
+      )
+    );
     return {
       title: `Form Negative — ${formLabel} (missing ${this.fieldLabel(omittedField)})`,
       type: "form_negative",
@@ -1281,6 +1308,10 @@ export class PageAnalyzer {
         this.makeExpectation(
           ExpectationType.ValidationMessageVisible,
           `Validation feedback should appear when ${this.fieldLabel(omittedField)} is omitted`
+        ),
+        this.makeExpectation(
+          ExpectationType.ErrorStateVisible,
+          `Omitting ${this.fieldLabel(omittedField)} should surface an error state`
         ),
         this.makeExpectation(
           "required_error_shown_for_field",
@@ -1308,7 +1339,12 @@ export class PageAnalyzer {
     const steps = this.buildFormSteps(
       form,
       validValues,
-      correctedField.selector
+      correctedField.selector,
+      this.buildValuePreservationExpectations(
+        form,
+        validValues,
+        correctedField.selector
+      )
     );
     const correctionValue = validValues[correctedField.selector];
     if (correctionValue) {
@@ -1340,6 +1376,10 @@ export class PageAnalyzer {
       steps,
       globalExpectations: [
         ...this.defaultFlowExpectations(`Correction flow for ${formLabel}`),
+        this.makeExpectation(
+          ExpectationType.ErrorStateCleared,
+          `Error state for ${formLabel} should clear after correcting ${this.fieldLabel(correctedField)}`
+        ),
         this.makeExpectation(
           ExpectationType.FormSubmittedSuccessfully,
           `Form ${formLabel} should submit after correcting ${this.fieldLabel(correctedField)}`
@@ -1459,7 +1499,8 @@ export class PageAnalyzer {
   private buildFormSteps(
     form: FormInfo,
     valuesBySelector: Record<string, string>,
-    omittedSelector?: string
+    omittedSelector?: string,
+    postSubmitExpectations: Expectation[] = []
   ): TestStep[] {
     const steps: TestStep[] = [];
 
@@ -1481,7 +1522,9 @@ export class PageAnalyzer {
       if (step) steps.push(step);
     }
 
-    steps.push(...this.buildSubmitSteps(form.submitSelector));
+    steps.push(
+      ...this.buildSubmitSteps(form.submitSelector, postSubmitExpectations)
+    );
 
     return steps;
   }
@@ -1572,7 +1615,10 @@ export class PageAnalyzer {
     };
   }
 
-  private buildSubmitSteps(submitSelector?: string): TestStep[] {
+  private buildSubmitSteps(
+    submitSelector?: string,
+    postSubmitExpectations: Expectation[] = []
+  ): TestStep[] {
     if (!submitSelector) return [];
 
     return [
@@ -1593,11 +1639,60 @@ export class PageAnalyzer {
           playwrightCode: "await page.waitForLoadState('networkidle')",
           description: "Wait for post-submit state",
         },
-        expectations: [],
+        expectations: postSubmitExpectations,
         description: "Wait for post-submit state",
         continueOnFailure: true,
       },
     ];
+  }
+
+  private buildValuePreservationExpectations(
+    form: FormInfo,
+    valuesBySelector: Record<string, string>,
+    omittedSelector?: string
+  ): Expectation[] {
+    const expectations: Expectation[] = [];
+
+    for (const field of form.fields) {
+      if (field.selector === omittedSelector) continue;
+
+      const analyzerField = field as AnalyzerFormField;
+      const fieldIsImmutable = Boolean(
+        analyzerField.disabled ||
+        analyzerField.readOnly ||
+        this.looksVisuallyDisabledField(analyzerField)
+      );
+      if (fieldIsImmutable) continue;
+
+      const value = valuesBySelector[field.selector];
+      if (!value || this.isSkippableFieldType(field)) continue;
+
+      if (this.isCheckboxLike(field)) {
+        expectations.push(
+          this.makeExpectation(
+            ExpectationType.ElementChecked,
+            `${this.fieldLabel(field)} should preserve its selected state after validation feedback`,
+            {
+              targetPath: field.selector,
+            }
+          )
+        );
+        continue;
+      }
+
+      expectations.push(
+        this.makeExpectation(
+          ExpectationType.InputValue,
+          `${this.fieldLabel(field)} should preserve its value after validation feedback`,
+          {
+            targetPath: field.selector,
+            expectedValue: value,
+          }
+        )
+      );
+    }
+
+    return expectations;
   }
 
   private planFormValues(
@@ -1827,6 +1922,36 @@ export class PageAnalyzer {
         ],
         uid,
       },
+      {
+        title: `Search Recovery — ${formLabel}`,
+        type: "form",
+        sizeClass,
+        surface_tags: ["form", "search", "recovery"],
+        priority: 3,
+        startingPageStateId,
+        startingPath: currentPath,
+        steps: [
+          ...this.buildFormSteps(form, noResultsValues, undefined),
+          ...this.buildSearchRecoverySteps(form, searchField, "test"),
+        ],
+        globalExpectations: [
+          ...this.defaultFlowExpectations(`Search recovery flow ${formLabel}`),
+          this.makeExpectation(
+            ExpectationType.NetworkRequestMade,
+            `Recovering search results via ${formLabel} should issue GET requests`,
+            {
+              expectedValue: "GET",
+              timeoutMs: 3000,
+              expectedTextTokens: ["search", "q=", "query", "term"],
+            }
+          ),
+          this.makeExpectation(
+            ExpectationType.LoadingCompletes,
+            `Search recovery for ${formLabel} should finish loading`
+          ),
+        ],
+        uid,
+      },
     ];
 
     const clearAction = actionableItems.find(item =>
@@ -1874,6 +1999,40 @@ export class PageAnalyzer {
     return tests;
   }
 
+  private buildSearchRecoverySteps(
+    form: FormInfo,
+    searchField: FormField,
+    recoveryValue: string
+  ): TestStep[] {
+    const steps: TestStep[] = [];
+    const refillStep = this.buildFieldStep(searchField, recoveryValue);
+    if (refillStep) {
+      steps.push(refillStep);
+    }
+    steps.push(
+      ...this.buildSubmitSteps(form.submitSelector, [
+        this.makeExpectation(
+          ExpectationType.ResultsChanged,
+          `${this.fieldLabel(searchField)} should recover from the empty state to a different result set`
+        ),
+        this.makeExpectation(
+          ExpectationType.InputValue,
+          `${this.fieldLabel(searchField)} should preserve the recovery query after resubmission`,
+          {
+            targetPath: searchField.selector,
+            expectedValue: recoveryValue,
+          }
+        ),
+        this.makeExpectation(
+          ExpectationType.LoadingCompletes,
+          "Recovered search results should finish loading"
+        ),
+      ])
+    );
+
+    return steps;
+  }
+
   private describeForm(form: FormInfo, index: number): string {
     const namedField = form.fields.find(field => field.label || field.name);
     const descriptor =
@@ -1888,9 +2047,13 @@ export class PageAnalyzer {
       item => item.visible && !item.disabled && Boolean(item.selector)
     );
     const journeys: TestElement[] = [];
+    const collectionCount = this.estimateCollectionCount(context.html);
 
     const addToCart = items.find(item => this.isAddToCartItem(item));
     const checkout = items.find(item => this.isCheckoutItem(item));
+    const createCollectionAction = items.find(item =>
+      this.isCreateCollectionAction(item)
+    );
     if (addToCart && checkout) {
       journeys.push(
         this.buildJourneyTestElement(
@@ -1978,68 +2141,155 @@ export class PageAnalyzer {
 
     const removeItem = items.find(item => this.isRemoveItemAction(item));
     if (removeItem) {
+      const removeExpectations = [
+        this.makeExpectation(
+          "navigation_or_state_changed",
+          "Removing an item should change the page state"
+        ),
+        this.makeExpectation(
+          "count_changed",
+          "Removing an item should update a visible count",
+          {
+            expectedCountDelta: -1,
+          }
+        ),
+        this.makeExpectation(
+          "cart_summary_changed",
+          "Removing an item should update the cart summary"
+        ),
+        this.makeExpectation(
+          "row_count_changed",
+          "Removing an item should change the visible row or item count",
+          {
+            expectedCountDelta: -1,
+          }
+        ),
+        this.makeExpectation(
+          "results_changed",
+          "Removing an item should change the visible collection state"
+        ),
+        this.makeExpectation(
+          ExpectationType.NetworkRequestMade,
+          "Removing an item should trigger a backend mutation request",
+          {
+            expectedValue: "mutation",
+            timeoutMs: 3000,
+          }
+        ),
+        this.makeExpectation(
+          ExpectationType.NoDuplicateMutationRequests,
+          "Removing an item should not trigger duplicate mutation requests"
+        ),
+        this.makeExpectation(
+          "feedback_visible",
+          "Removing an item should provide visible feedback",
+          {
+            expectedTextTokens: ["removed", "updated", "cart", "bag"],
+            forbiddenTextTokens: ["error", "failed"],
+          }
+        ),
+        this.makeExpectation(
+          "feedback_not_duplicated",
+          "Removing an item should not show duplicate feedback messages"
+        ),
+        this.makeExpectation(
+          "loading_completes",
+          "Removal flow should complete loading"
+        ),
+        this.makeExpectation(
+          "page_responsive",
+          "Page should remain responsive after removal"
+        ),
+      ];
+      if (this.estimateCollectionCount(context.html) <= 1) {
+        removeExpectations.push(
+          this.makeExpectation(
+            ExpectationType.EmptyStateVisible,
+            "Removing the last visible item should show an empty state or zero-results message",
+            {
+              expectedTextTokens: [
+                "no items",
+                "no products",
+                "empty",
+                "no results",
+                "nothing found",
+              ],
+              severity: ExpectationSeverity.ShouldPass,
+            }
+          )
+        );
+      }
+
       journeys.push(
         this.buildJourneyTestElement(
           "Remove item from collection",
           ["commerce", "remove"],
           context,
           [
-            this.buildJourneyAction(removeItem, "Remove item", [
-              this.makeExpectation(
-                "navigation_or_state_changed",
-                "Removing an item should change the page state"
-              ),
-              this.makeExpectation(
-                "count_changed",
-                "Removing an item should update a visible count",
-                {
-                  expectedCountDelta: -1,
-                }
-              ),
-              this.makeExpectation(
-                "cart_summary_changed",
-                "Removing an item should update the cart summary"
-              ),
-              this.makeExpectation(
-                "row_count_changed",
-                "Removing an item should change the visible row or item count",
-                {
-                  expectedCountDelta: -1,
-                }
-              ),
-              this.makeExpectation(
-                ExpectationType.NetworkRequestMade,
-                "Removing an item should trigger a backend mutation request",
-                {
-                  expectedValue: "mutation",
-                  timeoutMs: 3000,
-                }
-              ),
-              this.makeExpectation(
-                ExpectationType.NoDuplicateMutationRequests,
-                "Removing an item should not trigger duplicate mutation requests"
-              ),
-              this.makeExpectation(
-                "feedback_visible",
-                "Removing an item should provide visible feedback",
-                {
-                  expectedTextTokens: ["removed", "updated", "cart", "bag"],
-                  forbiddenTextTokens: ["error", "failed"],
-                }
-              ),
-              this.makeExpectation(
-                "feedback_not_duplicated",
-                "Removing an item should not show duplicate feedback messages"
-              ),
-              this.makeExpectation(
-                "loading_completes",
-                "Removal flow should complete loading"
-              ),
-              this.makeExpectation(
-                "page_responsive",
-                "Page should remain responsive after removal"
-              ),
-            ]),
+            this.buildJourneyAction(
+              removeItem,
+              "Remove item",
+              removeExpectations
+            ),
+          ]
+        )
+      );
+    }
+
+    if (createCollectionAction) {
+      const createExpectations = [
+        this.makeExpectation(
+          "navigation_or_state_changed",
+          "Creating or adding a record should change the page state"
+        ),
+        this.makeExpectation(
+          "row_count_changed",
+          "Creating or adding a record should increase the visible row or item count",
+          {
+            expectedCountDelta: 1,
+          }
+        ),
+        this.makeExpectation(
+          "results_changed",
+          "Creating or adding a record should change the visible collection state"
+        ),
+        this.makeExpectation(
+          ExpectationType.NetworkRequestMade,
+          "Creating or adding a record should trigger a backend mutation request",
+          {
+            expectedValue: "mutation",
+            timeoutMs: 3000,
+          }
+        ),
+        this.makeExpectation(
+          ExpectationType.NoDuplicateMutationRequests,
+          "Creating or adding a record should not trigger duplicate mutation requests"
+        ),
+        this.makeExpectation(
+          "feedback_not_duplicated",
+          "Creating or adding a record should not duplicate visible feedback"
+        ),
+        this.makeExpectation(
+          "loading_completes",
+          "Create/add flow should complete loading"
+        ),
+        this.makeExpectation(
+          "page_responsive",
+          "Page should remain responsive after creating or adding a record"
+        ),
+      ];
+
+      journeys.push(
+        this.buildJourneyTestElement(
+          "Create or add collection record",
+          ["list", "crud", "create"],
+          context,
+          [
+            this.buildJourneyAction(
+              createCollectionAction,
+              "Create or add record",
+              createExpectations
+            ),
           ]
         )
       );
@@ -2071,6 +2321,126 @@ export class PageAnalyzer {
                 ),
               ]
             ),
+          ]
+        )
+      );
+    }
+
+    const protectedAction = items.find(
+      item => item !== authEntry && this.isProtectedActionItem(item)
+    );
+    if (authEntry && protectedAction) {
+      journeys.push(
+        this.buildJourneyTestElement(
+          "Protected action auth gate journey",
+          ["auth", "protected"],
+          context,
+          [
+            this.buildJourneyAction(protectedAction, "Open protected action", [
+              this.makeExpectation(
+                ExpectationType.NavigationOrStateChanged,
+                "Protected action should open a gated state, redirect, or login requirement"
+              ),
+              this.makeExpectation(
+                ExpectationType.PageResponsive,
+                "Page should remain responsive when auth gating is triggered"
+              ),
+              this.makeExpectation(
+                ExpectationType.LoadingCompletes,
+                "Protected action gate should settle cleanly"
+              ),
+            ]),
+          ]
+        )
+      );
+    }
+
+    const logoutAction = items.find(item => this.isLogoutAction(item));
+    if (logoutAction) {
+      journeys.push(
+        this.buildJourneyTestElement(
+          "Logout journey",
+          ["auth", "logout"],
+          context,
+          [
+            this.buildJourneyAction(logoutAction, "Log out", [
+              this.makeExpectation(
+                ExpectationType.NavigationOrStateChanged,
+                "Logging out should change application state"
+              ),
+              this.makeExpectation(
+                ExpectationType.PageResponsive,
+                "Page should remain responsive during logout"
+              ),
+              this.makeExpectation(
+                ExpectationType.LoadingCompletes,
+                "Logout should settle cleanly"
+              ),
+              this.makeExpectation(
+                ExpectationType.FeedbackVisible,
+                "Logout should provide visible confirmation or a clear state change",
+                {
+                  forbiddenTextTokens: ["error", "failed"],
+                }
+              ),
+              this.makeExpectation(
+                ExpectationType.ErrorStateCleared,
+                "Logout should not leave visible recoverable error state behind",
+                {
+                  severity: ExpectationSeverity.ShouldPass,
+                }
+              ),
+            ]),
+          ]
+        )
+      );
+    }
+
+    const retryAction = items.find(item => this.isRetryAction(item));
+    if (retryAction) {
+      journeys.push(
+        this.buildJourneyTestElement(
+          "Retry recovery journey",
+          ["recovery", "retry"],
+          context,
+          [
+            this.buildJourneyAction(retryAction, "Retry failed action", [
+              this.makeExpectation(
+                ExpectationType.ErrorStateCleared,
+                "Retrying should clear any visible recoverable error state"
+              ),
+              this.makeExpectation(
+                ExpectationType.NetworkRequestMade,
+                "Retrying should trigger a follow-up request or state transition",
+                {
+                  expectedValue: "ANY",
+                  timeoutMs: 3000,
+                }
+              ),
+              this.makeExpectation(
+                "navigation_or_state_changed",
+                "Retrying should change page state or visibly advance recovery"
+              ),
+              this.makeExpectation(
+                "loading_completes",
+                "Retry recovery should complete loading"
+              ),
+              this.makeExpectation(
+                "page_responsive",
+                "Page should remain responsive during retry recovery"
+              ),
+              this.makeExpectation(
+                "feedback_not_duplicated",
+                "Retry recovery should not duplicate visible feedback"
+              ),
+              this.makeExpectation(
+                "feedback_visible",
+                "Retry recovery should show updated feedback or state confirmation",
+                {
+                  forbiddenTextTokens: ["error", "failed", "try again"],
+                }
+              ),
+            ]),
           ]
         )
       );
@@ -2108,40 +2478,71 @@ export class PageAnalyzer {
       );
     }
 
-    const quantityAction = items.find(item => this.isQuantityAction(item));
-    if (quantityAction) {
+    for (const quantityAction of items.filter(item =>
+      this.isQuantityAction(item)
+    )) {
+      const quantityDelta = this.inferQuantityDelta(quantityAction);
+      const quantityExpectations = [
+        this.makeExpectation(
+          "count_changed",
+          "Adjusting quantity should update a visible count or quantity indicator",
+          quantityDelta == null
+            ? undefined
+            : { expectedCountDelta: quantityDelta }
+        ),
+        this.makeExpectation(
+          "cart_summary_changed",
+          "Adjusting quantity should update subtotal, totals, or line pricing"
+        ),
+        this.makeExpectation(
+          "results_changed",
+          "Adjusting quantity should change the visible cart or line-item state"
+        ),
+        this.makeExpectation(
+          ExpectationType.NetworkRequestMade,
+          "Adjusting quantity should trigger a backend mutation request",
+          {
+            expectedValue: "mutation",
+            timeoutMs: 3000,
+          }
+        ),
+        this.makeExpectation(
+          ExpectationType.NoDuplicateMutationRequests,
+          "Adjusting quantity should not trigger duplicate mutation requests"
+        ),
+        this.makeExpectation(
+          "feedback_not_duplicated",
+          "Quantity adjustment should not duplicate visible feedback"
+        ),
+        this.makeExpectation(
+          "loading_completes",
+          "Quantity adjustment should complete loading"
+        ),
+        this.makeExpectation(
+          "page_responsive",
+          "Page should remain responsive during quantity adjustment"
+        ),
+      ].filter(Boolean) as Expectation[];
+
       journeys.push(
         this.buildJourneyTestElement(
-          "Quantity adjustment journey",
+          quantityDelta === -1
+            ? "Quantity decrease journey"
+            : quantityDelta === 1
+              ? "Quantity increase journey"
+              : "Quantity adjustment journey",
           ["commerce", "quantity"],
           context,
           [
-            this.buildJourneyAction(quantityAction, "Adjust quantity", [
-              this.makeExpectation(
-                "count_changed",
-                "Adjusting quantity should update a visible count or quantity indicator"
-              ),
-              this.makeExpectation(
-                "cart_summary_changed",
-                "Adjusting quantity should update the summary values"
-              ),
-              this.makeExpectation(
-                ExpectationType.NetworkRequestMade,
-                "Adjusting quantity should trigger a backend mutation request",
-                {
-                  expectedValue: "mutation",
-                  timeoutMs: 3000,
-                }
-              ),
-              this.makeExpectation(
-                ExpectationType.NoDuplicateMutationRequests,
-                "Adjusting quantity should not trigger duplicate mutation requests"
-              ),
-              this.makeExpectation(
-                "loading_completes",
-                "Quantity adjustment should complete loading"
-              ),
-            ]),
+            this.buildJourneyAction(
+              quantityAction,
+              quantityDelta === -1
+                ? "Decrease quantity"
+                : quantityDelta === 1
+                  ? "Increase quantity"
+                  : "Adjust quantity",
+              quantityExpectations
+            ),
           ]
         )
       );
@@ -2240,8 +2641,16 @@ export class PageAnalyzer {
                 "Pagination should change the visible list state"
               ),
               this.makeExpectation(
+                "results_changed",
+                "Pagination should change the visible collection contents"
+              ),
+              this.makeExpectation(
                 "row_count_changed",
                 "Pagination should change the visible rows or items"
+              ),
+              this.makeExpectation(
+                "collection_order_changed",
+                "Pagination should change the visible collection ordering or composition"
               ),
               this.makeExpectation(
                 ExpectationType.LoadingCompletes,
@@ -2280,6 +2689,49 @@ export class PageAnalyzer {
                     "quantity",
                   ],
                 }
+              ),
+            ]),
+          ]
+        )
+      );
+    }
+
+    if (collectionCount > 0 && removeItem && createCollectionAction) {
+      journeys.push(
+        this.buildJourneyTestElement(
+          "Collection mutation recovery journey",
+          ["list", "crud", "recovery"],
+          context,
+          [
+            this.buildJourneyAction(removeItem, "Remove record", [
+              this.makeExpectation(
+                "row_count_changed",
+                "Removing a record should change the visible collection",
+                {
+                  expectedCountDelta: -1,
+                }
+              ),
+              this.makeExpectation(
+                "results_changed",
+                "Removing a record should change the visible collection contents"
+              ),
+            ]),
+            this.waitStep(500, "Wait for collection mutation"),
+            this.buildJourneyAction(createCollectionAction, "Add record back", [
+              this.makeExpectation(
+                "row_count_changed",
+                "Adding a record back should restore visible collection size",
+                {
+                  expectedCountDelta: 1,
+                }
+              ),
+              this.makeExpectation(
+                "results_changed",
+                "Adding a record back should change the visible collection contents again"
+              ),
+              this.makeExpectation(
+                "loading_completes",
+                "Collection recovery should complete loading"
               ),
             ]),
           ]
@@ -2591,9 +3043,40 @@ export class PageAnalyzer {
         this.isVariantSelector(item)
     );
 
-    return items
+    const tests = items
       .map(item => this.buildVariantTestElement(item, context))
       .filter((item): item is TestElement => Boolean(item));
+
+    const purchaseAction = context.actionableItems.find(
+      item =>
+        item.visible &&
+        !item.disabled &&
+        Boolean(item.selector) &&
+        (this.isAddToCartItem(item) || this.isCheckoutItem(item))
+    );
+
+    for (const item of items) {
+      const purchaseJourney = this.buildVariantPurchaseJourney(
+        item,
+        purchaseAction,
+        context
+      );
+      if (purchaseJourney) tests.push(purchaseJourney);
+
+      const requiredField = this.findRequiredVariantField(item, context.forms);
+      if (requiredField && purchaseAction) {
+        tests.push(
+          this.buildRequiredVariantGuardTestElement(
+            item,
+            requiredField,
+            purchaseAction,
+            context
+          )
+        );
+      }
+    }
+
+    return tests;
   }
 
   private buildVariantTestElement(
@@ -2648,6 +3131,189 @@ export class PageAnalyzer {
       ),
       uid: context.uid,
     };
+  }
+
+  private buildVariantPurchaseJourney(
+    item: ActionableItem,
+    purchaseAction: ActionableItem | undefined,
+    context: AnalyzerContext
+  ): TestElement | null {
+    const plannedValue = this.extractSelectableValue(item);
+    if (!plannedValue || !item.selector || !purchaseAction?.selector) {
+      return null;
+    }
+
+    const label = this.describeActionableItem(item);
+    const purchaseLabel = this.describeActionableItem(purchaseAction);
+    const purchaseExpectations = this.isAddToCartItem(purchaseAction)
+      ? [
+          this.makeExpectation(
+            ExpectationType.NetworkRequestMade,
+            `${purchaseLabel} should trigger a backend mutation request after selecting ${label}`,
+            {
+              expectedValue: "mutation",
+              timeoutMs: 3000,
+            }
+          ),
+          this.makeExpectation(
+            ExpectationType.NoDuplicateMutationRequests,
+            `${purchaseLabel} should not trigger duplicate mutation requests after selecting ${label}`
+          ),
+          this.makeExpectation(
+            ExpectationType.CountChanged,
+            `${purchaseLabel} should update a visible count after selecting ${label}`,
+            {
+              expectedCountDelta: 1,
+            }
+          ),
+          this.makeExpectation(
+            ExpectationType.CartSummaryChanged,
+            `${purchaseLabel} should update cart summary after selecting ${label}`
+          ),
+          this.makeExpectation(
+            ExpectationType.FeedbackVisible,
+            `${purchaseLabel} should provide visible feedback after selecting ${label}`,
+            {
+              expectedTextTokens: ["added", "success", "cart", "bag"],
+              forbiddenTextTokens: ["error", "failed"],
+            }
+          ),
+        ]
+      : [
+          this.makeExpectation(
+            ExpectationType.NetworkRequestMade,
+            `${purchaseLabel} should trigger a request or transition after selecting ${label}`,
+            {
+              expectedValue: "ANY",
+              timeoutMs: 3000,
+              expectedTextTokens: ["checkout", "buy", "order"],
+            }
+          ),
+          this.makeExpectation(
+            ExpectationType.NavigationOrStateChanged,
+            `${purchaseLabel} should advance the purchase flow after selecting ${label}`
+          ),
+        ];
+
+    return {
+      title: `Variant purchase journey ${label}`,
+      type: "interaction",
+      sizeClass: context.sizeClass,
+      surface_tags: ["variant", "purchase"],
+      priority: 2,
+      startingPageStateId: context.currentPageStateId,
+      startingPath: context.currentPath,
+      steps: [
+        {
+          action: {
+            actionType: PlaywrightAction.SelectOption,
+            path: item.selector,
+            value: plannedValue,
+            playwrightCode: `await page.locator('${item.selector}').selectOption('${this.escapeSingleQuotes(plannedValue)}')`,
+            description: `Select variant ${label}`,
+          },
+          expectations: [
+            this.makeExpectation(
+              ExpectationType.InputValue,
+              `Selecting ${label} should update the chosen option`,
+              {
+                targetPath: item.selector,
+                expectedValue: plannedValue,
+              }
+            ),
+            this.makeExpectation(
+              ExpectationType.VariantStateChanged,
+              `Selecting ${label} should update product state before purchase`,
+              {
+                targetPath: item.selector,
+                expectedValue: plannedValue,
+              }
+            ),
+          ],
+          description: `Select variant ${label}`,
+          continueOnFailure: false,
+        },
+        this.buildJourneyAction(
+          purchaseAction,
+          `Purchase with selected ${label}`,
+          [
+            ...purchaseExpectations,
+            this.makeExpectation(
+              ExpectationType.LoadingCompletes,
+              `${purchaseLabel} should complete loading after selecting ${label}`
+            ),
+            this.makeExpectation(
+              ExpectationType.PageResponsive,
+              `Page should remain responsive while completing ${purchaseLabel}`
+            ),
+          ]
+        ),
+      ],
+      globalExpectations: this.defaultFlowExpectations(
+        `Variant purchase journey for ${label} should execute cleanly`
+      ),
+      uid: context.uid,
+    };
+  }
+
+  private buildRequiredVariantGuardTestElement(
+    item: ActionableItem,
+    requiredField: FormField,
+    purchaseAction: ActionableItem,
+    context: AnalyzerContext
+  ): TestElement {
+    const label = this.describeActionableItem(item);
+    const purchaseLabel = this.describeActionableItem(purchaseAction);
+
+    return {
+      title: `Variant required guard ${label}`,
+      type: "interaction",
+      sizeClass: context.sizeClass,
+      surface_tags: ["variant", "validation", "guard"],
+      priority: 3,
+      startingPageStateId: context.currentPageStateId,
+      startingPath: context.currentPath,
+      steps: [
+        this.buildJourneyAction(
+          purchaseAction,
+          `Attempt ${purchaseLabel} without selecting ${label}`,
+          [
+            this.makeExpectation(
+              ExpectationType.RequiredErrorShownForField,
+              `${label} should show required validation before ${purchaseLabel}`,
+              {
+                targetPath: requiredField.selector,
+              }
+            ),
+            this.makeExpectation(
+              ExpectationType.PageResponsive,
+              `Page should remain responsive when ${purchaseLabel} is blocked by missing ${label}`
+            ),
+          ]
+        ),
+      ],
+      globalExpectations: this.defaultFlowExpectations(
+        `${label} should be enforced before ${purchaseLabel}`
+      ),
+      uid: context.uid,
+    };
+  }
+
+  private findRequiredVariantField(
+    item: ActionableItem,
+    forms: FormInfo[]
+  ): FormField | undefined {
+    for (const form of forms) {
+      const field = form.fields.find(
+        field =>
+          field.selector === item.selector &&
+          field.required &&
+          this.isSearchField(field) === false
+      );
+      if (field) return field;
+    }
+
+    return undefined;
   }
 
   private buildDisclosureToggleTestElement(
@@ -2724,7 +3390,15 @@ export class PageAnalyzer {
             playwrightCode: `await page.locator('${item.selector}').focus()`,
             description: `Focus ${label}`,
           },
-          expectations: [],
+          expectations: [
+            this.makeExpectation(
+              ExpectationType.ElementFocused,
+              `${label} should be keyboard-focusable`,
+              {
+                targetPath: item.selector,
+              }
+            ),
+          ],
           description: `Focus ${label}`,
           continueOnFailure: false,
         },
@@ -3111,14 +3785,54 @@ export class PageAnalyzer {
   }
 
   private isRemoveItemAction(item: ActionableItem): boolean {
-    return /\b(remove|delete|trash|clear item|remove item)\b/.test(
+    return /\b(remove|delete|trash|clear item|remove item|dismiss|archive|hide item|close item)\b/.test(
       this.semanticText(item)
     );
+  }
+
+  private estimateCollectionCount(html: string): number {
+    const tableRows = (html.match(/<tr\b/gi) ?? []).length;
+    if (tableRows > 0) return tableRows;
+
+    const listItems = (html.match(/<li\b/gi) ?? []).length;
+    if (listItems > 0) return listItems;
+
+    const cards = (
+      html.match(
+        /<(?:article|section|div)\b[^>]*(?:product|card|result|item|row)[^>]*>/gi
+      ) ?? []
+    ).length;
+
+    return cards;
   }
 
   private isAuthEntryItem(item: ActionableItem): boolean {
     return /\b(sign up|register|create account|sign in|log in|login)\b/.test(
       this.semanticText(item)
+    );
+  }
+
+  private isProtectedActionItem(item: ActionableItem): boolean {
+    return /\b(checkout|pricing|view price|account|settings|billing|subscription|dashboard|admin|manage account|saved items|favorites|download)\b/.test(
+      this.semanticText(item)
+    );
+  }
+
+  private isLogoutAction(item: ActionableItem): boolean {
+    return /\b(log out|logout|sign out)\b/.test(this.semanticText(item));
+  }
+
+  private isRetryAction(item: ActionableItem): boolean {
+    return /\b(retry|try again|resend|send again|reload|refresh|reconnect|resume)\b/.test(
+      this.semanticText(item)
+    );
+  }
+
+  private isCreateCollectionAction(item: ActionableItem): boolean {
+    const text = this.semanticText(item);
+    if (this.isAddToCartItem(item)) return false;
+    return /\b(add row|add record|add item|new row|new record|create item|create record|add another|new item)\b/.test(
+      text
     );
   }
 
@@ -3142,6 +3856,25 @@ export class PageAnalyzer {
     return /\b(qty|quantity|increase|decrease|increment|decrement|plus|minus)\b/.test(
       this.semanticText(item)
     );
+  }
+
+  private inferQuantityDelta(item: ActionableItem): number | undefined {
+    const text = this.semanticText(item);
+    if (
+      /\b(decrease|decrement|minus|remove one|lower qty|lower quantity)\b/.test(
+        text
+      )
+    ) {
+      return -1;
+    }
+    if (
+      /\b(increase|increment|plus|add one|raise qty|raise quantity)\b/.test(
+        text
+      )
+    ) {
+      return 1;
+    }
+    return undefined;
   }
 
   private isFilterAction(item: ActionableItem): boolean {

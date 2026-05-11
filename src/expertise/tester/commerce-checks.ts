@@ -13,8 +13,36 @@ export function checkCountChanged(
     : ["cart", "bag", "basket", "item", "items", "qty", "quantity"];
   const initialCount = extractRelevantNumber(context.initialHtml, tokens);
   const finalCount = extractRelevantNumber(context.html, tokens);
+  const fallbackControlDelta = extractQuantityControlDelta(context);
 
   if (initialCount == null || finalCount == null) {
+    if (fallbackControlDelta != null) {
+      if (
+        expectation.expectedCountDelta != null &&
+        fallbackControlDelta !== expectation.expectedCountDelta
+      ) {
+        return {
+          expected: expectation.description,
+          observed: `Expected count delta ${expectation.expectedCountDelta}, observed quantity-control delta ${fallbackControlDelta}`,
+          result: "error",
+        };
+      }
+
+      if (fallbackControlDelta === 0) {
+        return {
+          expected: expectation.description,
+          observed: "Quantity-like control value did not change",
+          result: "error",
+        };
+      }
+
+      return {
+        expected: expectation.description,
+        observed: `Quantity-like control changed by ${fallbackControlDelta}`,
+        result: "pass",
+      };
+    }
+
     return {
       expected: expectation.description,
       observed: "Could not extract comparable count values from page text",
@@ -63,6 +91,18 @@ export function checkCartSummaryChanged(
   const finalSummary = extractRelevantSummary(context.html, tokens);
 
   if (!initialSummary || !finalSummary) {
+    const priceDiff = extractSummaryPriceChange(
+      context.initialHtml,
+      context.html
+    );
+    if (priceDiff) {
+      return {
+        expected: expectation.description,
+        observed: priceDiff,
+        result: "pass",
+      };
+    }
+
     return {
       expected: expectation.description,
       observed: "Could not find a cart-like summary region in page text",
@@ -71,6 +111,18 @@ export function checkCartSummaryChanged(
   }
 
   if (normalizeText(initialSummary) === normalizeText(finalSummary)) {
+    const priceDiff = extractSummaryPriceChange(
+      context.initialHtml,
+      context.html
+    );
+    if (priceDiff) {
+      return {
+        expected: expectation.description,
+        observed: priceDiff,
+        result: "pass",
+      };
+    }
+
     return {
       expected: expectation.description,
       observed: "Cart-like summary text did not change after the action",
@@ -178,4 +230,56 @@ function extractCollectionSignature(html: string): string | null {
   const unique = Array.from(new Set(matches));
   if (unique.length < 3) return null;
   return unique.slice(0, 8).join(" | ").toLowerCase();
+}
+
+function extractQuantityControlDelta(context: ExpertiseContext): number | null {
+  const initial = findQuantityControlValue(context.initialControlStates);
+  const final = findQuantityControlValue(context.finalControlStates);
+  if (initial == null || final == null) return null;
+  return final - initial;
+}
+
+function findQuantityControlValue(
+  states: ExpertiseContext["initialControlStates"]
+): number | null {
+  const candidate = states.find(state => {
+    const text = [
+      state.label ?? "",
+      state.name ?? "",
+      state.selector,
+      state.role ?? "",
+      state.inputType ?? "",
+    ]
+      .join(" ")
+      .toLowerCase();
+    return /\b(qty|quantity|items?)\b/.test(text) && /^\d+$/.test(state.value);
+  });
+
+  if (!candidate) return null;
+  return Number.parseInt(candidate.value, 10);
+}
+
+function extractSummaryPriceChange(
+  initialHtml: string,
+  html: string
+): string | null {
+  const initialPrices = extractPriceSignals(initialHtml);
+  const finalPrices = extractPriceSignals(html);
+  if (initialPrices.length === 0 || finalPrices.length === 0) return null;
+
+  const initialJoined = initialPrices.slice(0, 4).join(" | ");
+  const finalJoined = finalPrices.slice(0, 4).join(" | ");
+  if (initialJoined === finalJoined) return null;
+
+  return `Cart-like price signals changed from [${initialJoined}] to [${finalJoined}]`;
+}
+
+function extractPriceSignals(html: string): string[] {
+  return Array.from(
+    stripHtml(html).matchAll(
+      /(?:[$€£]\s?\d[\d,.]*|\d[\d,.]*\s?(?:usd|eur|gbp|cad|aud))/gi
+    )
+  )
+    .map(match => match[0].trim().toLowerCase())
+    .filter(Boolean);
 }

@@ -1,6 +1,48 @@
 import type { ExpertiseContext, Outcome } from "../types";
 import { findControlBySelector } from "./control-state";
 
+export function checkElementFocused(
+  expectation: {
+    description: string;
+    targetPath?: string;
+  },
+  context: ExpertiseContext
+): Outcome {
+  const expectedSelector = expectation.targetPath;
+  const actualSelector = context.finalUiSnapshot.activeElementSelector;
+
+  if (!expectedSelector) {
+    return {
+      expected: expectation.description,
+      observed: "No target selector was provided for focus validation",
+      result: "warning",
+    };
+  }
+
+  if (!actualSelector) {
+    return {
+      expected: expectation.description,
+      observed:
+        "No active element snapshot was available after the focus action",
+      result: "warning",
+    };
+  }
+
+  if (actualSelector === expectedSelector) {
+    return {
+      expected: expectation.description,
+      observed: `Focus moved to ${actualSelector}`,
+      result: "pass",
+    };
+  }
+
+  return {
+    expected: expectation.description,
+    observed: `Expected focus on ${expectedSelector}, but active element was ${actualSelector}`,
+    result: "error",
+  };
+}
+
 export function checkExpandedStateChanged(
   expectation: {
     description: string;

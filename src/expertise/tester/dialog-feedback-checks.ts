@@ -69,22 +69,12 @@ export function checkFeedbackVisible(
 ): Outcome {
   const initialCount = context.initialUiSnapshot.toastCount;
   const finalCount = context.finalUiSnapshot.toastCount;
+  const initialTexts = context.initialUiSnapshot.feedbackTexts.map(text =>
+    text.toLowerCase()
+  );
   const texts = context.finalUiSnapshot.feedbackTexts.map(text =>
     text.toLowerCase()
   );
-
-  if (expectation.expectedTextTokens?.length) {
-    const matched = expectation.expectedTextTokens.some(token =>
-      texts.some(text => text.includes(token.toLowerCase()))
-    );
-    if (matched) {
-      return {
-        expected: expectation.description,
-        observed: "Feedback region contains an expected token",
-        result: "pass",
-      };
-    }
-  }
 
   if (expectation.forbiddenTextTokens?.length) {
     const forbidden = expectation.forbiddenTextTokens.find(token =>
@@ -99,10 +89,46 @@ export function checkFeedbackVisible(
     }
   }
 
+  if (expectation.expectedTextTokens?.length) {
+    const matchedText = texts.find(text =>
+      expectation.expectedTextTokens?.some(token =>
+        text.includes(token.toLowerCase())
+      )
+    );
+    if (matchedText) {
+      const wasAlreadyVisible = initialTexts.some(
+        initialText => initialText === matchedText
+      );
+      if (wasAlreadyVisible && finalCount <= initialCount) {
+        return {
+          expected: expectation.description,
+          observed:
+            "Expected feedback text was already visible before the action and no new feedback appeared",
+          result: "warning",
+        };
+      }
+
+      return {
+        expected: expectation.description,
+        observed: "Feedback region contains a newly visible expected token",
+        result: "pass",
+      };
+    }
+  }
+
+  const newTexts = texts.filter(text => !initialTexts.includes(text));
   if (finalCount > initialCount) {
     return {
       expected: expectation.description,
       observed: `Feedback regions increased from ${initialCount} to ${finalCount}`,
+      result: "pass",
+    };
+  }
+
+  if (newTexts.length > 0) {
+    return {
+      expected: expectation.description,
+      observed: "Visible feedback content changed after the action",
       result: "pass",
     };
   }

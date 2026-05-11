@@ -65,6 +65,18 @@ describe("search checks", () => {
     expect(result.result).toBe("pass");
   });
 
+  it("passes when the list drops to zero and an empty-state container is present", () => {
+    const result = checkEmptyStateVisible(
+      { description: "No-result search should show an empty state" },
+      createContext({
+        initialHtml: "<main><ul><li>Chair</li><li>Table</li></ul></main>",
+        html: '<main><div class="empty-state"></div></main>',
+      })
+    );
+
+    expect(result.result).toBe("pass");
+  });
+
   it("fails when an empty state is not visible", () => {
     const result = checkEmptyStateVisible(
       { description: "No-result search should show an empty state" },

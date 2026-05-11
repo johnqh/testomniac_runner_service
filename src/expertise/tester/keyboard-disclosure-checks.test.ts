@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { checkExpandedStateChanged } from "./keyboard-disclosure-checks";
+import {
+  checkElementFocused,
+  checkExpandedStateChanged,
+} from "./keyboard-disclosure-checks";
 import type { ExpertiseContext } from "../types";
 import type { ControlState } from "./control-state";
 import type { UiSnapshot } from "../../browser/ui-snapshot";
@@ -65,6 +68,18 @@ function createContext(
 }
 
 describe("keyboard/disclosure checks", () => {
+  it("passes when focus moves to the target element", () => {
+    const result = checkElementFocused(
+      {
+        description: "Target should receive focus",
+        targetPath: "#toggle",
+      },
+      createContext([createControlState()], [createControlState()])
+    );
+
+    expect(result.result).toBe("pass");
+  });
+
   it("passes when expanded state changes", () => {
     const result = checkExpandedStateChanged(
       {

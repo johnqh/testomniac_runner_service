@@ -55,4 +55,19 @@ describe("list workflow checks", () => {
 
     expect(result.result).toBe("error");
   });
+
+  it("passes when removing the last item leaves an empty state", () => {
+    const result = checkRowCountChanged(
+      {
+        description: "Deleting the last row should reduce the list to empty",
+        expectedCountDelta: -1,
+      },
+      createContext(
+        "<ul><li>Only item</li></ul>",
+        "<main><p>No items found</p></main>"
+      )
+    );
+
+    expect(result.result).toBe("pass");
+  });
 });

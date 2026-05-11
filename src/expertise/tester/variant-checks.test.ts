@@ -57,4 +57,19 @@ describe("variant checks", () => {
 
     expect(result.result).toBe("warning");
   });
+
+  it("passes when selecting a variant enables or relabels the purchase CTA", () => {
+    const result = checkVariantStateChanged(
+      { description: "Selecting a variant should unlock purchase state" },
+      createContext({
+        initialHtml:
+          '<main><button disabled>Select options</button><img src="/same.jpg" /><div>$10.00</div></main>',
+        html: '<main><button>Add to cart</button><img src="/same.jpg" /><div>$10.00</div></main>',
+        initialUrl: "https://example.com/product",
+        currentUrl: "https://example.com/product",
+      })
+    );
+
+    expect(result.result).toBe("pass");
+  });
 });

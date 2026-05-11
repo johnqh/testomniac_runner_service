@@ -94,6 +94,21 @@ export function checkEmptyStateVisible(
     };
   }
 
+  const initialCount = countCollectionItems(context.initialHtml);
+  const finalCount = countCollectionItems(context.html);
+  if (
+    initialCount > 0 &&
+    finalCount === 0 &&
+    hasEmptyStateContainer(context.html)
+  ) {
+    return {
+      expected: expectation.description,
+      observed:
+        "Visible collection items dropped to zero and an empty-state-like container was detected",
+      result: "pass",
+    };
+  }
+
   return {
     expected: expectation.description,
     observed: "No visible empty-state text was detected after the search",
@@ -147,4 +162,24 @@ function extractCollectionSignature(html: string): string | null {
   const unique = Array.from(new Set(matches));
   if (unique.length < 3) return null;
   return unique.slice(0, 8).join(" | ").toLowerCase();
+}
+
+function countCollectionItems(html: string): number {
+  const tableRows = (html.match(/<tr\b/gi) ?? []).length;
+  if (tableRows > 0) return tableRows;
+
+  const listItems = (html.match(/<li\b/gi) ?? []).length;
+  if (listItems > 0) return listItems;
+
+  return (
+    html.match(
+      /<(?:article|section|div)\b[^>]*(?:product|card|result|item|row)[^>]*>/gi
+    ) ?? []
+  ).length;
+}
+
+function hasEmptyStateContainer(html: string): boolean {
+  return /(?:class|id|data-testid|aria-label)=["'][^"']*(?:empty|zero|no-results|no-items|empty-state)[^"']*["']/i.test(
+    html
+  );
 }

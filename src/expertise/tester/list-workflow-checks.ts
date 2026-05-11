@@ -8,7 +8,7 @@ export function checkRowCountChanged(
   context: ExpertiseContext
 ): Outcome {
   const initialCount = countListRows(context.initialHtml);
-  const finalCount = countListRows(context.html);
+  const finalCount = countListRows(context.html, initialCount);
 
   if (initialCount == null || finalCount == null) {
     return {
@@ -45,7 +45,10 @@ export function checkRowCountChanged(
   };
 }
 
-function countListRows(html: string): number | null {
+function countListRows(
+  html: string,
+  priorKnownCount?: number | null
+): number | null {
   const tableRows = (html.match(/<tr\b/gi) ?? []).length;
   if (tableRows > 0) return tableRows;
 
@@ -59,5 +62,22 @@ function countListRows(html: string): number | null {
   ).length;
   if (cards > 0) return cards;
 
+  if (
+    (priorKnownCount ?? 0) > 0 &&
+    (hasCollectionContainer(html) || hasEmptyStateLikeText(html))
+  ) {
+    return 0;
+  }
+
   return null;
+}
+
+function hasCollectionContainer(html: string): boolean {
+  return /<(?:table|ul|ol)\b|role=["'](?:list|grid|table)["']/i.test(html);
+}
+
+function hasEmptyStateLikeText(html: string): boolean {
+  return /\b(no results|0 results|no matches|nothing found|no items|no products|empty|no records)\b/i.test(
+    html
+  );
 }

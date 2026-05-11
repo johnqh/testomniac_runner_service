@@ -36,6 +36,22 @@ export function checkVariantStateChanged(
     reasons.push(`availability changed from ${stockBefore} to ${stockAfter}`);
   }
 
+  const ctaBefore = extractPurchaseCtaSignal(context.initialHtml);
+  const ctaAfter = extractPurchaseCtaSignal(context.html);
+  if (ctaBefore && ctaAfter) {
+    if (ctaBefore.disabled !== ctaAfter.disabled) {
+      reasons.push(
+        `purchase control changed from ${ctaBefore.disabled ? "disabled" : "enabled"} to ${ctaAfter.disabled ? "disabled" : "enabled"}`
+      );
+    }
+
+    if (ctaBefore.text && ctaAfter.text && ctaBefore.text !== ctaAfter.text) {
+      reasons.push(
+        `purchase control label changed from "${ctaBefore.text}" to "${ctaAfter.text}"`
+      );
+    }
+  }
+
   if (reasons.length > 0) {
     return {
       expected: expectation.description,
@@ -49,6 +65,44 @@ export function checkVariantStateChanged(
     observed:
       "Variant selection changed the control value but no product-state signal changed (price, image, availability, or URL)",
     result: "warning",
+  };
+}
+
+function extractPurchaseCtaSignal(
+  html: string
+): { text: string; disabled: boolean } | null {
+  const normalized = html.replace(/\s+/g, " ");
+  const buttonMatch = normalized.match(/<(button|a)\b([^>]*)>(.*?)<\/\1>/i);
+  const inputMatch = normalized.match(
+    /<input\b([^>]*)type=["'](?:submit|button)["']([^>]*)>/i
+  );
+
+  const candidate = [buttonMatch, inputMatch]
+    .filter((match): match is RegExpMatchArray => Boolean(match))
+    .map(match => {
+      const attrs = match[2] ?? match[1] ?? "";
+      const text =
+        match[3] ?? attrs.match(/\bvalue=["']([^"']+)["']/i)?.[1] ?? "";
+      return {
+        attrs,
+        text: text
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase(),
+      };
+    })
+    .find(match =>
+      /\b(add to cart|add to bag|buy now|checkout|place order|select options|choose option|choose size|choose color)\b/.test(
+        match.text
+      )
+    );
+
+  if (!candidate) return null;
+
+  return {
+    text: candidate.text,
+    disabled: /\bdisabled\b|aria-disabled=["']true["']/i.test(candidate.attrs),
   };
 }
 

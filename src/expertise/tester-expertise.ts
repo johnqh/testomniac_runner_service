@@ -8,6 +8,8 @@ import {
 import { checkInputValue } from "./tester/text-input-checks";
 import { checkSelectionState } from "./tester/selection-control-checks";
 import {
+  checkErrorStateCleared,
+  checkErrorStateVisible,
   checkFormSubmittedSuccessfully,
   checkValidationMessageVisible,
 } from "./tester/form-checks";
@@ -53,7 +55,10 @@ import {
   checkForwardNavigationReappliesState,
   checkStatePersistsAfterReload,
 } from "./tester/persistence-checks";
-import { checkExpandedStateChanged } from "./tester/keyboard-disclosure-checks";
+import {
+  checkElementFocused,
+  checkExpandedStateChanged,
+} from "./tester/keyboard-disclosure-checks";
 
 /**
  * Checks each test element expectation is met.
@@ -103,6 +108,10 @@ export class TesterExpertise implements Expertise {
         return checkSelectionState(expectation, context);
       case "validation_message_visible":
         return checkValidationMessageVisible(expectation, context);
+      case "error_state_visible":
+        return checkErrorStateVisible(expectation, context);
+      case "error_state_cleared":
+        return checkErrorStateCleared(expectation, context);
       case "form_submitted_successfully":
         return checkFormSubmittedSuccessfully(expectation, context);
       case "required_error_shown_for_field":
@@ -135,6 +144,8 @@ export class TesterExpertise implements Expertise {
         return checkForwardNavigationReappliesState(expectation, context);
       case "expanded_state_changed":
         return checkExpandedStateChanged(expectation, context);
+      case "element_focused":
+        return checkElementFocused(expectation, context);
       case "results_changed":
         return checkResultsChanged(expectation, context);
       case "results_restored":
