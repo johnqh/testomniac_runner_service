@@ -61,7 +61,7 @@ export class PageAnalyzer {
       },
       {
         expectationType: ExpectationType.NoNetworkErrors,
-        severity: ExpectationSeverity.MustPass,
+        severity: ExpectationSeverity.ShouldPass,
         description: "No network errors during page load or interaction",
         playwrightCode: "// checked by TesterExpertise",
       },
@@ -2214,7 +2214,7 @@ export class PageAnalyzer {
       },
       {
         expectationType: ExpectationType.NoNetworkErrors,
-        severity: ExpectationSeverity.MustPass,
+        severity: ExpectationSeverity.ShouldPass,
         description: "No network errors during flow",
         playwrightCode: "// checked by TesterExpertise",
       },
