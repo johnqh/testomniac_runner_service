@@ -8,7 +8,7 @@ export async function generateFormTestElements(
   if (context.forms.length === 0) {
     await analyzer.reconcileGeneratedSurfaceElements(context, {
       surfaceTitle,
-      desiredTitles: [],
+      desiredKeys: [],
     });
     return;
   }
@@ -36,7 +36,7 @@ export async function generateFormTestElements(
     bundleRun.id
   );
 
-  const desiredTitles: string[] = [];
+  const desiredKeys: string[] = [];
   for (let index = 0; index < context.forms.length; index++) {
     const form = context.forms[index];
     const formType = analyzer.identifyFormType(form, context.currentPath);
@@ -56,7 +56,7 @@ export async function generateFormTestElements(
       );
 
       for (const searchTest of searchTests) {
-        desiredTitles.push(searchTest.title);
+        desiredKeys.push(analyzer.getGeneratedKey(searchTest));
         const searchElement = await api.ensureTestElement(
           runnerId,
           surface.id,
@@ -80,7 +80,7 @@ export async function generateFormTestElements(
       context.currentPageStateId,
       validValues
     );
-    desiredTitles.push(positive.title);
+    desiredKeys.push(analyzer.getGeneratedKey(positive));
     const positiveElement = await api.ensureTestElement(
       runnerId,
       surface.id,
@@ -105,7 +105,7 @@ export async function generateFormTestElements(
         context.currentPageStateId,
         validValues
       );
-      desiredTitles.push(negative.title);
+      desiredKeys.push(analyzer.getGeneratedKey(negative));
       const negativeElement = await api.ensureTestElement(
         runnerId,
         surface.id,
@@ -127,7 +127,7 @@ export async function generateFormTestElements(
         context.currentPageStateId,
         validValues
       );
-      desiredTitles.push(correction.title);
+      desiredKeys.push(analyzer.getGeneratedKey(correction));
       const correctionElement = await api.ensureTestElement(
         runnerId,
         surface.id,
@@ -155,7 +155,7 @@ export async function generateFormTestElements(
       );
 
       for (const passwordTest of passwordTests) {
-        desiredTitles.push(passwordTest.title);
+        desiredKeys.push(analyzer.getGeneratedKey(passwordTest));
         const passwordElement = await api.ensureTestElement(
           runnerId,
           surface.id,
@@ -172,6 +172,6 @@ export async function generateFormTestElements(
   await analyzer.reconcileGeneratedSurfaceElements(context, {
     surfaceId: surface.id,
     surfaceTitle,
-    desiredTitles,
+    desiredKeys,
   });
 }

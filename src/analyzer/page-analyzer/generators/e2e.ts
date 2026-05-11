@@ -8,7 +8,7 @@ export async function generateE2ETestElements(
   if (context.journeySteps.length < 2) {
     await analyzer.reconcileGeneratedSurfaceElements(context, {
       surfaceTitle,
-      desiredTitles: [],
+      desiredKeys: [],
     });
     return;
   }
@@ -52,6 +52,6 @@ export async function generateE2ETestElements(
   await analyzer.reconcileGeneratedSurfaceElements(context, {
     surfaceId: surface.id,
     surfaceTitle,
-    desiredTitles: [e2e.title],
+    desiredKeys: [analyzer.getGeneratedKey(e2e)],
   });
 }

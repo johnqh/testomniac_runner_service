@@ -40,7 +40,7 @@ export async function generateHoverFollowUpCases(
     await analyzer.reconcileGeneratedSurfaceElements(context, {
       surfaceId: context.currentTestSurfaceId,
       surfaceTitle: "",
-      desiredTitles: [clickCase.title],
+      desiredKeys: [analyzer.getGeneratedKey(clickCase)],
       dependencyTestElementId: context.currentTestElementId,
     });
     const tc = await context.api.ensureTestElement(
@@ -55,8 +55,8 @@ export async function generateHoverFollowUpCases(
     return;
   }
 
-  const desiredTitles = revealedItems.map(
-    (item: any) =>
+  const desiredKeys = revealedItems.map((item: any) =>
+    analyzer.getGeneratedKey(
       analyzer.buildHoverTestElement(
         item,
         context.currentPath,
@@ -64,12 +64,13 @@ export async function generateHoverFollowUpCases(
         context.uid,
         context.currentPageStateId,
         context.currentTestElementId
-      ).title
+      )
+    )
   );
   await analyzer.reconcileGeneratedSurfaceElements(context, {
     surfaceId: context.currentTestSurfaceId,
     surfaceTitle: "",
-    desiredTitles,
+    desiredKeys,
     dependencyTestElementId: context.currentTestElementId,
   });
 

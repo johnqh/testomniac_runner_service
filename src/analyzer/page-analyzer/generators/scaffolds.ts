@@ -6,7 +6,7 @@ export async function generateScaffoldTestElements(
 ): Promise<void> {
   const { api, runnerId, sizeClass, uid, bundleRun } = context;
   const processedSurfaceTitles = new Set<string>();
-  const desiredTitlesBySurface = new Map<string, string[]>();
+  const desiredKeysBySurface = new Map<string, string[]>();
 
   for (const scaffold of context.scaffolds) {
     const scaffoldItems = analyzer.selectRepresentativeItems(
@@ -16,7 +16,7 @@ export async function generateScaffoldTestElements(
     const surfaceTitle = `Scaffold: ${scaffold.type}`;
     processedSurfaceTitles.add(surfaceTitle);
     if (scaffoldItems.length === 0) {
-      desiredTitlesBySurface.set(surfaceTitle, []);
+      desiredKeysBySurface.set(surfaceTitle, []);
       continue;
     }
     const surface = await api.ensureTestSurface(runnerId, {
@@ -44,7 +44,7 @@ export async function generateScaffoldTestElements(
       bundleRun.id
     );
 
-    const desiredTitles: string[] = [];
+    const desiredKeys: string[] = [];
     for (const item of scaffoldItems) {
       const testElement = analyzer.shouldUseDirectControlInteraction(item)
         ? analyzer.buildControlInteractionTestElement(
@@ -61,7 +61,7 @@ export async function generateScaffoldTestElements(
             uid,
             context.currentPageStateId
           );
-      desiredTitles.push(testElement.title);
+      desiredKeys.push(analyzer.getGeneratedKey(testElement));
       const tc = await api.ensureTestElement(runnerId, surface.id, testElement);
       await api.createTestElementRun({
         testElementId: tc.id,
@@ -69,11 +69,11 @@ export async function generateScaffoldTestElements(
       });
     }
 
-    desiredTitlesBySurface.set(surfaceTitle, desiredTitles);
+    desiredKeysBySurface.set(surfaceTitle, desiredKeys);
     await analyzer.reconcileGeneratedSurfaceElements(context, {
       surfaceId: surface.id,
       surfaceTitle,
-      desiredTitles,
+      desiredKeys,
     });
   }
 
@@ -85,16 +85,16 @@ export async function generateScaffoldTestElements(
       await analyzer.reconcileGeneratedSurfaceElements(context, {
         surfaceId: surface.id,
         surfaceTitle: surface.title,
-        desiredTitles: [],
+        desiredKeys: [],
       });
     }
   }
 
-  for (const [surfaceTitle, desiredTitles] of desiredTitlesBySurface) {
-    if (desiredTitles.length > 0) continue;
+  for (const [surfaceTitle, desiredKeys] of desiredKeysBySurface) {
+    if (desiredKeys.length > 0) continue;
     await analyzer.reconcileGeneratedSurfaceElements(context, {
       surfaceTitle,
-      desiredTitles,
+      desiredKeys,
     });
   }
 }

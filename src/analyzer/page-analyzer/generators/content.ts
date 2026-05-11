@@ -16,7 +16,7 @@ export async function generateContentTestElements(
   if (contentItems.length === 0) {
     await analyzer.reconcileGeneratedSurfaceElements(context, {
       surfaceTitle,
-      desiredTitles: [],
+      desiredKeys: [],
     });
     return;
   }
@@ -42,7 +42,7 @@ export async function generateContentTestElements(
     bundleRun.id
   );
 
-  const desiredTitles: string[] = [];
+  const desiredKeys: string[] = [];
   for (const item of contentItems) {
     const testElement = analyzer.shouldUseDirectControlInteraction(item)
       ? analyzer.buildControlInteractionTestElement(
@@ -59,7 +59,7 @@ export async function generateContentTestElements(
           uid,
           context.currentPageStateId
         );
-    desiredTitles.push(testElement.title);
+    desiredKeys.push(analyzer.getGeneratedKey(testElement));
     const tc = await api.ensureTestElement(runnerId, surface.id, testElement);
     await api.createTestElementRun({
       testElementId: tc.id,
@@ -70,6 +70,6 @@ export async function generateContentTestElements(
   await analyzer.reconcileGeneratedSurfaceElements(context, {
     surfaceId: surface.id,
     surfaceTitle,
-    desiredTitles,
+    desiredKeys,
   });
 }

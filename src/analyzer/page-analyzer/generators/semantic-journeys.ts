@@ -9,7 +9,7 @@ export async function generateSemanticJourneyTestElements(
   if (journeys.length === 0) {
     await analyzer.reconcileGeneratedSurfaceElements(context, {
       surfaceTitle,
-      desiredTitles: [],
+      desiredKeys: [],
     });
     return;
   }
@@ -48,6 +48,8 @@ export async function generateSemanticJourneyTestElements(
   await analyzer.reconcileGeneratedSurfaceElements(context, {
     surfaceId: surface.id,
     surfaceTitle,
-    desiredTitles: journeys.map((journey: any) => journey.title),
+    desiredKeys: journeys.map((journey: any) =>
+      analyzer.getGeneratedKey(journey)
+    ),
   });
 }

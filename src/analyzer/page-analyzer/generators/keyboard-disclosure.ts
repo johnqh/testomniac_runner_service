@@ -9,7 +9,7 @@ export async function generateKeyboardAndDisclosureTestElements(
   if (tests.length === 0) {
     await analyzer.reconcileGeneratedSurfaceElements(context, {
       surfaceTitle,
-      desiredTitles: [],
+      desiredKeys: [],
     });
     return;
   }
@@ -48,6 +48,6 @@ export async function generateKeyboardAndDisclosureTestElements(
   await analyzer.reconcileGeneratedSurfaceElements(context, {
     surfaceId: surface.id,
     surfaceTitle,
-    desiredTitles: tests.map((test: any) => test.title),
+    desiredKeys: tests.map((test: any) => analyzer.getGeneratedKey(test)),
   });
 }

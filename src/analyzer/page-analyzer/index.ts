@@ -41,6 +41,10 @@ type AnalyzerFormField = FormField & {
   appearanceHint?: string;
 };
 
+type GeneratedTestElement = TestElement & {
+  generatedKey?: string;
+};
+
 /**
  * PageAnalyzer generates expectations and discovers new test elements
  * during discovery mode.
@@ -122,7 +126,7 @@ export class PageAnalyzer {
     params: {
       surfaceId?: number | null;
       surfaceTitle: string;
-      desiredTitles: string[];
+      desiredKeys: string[];
       dependencyTestElementId?: number;
     }
   ): Promise<void> {
@@ -136,7 +140,9 @@ export class PageAnalyzer {
       surface.id,
       true
     );
-    const desiredTitles = new Set(params.desiredTitles);
+    const desiredKeys = new Set(
+      params.desiredKeys.map(key => key.trim()).filter(Boolean)
+    );
     const obsoleteIds = existing
       .filter(testElement => {
         const isGenerated = Boolean((testElement as any).isGenerated);
@@ -150,7 +156,8 @@ export class PageAnalyzer {
         ) {
           return false;
         }
-        return !desiredTitles.has(testElement.title);
+        const existingKey = this.getPersistedGeneratedKey(testElement);
+        return !existingKey || !desiredKeys.has(existingKey);
       })
       .map(testElement => testElement.id);
 
@@ -233,7 +240,7 @@ export class PageAnalyzer {
     sizeClass: SizeClass,
     uid?: string,
     startingPageStateId?: number
-  ): TestElement {
+  ): GeneratedTestElement {
     return {
       title: `Navigate to ${path}`,
       type: "navigation",
@@ -257,6 +264,11 @@ export class PageAnalyzer {
       ],
       globalExpectations: [],
       uid,
+      generatedKey: this.buildGeneratedKey(
+        "navigation",
+        startingPageStateId,
+        path
+      ),
     };
   }
 
@@ -267,7 +279,7 @@ export class PageAnalyzer {
     uid?: string,
     startingPageStateId?: number,
     dependencyTestElementId?: number
-  ): TestElement {
+  ): GeneratedTestElement {
     const label = item.accessibleName || item.textContent || item.selector;
     return {
       title: `Hover over ${label}`,
@@ -293,6 +305,12 @@ export class PageAnalyzer {
       ],
       globalExpectations: [],
       uid,
+      generatedKey: this.buildGeneratedKey(
+        "hover",
+        startingPageStateId,
+        dependencyTestElementId,
+        item.stableKey ?? item.selector ?? label
+      ),
     };
   }
 
@@ -303,7 +321,7 @@ export class PageAnalyzer {
     uid?: string,
     startingPageStateId?: number,
     dependencyTestElementId?: number
-  ): TestElement {
+  ): GeneratedTestElement {
     const label = item.accessibleName || item.textContent || item.selector;
     return {
       title: `Click ${label}`,
@@ -329,6 +347,12 @@ export class PageAnalyzer {
       ],
       globalExpectations: [],
       uid,
+      generatedKey: this.buildGeneratedKey(
+        "click",
+        startingPageStateId,
+        dependencyTestElementId,
+        item.stableKey ?? item.selector ?? label
+      ),
     };
   }
 
@@ -354,6 +378,68 @@ export class PageAnalyzer {
     const stableKey = "stableKey" in item ? item.stableKey : null;
     const selector = item.selector;
     return stableKey ?? selector ?? null;
+  }
+
+  withGeneratedKey(
+    testElement: GeneratedTestElement,
+    ...parts: Array<string | number | null | undefined>
+  ): GeneratedTestElement {
+    return {
+      ...testElement,
+      generatedKey: this.buildGeneratedKey(...parts),
+    };
+  }
+
+  getGeneratedKey(
+    testElement: Pick<GeneratedTestElement, "generatedKey" | "title">
+  ): string {
+    return (testElement.generatedKey?.trim() || testElement.title).trim();
+  }
+
+  private getPersistedGeneratedKey(
+    testElement: Pick<TestElement, "title"> & {
+      generatedKey?: string | null;
+    }
+  ): string | null {
+    const generatedKey = testElement.generatedKey?.trim();
+    if (generatedKey) return generatedKey;
+    const title = testElement.title?.trim();
+    return title || null;
+  }
+
+  private buildGeneratedKey(
+    ...parts: Array<string | number | null | undefined>
+  ): string {
+    const normalized = parts
+      .map(part => (part == null ? "" : String(part).trim()))
+      .filter(Boolean);
+    const raw = normalized.join("||");
+    const digest = createHash("sha1").update(raw).digest("hex").slice(0, 16);
+    const prefix = normalized
+      .slice(0, 3)
+      .map(part =>
+        part
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+      )
+      .filter(Boolean)
+      .join(":")
+      .slice(0, 80);
+    return prefix ? `${prefix}:${digest}` : digest;
+  }
+
+  private buildStepSignature(steps: TestStep[]): string {
+    return steps
+      .map(step =>
+        [
+          step.action?.actionType ?? "",
+          step.action?.path ?? "",
+          step.action?.value ?? "",
+          step.action?.description ?? "",
+        ].join("|")
+      )
+      .join("||");
   }
 
   private async ensureTargetPageState(
@@ -514,7 +600,7 @@ export class PageAnalyzer {
     uid: string | undefined,
     startingPageStateId: number,
     pageId: number
-  ): TestElement {
+  ): GeneratedTestElement {
     return {
       title: `Render — ${currentPath}`,
       type: "render",
@@ -569,6 +655,12 @@ export class PageAnalyzer {
         "Render page without runtime errors"
       ),
       uid,
+      generatedKey: this.buildGeneratedKey(
+        "render",
+        startingPageStateId,
+        pageId,
+        currentPath
+      ),
     };
   }
 
@@ -581,7 +673,7 @@ export class PageAnalyzer {
     uid: string | undefined,
     startingPageStateId: number,
     validValues: Record<string, string>
-  ): TestElement {
+  ): GeneratedTestElement {
     const steps = this.buildFormSteps(form, validValues, undefined);
     return {
       title: `Form — ${formLabel}`,
@@ -653,6 +745,12 @@ export class PageAnalyzer {
         ),
       ],
       uid,
+      generatedKey: this.buildGeneratedKey(
+        "form-positive",
+        startingPageStateId,
+        form.selector,
+        formType
+      ),
     };
   }
 
@@ -666,7 +764,7 @@ export class PageAnalyzer {
     uid: string | undefined,
     startingPageStateId: number,
     validValues: Record<string, string>
-  ): TestElement {
+  ): GeneratedTestElement {
     const steps = this.buildFormSteps(
       form,
       validValues,
@@ -705,6 +803,13 @@ export class PageAnalyzer {
         ),
       ],
       uid,
+      generatedKey: this.buildGeneratedKey(
+        "form-negative",
+        startingPageStateId,
+        form.selector,
+        formType,
+        omittedField.selector
+      ),
     };
   }
 
@@ -718,7 +823,7 @@ export class PageAnalyzer {
     uid: string | undefined,
     startingPageStateId: number,
     validValues: Record<string, string>
-  ): TestElement {
+  ): GeneratedTestElement {
     const steps = this.buildFormSteps(
       form,
       validValues,
@@ -798,6 +903,13 @@ export class PageAnalyzer {
         ),
       ],
       uid,
+      generatedKey: this.buildGeneratedKey(
+        "form-correction",
+        startingPageStateId,
+        form.selector,
+        formType,
+        correctedField.selector
+      ),
     };
   }
 
@@ -811,7 +923,7 @@ export class PageAnalyzer {
     startingPageStateId: number,
     validValues: Record<string, string>,
     passwordRequirements: PasswordRequirementSnapshot
-  ): TestElement[] {
+  ): GeneratedTestElement[] {
     const passwordFields = form.fields.filter(
       field => field.type === "password"
     );
@@ -849,6 +961,14 @@ export class PageAnalyzer {
           },
         ],
         uid,
+        generatedKey: this.buildGeneratedKey(
+          "password",
+          startingPageStateId,
+          form.selector,
+          formType,
+          variant.description,
+          variant.password
+        ),
       };
     });
   }
@@ -859,7 +979,7 @@ export class PageAnalyzer {
     uid: string | undefined,
     startingPageStateId: number,
     journeySteps: TestStep[]
-  ): TestElement {
+  ): GeneratedTestElement {
     return {
       title: `E2E — Journey to ${currentPath}`,
       type: "e2e",
@@ -876,6 +996,12 @@ export class PageAnalyzer {
         `Journey to ${currentPath} should complete without runtime errors`
       ),
       uid,
+      generatedKey: this.buildGeneratedKey(
+        "dependency-journey",
+        startingPageStateId,
+        currentPath,
+        this.buildStepSignature(journeySteps)
+      ),
     };
   }
 
@@ -1219,7 +1345,7 @@ export class PageAnalyzer {
     startingPageStateId: number,
     validValues: Record<string, string>,
     actionableItems: ActionableItem[]
-  ): TestElement[] {
+  ): GeneratedTestElement[] {
     const searchField = form.fields.find(field => this.isSearchField(field));
     if (!searchField) return [];
 
@@ -1232,7 +1358,7 @@ export class PageAnalyzer {
       [searchField.selector]: this.improbableSearchQuery(),
     };
 
-    const tests: TestElement[] = [
+    const tests: GeneratedTestElement[] = [
       {
         title: `Search — ${formLabel}`,
         type: "form",
@@ -1267,6 +1393,12 @@ export class PageAnalyzer {
           ),
         ],
         uid,
+        generatedKey: this.buildGeneratedKey(
+          "search",
+          startingPageStateId,
+          form.selector,
+          searchField.selector
+        ),
       },
       {
         title: `Search Empty State — ${formLabel}`,
@@ -1304,6 +1436,12 @@ export class PageAnalyzer {
           ),
         ],
         uid,
+        generatedKey: this.buildGeneratedKey(
+          "search-empty",
+          startingPageStateId,
+          form.selector,
+          searchField.selector
+        ),
       },
       {
         title: `Search Recovery — ${formLabel}`,
@@ -1334,6 +1472,12 @@ export class PageAnalyzer {
           ),
         ],
         uid,
+        generatedKey: this.buildGeneratedKey(
+          "search-recovery",
+          startingPageStateId,
+          form.selector,
+          searchField.selector
+        ),
       },
     ];
 
@@ -1376,6 +1520,13 @@ export class PageAnalyzer {
           ),
         ],
         uid,
+        generatedKey: this.buildGeneratedKey(
+          "search-clear",
+          startingPageStateId,
+          form.selector,
+          searchField.selector,
+          clearAction.selector
+        ),
       });
     }
 
@@ -1425,13 +1576,13 @@ export class PageAnalyzer {
 
   private buildSemanticJourneyTestElements(
     context: AnalyzerContext
-  ): TestElement[] {
+  ): GeneratedTestElement[] {
     const items = this.selectRepresentativeItems(
       context.actionableItems.filter(
         item => item.visible && !item.disabled && Boolean(item.selector)
       )
     );
-    const journeys: TestElement[] = [];
+    const journeys: GeneratedTestElement[] = [];
     const collectionCount = this.estimateCollectionCount(context.html);
 
     const addToCart = items.find(item => this.isAddToCartItem(item));
@@ -2170,7 +2321,7 @@ export class PageAnalyzer {
     surfaceTags: string[],
     context: AnalyzerContext,
     steps: TestStep[]
-  ): TestElement {
+  ): GeneratedTestElement {
     return {
       title: `${title} — ${context.currentPath}`,
       type: "e2e",
@@ -2184,6 +2335,12 @@ export class PageAnalyzer {
         `${title} should complete without runtime errors`
       ),
       uid: context.uid,
+      generatedKey: this.buildGeneratedKey(
+        "semantic-journey",
+        context.currentPageStateId,
+        context.currentPath,
+        this.buildStepSignature(steps)
+      ),
     };
   }
 
@@ -2312,13 +2469,13 @@ export class PageAnalyzer {
 
   private buildKeyboardAndDisclosureTestElements(
     context: AnalyzerContext
-  ): TestElement[] {
+  ): GeneratedTestElement[] {
     const items = this.selectRepresentativeItems(
       context.actionableItems.filter(
         item => item.visible && !item.disabled && Boolean(item.selector)
       )
     );
-    const tests: TestElement[] = [];
+    const tests: GeneratedTestElement[] = [];
 
     for (const item of items) {
       if (this.isDisclosureItem(item)) {
@@ -2421,7 +2578,9 @@ export class PageAnalyzer {
     return tests;
   }
 
-  private buildVariantTestElements(context: AnalyzerContext): TestElement[] {
+  private buildVariantTestElements(
+    context: AnalyzerContext
+  ): GeneratedTestElement[] {
     const items = this.selectRepresentativeItems(
       context.actionableItems.filter(
         item =>
@@ -2434,7 +2593,7 @@ export class PageAnalyzer {
 
     const tests = items
       .map(item => this.buildVariantTestElement(item, context))
-      .filter((item): item is TestElement => Boolean(item));
+      .filter((item): item is GeneratedTestElement => Boolean(item));
 
     const purchaseAction = context.actionableItems.find(
       item =>
@@ -2471,7 +2630,7 @@ export class PageAnalyzer {
   private buildVariantTestElement(
     item: ActionableItem,
     context: AnalyzerContext
-  ): TestElement | null {
+  ): GeneratedTestElement | null {
     const plannedValue = this.extractSelectableValue(item);
     if (!plannedValue || !item.selector) return null;
 
@@ -2519,6 +2678,12 @@ export class PageAnalyzer {
         "Variant selection should complete without runtime errors"
       ),
       uid: context.uid,
+      generatedKey: this.buildGeneratedKey(
+        "variant-selection",
+        context.currentPageStateId,
+        item.selector,
+        plannedValue
+      ),
     };
   }
 
@@ -2526,7 +2691,7 @@ export class PageAnalyzer {
     item: ActionableItem,
     purchaseAction: ActionableItem | undefined,
     context: AnalyzerContext
-  ): TestElement | null {
+  ): GeneratedTestElement | null {
     const plannedValue = this.extractSelectableValue(item);
     if (!plannedValue || !item.selector || !purchaseAction?.selector) {
       return null;
@@ -2642,6 +2807,13 @@ export class PageAnalyzer {
         `Variant purchase journey for ${label} should execute cleanly`
       ),
       uid: context.uid,
+      generatedKey: this.buildGeneratedKey(
+        "variant-purchase",
+        context.currentPageStateId,
+        item.selector,
+        plannedValue,
+        purchaseAction.selector
+      ),
     };
   }
 
@@ -2650,7 +2822,7 @@ export class PageAnalyzer {
     requiredField: FormField,
     purchaseAction: ActionableItem,
     context: AnalyzerContext
-  ): TestElement {
+  ): GeneratedTestElement {
     const label = this.describeActionableItem(item);
     const purchaseLabel = this.describeActionableItem(purchaseAction);
 
@@ -2685,6 +2857,13 @@ export class PageAnalyzer {
         `${label} should be enforced before ${purchaseLabel}`
       ),
       uid: context.uid,
+      generatedKey: this.buildGeneratedKey(
+        "variant-guard",
+        context.currentPageStateId,
+        item.selector,
+        requiredField.selector,
+        purchaseAction.selector
+      ),
     };
   }
 
@@ -2711,7 +2890,7 @@ export class PageAnalyzer {
     sizeClass: SizeClass,
     uid?: string,
     startingPageStateId?: number
-  ): TestElement {
+  ): GeneratedTestElement {
     const label = this.describeActionableItem(item);
     return {
       title: `Toggle disclosure ${label}`,
@@ -2746,6 +2925,11 @@ export class PageAnalyzer {
         "Disclosure interaction should complete without runtime errors"
       ),
       uid,
+      generatedKey: this.buildGeneratedKey(
+        "disclosure-click",
+        startingPageStateId,
+        item.stableKey ?? item.selector ?? label
+      ),
     };
   }
 
@@ -2758,7 +2942,7 @@ export class PageAnalyzer {
     sizeClass: SizeClass,
     uid?: string,
     startingPageStateId?: number
-  ): TestElement {
+  ): GeneratedTestElement {
     const label = this.describeActionableItem(item);
     return {
       title: `${titlePrefix} ${label}`,
@@ -2807,6 +2991,12 @@ export class PageAnalyzer {
         "Keyboard activation should complete without runtime errors"
       ),
       uid,
+      generatedKey: this.buildGeneratedKey(
+        "keyboard",
+        startingPageStateId,
+        key === " " ? "space" : key,
+        item.stableKey ?? item.selector ?? label
+      ),
     };
   }
 
@@ -2816,7 +3006,7 @@ export class PageAnalyzer {
     sizeClass: SizeClass,
     uid?: string,
     startingPageStateId?: number
-  ): TestElement {
+  ): GeneratedTestElement {
     const label = this.describeActionableItem(item);
     return {
       title: `Close dialog via ${label}`,
@@ -2852,6 +3042,11 @@ export class PageAnalyzer {
         "Dialog should close cleanly"
       ),
       uid,
+      generatedKey: this.buildGeneratedKey(
+        "dialog-close",
+        startingPageStateId,
+        item.stableKey ?? item.selector ?? label
+      ),
     };
   }
 
@@ -2860,7 +3055,7 @@ export class PageAnalyzer {
     sizeClass: SizeClass,
     uid?: string,
     startingPageStateId?: number
-  ): TestElement {
+  ): GeneratedTestElement {
     return {
       title: "Close dialog with Escape",
       type: "interaction",
@@ -2895,6 +3090,11 @@ export class PageAnalyzer {
         "Dialog should close on Escape without runtime errors"
       ),
       uid,
+      generatedKey: this.buildGeneratedKey(
+        "dialog-escape",
+        startingPageStateId,
+        startingPath
+      ),
     };
   }
 
@@ -2921,7 +3121,7 @@ export class PageAnalyzer {
     sizeClass: SizeClass,
     uid?: string,
     startingPageStateId?: number
-  ): TestElement {
+  ): GeneratedTestElement {
     const label = item.accessibleName || item.textContent || item.selector;
     const role = (item.role ?? "").toLowerCase();
     const inputType = (item.inputType ?? "").toLowerCase();
@@ -3021,6 +3221,13 @@ export class PageAnalyzer {
           : `${label} should react without runtime errors`
       ),
       uid,
+      generatedKey: this.buildGeneratedKey(
+        "control",
+        startingPageStateId,
+        isImmutable ? "immutable" : "enabled",
+        role || inputType || item.actionKind || "control",
+        item.stableKey ?? item.selector ?? label
+      ),
     };
   }
 

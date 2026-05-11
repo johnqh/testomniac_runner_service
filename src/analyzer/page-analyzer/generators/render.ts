@@ -45,6 +45,6 @@ export async function generateRenderTestElements(
   await analyzer.reconcileGeneratedSurfaceElements(context, {
     surfaceId: surface.id,
     surfaceTitle,
-    desiredTitles: [testElement.title],
+    desiredKeys: [analyzer.getGeneratedKey(testElement)],
   });
 }

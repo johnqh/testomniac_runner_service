@@ -9,7 +9,7 @@ export async function generateDialogLifecycleTestElements(
   if (!analyzer.pageHasOpenDialog(context.html)) {
     await analyzer.reconcileGeneratedSurfaceElements(context, {
       surfaceTitle,
-      desiredTitles: [],
+      desiredKeys: [],
     });
     return;
   }
@@ -68,7 +68,9 @@ export async function generateDialogLifecycleTestElements(
     bundleRun.id
   );
 
-  const desiredTitles = tests.map((test: TestElement) => test.title);
+  const desiredKeys = tests.map((test: TestElement) =>
+    analyzer.getGeneratedKey(test)
+  );
   for (const test of tests) {
     const tc = await api.ensureTestElement(runnerId, surface.id, test);
     await api.createTestElementRun({
@@ -80,6 +82,6 @@ export async function generateDialogLifecycleTestElements(
   await analyzer.reconcileGeneratedSurfaceElements(context, {
     surfaceId: surface.id,
     surfaceTitle,
-    desiredTitles,
+    desiredKeys,
   });
 }
