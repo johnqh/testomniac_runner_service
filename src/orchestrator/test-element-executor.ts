@@ -18,6 +18,58 @@ import { captureUiSnapshot } from "../browser/ui-snapshot";
 import { detectScaffoldRegions } from "../scanner/component-detector";
 import { detectPatternsWithInstances } from "../scanner/pattern-detector";
 
+type StoredExpectation = {
+  expectationType: string;
+  elementIdentityId?: number;
+  expectedValue?: string;
+  attributeName?: string;
+  targetPath?: string;
+  secondaryTargetPath?: string;
+  expectedCountDelta?: number;
+  expectedTextTokens?: string[];
+  forbiddenTextTokens?: string[];
+  timeoutMs?: number;
+  expectNoChange?: boolean;
+  severity: string;
+  description: string;
+  playwrightCode: string;
+};
+
+type StoredStep = {
+  action: {
+    actionType: string;
+    path?: string;
+    value?: string;
+    playwrightCode: string;
+    description: string;
+  };
+  expectations: StoredExpectation[];
+  description: string;
+  continueOnFailure: boolean;
+};
+
+type ExecutionSnapshot = {
+  html: string;
+  url: string;
+  uiSnapshot: ExpertiseContext["initialUiSnapshot"];
+  controlStates: ExpertiseContext["initialControlStates"];
+};
+
+type StepExecution = {
+  step: StoredStep;
+  startedAtMs: number;
+  endedAtMs: number;
+  beforeSnapshot: ExecutionSnapshot;
+  afterSnapshot: ExecutionSnapshot;
+};
+
+type ExpectationEvaluationGroup = {
+  expectations: StoredExpectation[];
+  networkLogs: NetworkLogEntry[];
+  snapshot: ExecutionSnapshot;
+  previousSnapshot: ExecutionSnapshot;
+};
+
 /**
  * Execute a single test element: run actions, decompose page, evaluate expertises,
  * set outcomes, create findings, and optionally discover new test elements.
@@ -106,32 +158,37 @@ export async function executeTestElement(
       }
     }
 
-    const initialHtml = await adapter.content();
-    const initialUrl = await adapter.getUrl();
-    const initialUiSnapshot = await captureUiSnapshot(adapter);
-    const initialControlStates = await captureControlStates(adapter);
-
-    const stepExecutions: Array<{
-      step: (typeof steps)[number];
-      startedAtMs: number;
-      endedAtMs: number;
-    }> = [];
+    const initialSnapshot = await captureExecutionSnapshot(adapter);
+    const stepExecutions: StepExecution[] = [];
+    let previousSnapshot = initialSnapshot;
 
     // Execute test actions
     for (const step of steps) {
       const startedAtMs = Date.now();
+      const beforeSnapshot = previousSnapshot;
       try {
         await executeAction(adapter, step.action, testRun);
+        const afterSnapshot = await captureExecutionSnapshot(adapter);
+        previousSnapshot = afterSnapshot;
         stepExecutions.push({
           step,
           startedAtMs,
           endedAtMs: Date.now(),
+          beforeSnapshot,
+          afterSnapshot,
         });
       } catch (error) {
+        const afterSnapshot = await captureExecutionSnapshotSafe(
+          adapter,
+          beforeSnapshot
+        );
+        previousSnapshot = afterSnapshot;
         stepExecutions.push({
           step,
           startedAtMs,
           endedAtMs: Date.now(),
+          beforeSnapshot,
+          afterSnapshot,
         });
         if (!step.continueOnFailure) {
           throw error;
@@ -155,15 +212,7 @@ export async function executeTestElement(
 
     // Parse global expectations
     const globalExpectations =
-      (testElement.globalExpectationsJson as Array<{
-        expectationType: string;
-        elementIdentityId?: number;
-        expectedValue?: string;
-        attributeName?: string;
-        severity: string;
-        description: string;
-        playwrightCode: string;
-      }>) ?? [];
+      (testElement.globalExpectationsJson as StoredExpectation[]) ?? [];
     const stepExpectations = steps.flatMap(step => step.expectations ?? []);
 
     // If discovery mode: generate baseline expectations
@@ -194,57 +243,58 @@ export async function executeTestElement(
     const currentUrl = await adapter.getUrl();
     const expertiseBaseContext: Omit<
       ExpertiseContext,
-      "networkLogs" | "expectations"
+      | "networkLogs"
+      | "expectations"
+      | "html"
+      | "initialHtml"
+      | "initialUrl"
+      | "currentUrl"
+      | "initialUiSnapshot"
+      | "finalUiSnapshot"
+      | "initialControlStates"
+      | "finalControlStates"
     > = {
-      html,
-      initialHtml,
       scaffolds,
       patterns,
       consoleLogs,
-      initialUrl,
-      currentUrl,
       startingPath: testElement.startingPath ?? undefined,
-      initialUiSnapshot,
-      finalUiSnapshot,
-      initialControlStates,
-      finalControlStates,
     };
 
     // Evaluate all expertises
     const allOutcomes: Outcome[] = [];
-    const expectationGroups = stepExecutions
-      .filter(
-        stepExecution => (stepExecution.step.expectations?.length ?? 0) > 0
-      )
-      .map(stepExecution => ({
-        expectations: stepExecution.step.expectations,
-        networkLogs: filterNetworkLogsForStep(
-          networkLogs,
-          stepExecution.startedAtMs,
-          stepExecution.endedAtMs,
-          stepExecution.step.expectations
-        ),
-      }));
-
     const generatedExpectations = expectations.filter(
       expectation =>
         !stepExpectations.includes(
           expectation as (typeof stepExpectations)[number]
         )
     );
-    if (generatedExpectations.length > 0) {
-      expectationGroups.push({
-        expectations: generatedExpectations as any,
-        networkLogs,
-      });
-    }
+    const expectationGroups = buildExpectationEvaluationGroups({
+      stepExecutions,
+      generatedExpectations: generatedExpectations as StoredExpectation[],
+      networkLogs,
+      initialSnapshot,
+      finalSnapshot: {
+        html,
+        url: currentUrl,
+        uiSnapshot: finalUiSnapshot,
+        controlStates: finalControlStates,
+      },
+    });
 
     for (const expertise of expertises) {
       for (const group of expectationGroups) {
         const outcomes = expertise.evaluate({
           ...expertiseBaseContext,
+          html: group.snapshot.html,
+          initialHtml: group.previousSnapshot.html,
           expectations: group.expectations as any,
           networkLogs: group.networkLogs,
+          initialUrl: group.previousSnapshot.url,
+          currentUrl: group.snapshot.url,
+          initialUiSnapshot: group.previousSnapshot.uiSnapshot,
+          finalUiSnapshot: group.snapshot.uiSnapshot,
+          initialControlStates: group.previousSnapshot.controlStates,
+          finalControlStates: group.snapshot.controlStates,
         });
         allOutcomes.push(...outcomes);
 
@@ -432,46 +482,8 @@ async function mapItemsToScaffolds(
   );
 }
 
-function parseStoredSteps(stepsJson: unknown): Array<{
-  action: {
-    actionType: string;
-    path?: string;
-    value?: string;
-    playwrightCode: string;
-    description: string;
-  };
-  expectations: Array<{
-    expectationType: string;
-    expectedValue?: string;
-    timeoutMs?: number;
-    severity: string;
-    description: string;
-    playwrightCode: string;
-  }>;
-  description: string;
-  continueOnFailure: boolean;
-}> {
-  return (
-    (stepsJson as Array<{
-      action: {
-        actionType: string;
-        path?: string;
-        value?: string;
-        playwrightCode: string;
-        description: string;
-      };
-      expectations: Array<{
-        expectationType: string;
-        expectedValue?: string;
-        timeoutMs?: number;
-        severity: string;
-        description: string;
-        playwrightCode: string;
-      }>;
-      description: string;
-      continueOnFailure: boolean;
-    }>) ?? []
-  );
+function parseStoredSteps(stepsJson: unknown): StoredStep[] {
+  return (stepsJson as StoredStep[]) ?? [];
 }
 
 function buildDependencyChain(
@@ -522,9 +534,7 @@ function filterNetworkLogsForStep(
   networkLogs: NetworkLogEntry[],
   startedAtMs: number,
   endedAtMs: number,
-  expectations: Array<{
-    timeoutMs?: number;
-  }>
+  expectations: StoredExpectation[]
 ): NetworkLogEntry[] {
   const timedEntries = networkLogs.filter(
     entry => typeof entry.timestampMs === "number"
@@ -544,6 +554,39 @@ function filterNetworkLogsForStep(
     const timestampMs = entry.timestampMs ?? 0;
     return timestampMs >= windowStart && timestampMs <= windowEnd;
   });
+}
+
+export function buildExpectationEvaluationGroups(params: {
+  stepExecutions: StepExecution[];
+  generatedExpectations: StoredExpectation[];
+  networkLogs: NetworkLogEntry[];
+  initialSnapshot: ExecutionSnapshot;
+  finalSnapshot: ExecutionSnapshot;
+}): ExpectationEvaluationGroup[] {
+  const groups = params.stepExecutions
+    .filter(stepExecution => (stepExecution.step.expectations?.length ?? 0) > 0)
+    .map(stepExecution => ({
+      expectations: stepExecution.step.expectations,
+      networkLogs: filterNetworkLogsForStep(
+        params.networkLogs,
+        stepExecution.startedAtMs,
+        stepExecution.endedAtMs,
+        stepExecution.step.expectations
+      ),
+      snapshot: stepExecution.afterSnapshot,
+      previousSnapshot: stepExecution.beforeSnapshot,
+    }));
+
+  if (params.generatedExpectations.length > 0) {
+    groups.push({
+      expectations: params.generatedExpectations,
+      networkLogs: params.networkLogs,
+      snapshot: params.finalSnapshot,
+      previousSnapshot: params.initialSnapshot,
+    });
+  }
+
+  return groups;
 }
 
 function getFindingTypeForOutcome(
@@ -650,5 +693,32 @@ async function executeAction(
       break;
     default:
       break;
+  }
+}
+
+async function captureExecutionSnapshot(
+  adapter: BrowserAdapter
+): Promise<ExecutionSnapshot> {
+  const html = await adapter.content();
+  const url = await adapter.getUrl();
+  const uiSnapshot = await captureUiSnapshot(adapter);
+  const controlStates = await captureControlStates(adapter);
+
+  return {
+    html,
+    url,
+    uiSnapshot,
+    controlStates,
+  };
+}
+
+async function captureExecutionSnapshotSafe(
+  adapter: BrowserAdapter,
+  fallback: ExecutionSnapshot
+): Promise<ExecutionSnapshot> {
+  try {
+    return await captureExecutionSnapshot(adapter);
+  } catch {
+    return fallback;
   }
 }
