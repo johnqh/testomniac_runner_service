@@ -344,6 +344,9 @@ export async function executeTestElement(
         ? "completed"
         : "completed";
 
+    currentPhase = "healing-superseded-findings";
+    await api.clearSupersededFindings(testElementRun.id);
+
     // Complete test element run
     const durationMs = Date.now() - startTime;
     await api.completeTestElementRun(testElementRun.id, {

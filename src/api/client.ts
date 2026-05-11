@@ -154,6 +154,13 @@ export class ApiClient {
     return this.put(`/test-element-runs/${testElementRunId}/complete`, payload);
   }
 
+  clearSupersededFindings(testElementRunId: number): Promise<void> {
+    return this.request<void>(
+      "DELETE",
+      `/test-element-runs/${testElementRunId}/superseded-findings`
+    );
+  }
+
   // ===========================================================================
   // Runners
   // ===========================================================================
