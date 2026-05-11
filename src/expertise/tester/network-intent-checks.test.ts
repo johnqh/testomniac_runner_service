@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { checkNetworkRequestMade } from "./network-intent-checks";
+import {
+  checkNetworkRequestMade,
+  checkNoDuplicateMutationRequests,
+} from "./network-intent-checks";
 import type { ExpertiseContext } from "../types";
 import type { UiSnapshot } from "../../browser/ui-snapshot";
 
@@ -89,6 +92,34 @@ describe("network intent checks", () => {
             url: "https://example.com/checkout",
             status: 200,
             contentType: "text/html",
+          },
+        ],
+      })
+    );
+
+    expect(result.result).toBe("error");
+  });
+
+  it("fails on duplicate mutation requests for the same action", () => {
+    const result = checkNoDuplicateMutationRequests(
+      {
+        description: "Submit should not send duplicate mutations",
+      },
+      createContext({
+        networkLogs: [
+          {
+            method: "POST",
+            url: "https://example.com/api/checkout",
+            status: 200,
+            contentType: "application/json",
+            timestampMs: 1000,
+          },
+          {
+            method: "POST",
+            url: "https://example.com/api/checkout",
+            status: 200,
+            contentType: "application/json",
+            timestampMs: 1200,
           },
         ],
       })

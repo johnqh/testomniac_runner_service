@@ -2,6 +2,7 @@ import type { BrowserAdapter } from "../adapter";
 import type { ApiClient } from "../api/client";
 import { ExpectationSeverity } from "@sudobility/testomniac_types";
 import type {
+  NetworkLogEntry,
   TestElementRunResponse,
   TestRunResponse,
   TestSurfaceResponse,
@@ -36,12 +37,7 @@ export async function executeTestElement(
 ): Promise<void> {
   const startTime = Date.now();
   const consoleLogs: string[] = [];
-  const networkLogs: {
-    method: string;
-    url: string;
-    status: number;
-    contentType: string;
-  }[] = [];
+  const networkLogs: NetworkLogEntry[] = [];
 
   // Listen for console and network events
   adapter.on("console", (...args: unknown[]) => {
@@ -49,16 +45,22 @@ export async function executeTestElement(
   });
   adapter.on("response", (...args: unknown[]) => {
     const entry = args[0] as {
+      method?: string;
       url: string;
       status: number;
       contentType?: string;
+      timestampMs?: number;
     };
     if (entry && typeof entry.url === "string") {
       networkLogs.push({
-        method: "GET",
+        method: entry.method ?? "GET",
         url: entry.url,
         status: entry.status,
         contentType: entry.contentType ?? "",
+        timestampMs:
+          typeof entry.timestampMs === "number"
+            ? entry.timestampMs
+            : Date.now(),
       });
     }
   });
@@ -109,11 +111,28 @@ export async function executeTestElement(
     const initialUiSnapshot = await captureUiSnapshot(adapter);
     const initialControlStates = await captureControlStates(adapter);
 
+    const stepExecutions: Array<{
+      step: (typeof steps)[number];
+      startedAtMs: number;
+      endedAtMs: number;
+    }> = [];
+
     // Execute test actions
     for (const step of steps) {
+      const startedAtMs = Date.now();
       try {
         await executeAction(adapter, step.action, testRun);
+        stepExecutions.push({
+          step,
+          startedAtMs,
+          endedAtMs: Date.now(),
+        });
       } catch (error) {
+        stepExecutions.push({
+          step,
+          startedAtMs,
+          endedAtMs: Date.now(),
+        });
         if (!step.continueOnFailure) {
           throw error;
         }
@@ -172,17 +191,18 @@ export async function executeTestElement(
       expectations = [...expectations, ...generated];
     }
 
-    // Build expertise context
-    const expertiseContext: ExpertiseContext = {
+    const currentUrl = await adapter.getUrl();
+    const expertiseBaseContext: Omit<
+      ExpertiseContext,
+      "networkLogs" | "expectations"
+    > = {
       html,
       initialHtml,
       scaffolds,
       patterns,
       consoleLogs,
-      networkLogs,
-      expectations: expectations as any,
       initialUrl,
-      currentUrl: await adapter.getUrl(),
+      currentUrl,
       startingPath: testElement.startingPath ?? undefined,
       initialUiSnapshot,
       finalUiSnapshot,
@@ -192,24 +212,57 @@ export async function executeTestElement(
 
     // Evaluate all expertises
     const allOutcomes: Outcome[] = [];
-    for (const expertise of expertises) {
-      const outcomes = expertise.evaluate(expertiseContext);
-      allOutcomes.push(...outcomes);
+    const expectationGroups = stepExecutions
+      .filter(
+        stepExecution => (stepExecution.step.expectations?.length ?? 0) > 0
+      )
+      .map(stepExecution => ({
+        expectations: stepExecution.step.expectations,
+        networkLogs: filterNetworkLogsForStep(
+          networkLogs,
+          stepExecution.startedAtMs,
+          stepExecution.endedAtMs,
+          stepExecution.step.expectations
+        ),
+      }));
 
-      // Create findings for unmet expectations based on configured severity.
-      for (const outcome of outcomes) {
-        const findingType = getFindingTypeForOutcome(outcome);
-        if (findingType) {
-          await api.createTestRunFinding({
-            testElementRunId: testElementRun.id,
-            type: findingType,
-            title: `[${expertise.name}] ${outcome.expected}`,
-            description: outcome.observed,
-          });
-          events.onFindingCreated({
-            type: findingType,
-            title: `[${expertise.name}] ${outcome.expected}`,
-          });
+    const generatedExpectations = expectations.filter(
+      expectation =>
+        !stepExpectations.includes(
+          expectation as (typeof stepExpectations)[number]
+        )
+    );
+    if (generatedExpectations.length > 0) {
+      expectationGroups.push({
+        expectations: generatedExpectations as any,
+        networkLogs,
+      });
+    }
+
+    for (const expertise of expertises) {
+      for (const group of expectationGroups) {
+        const outcomes = expertise.evaluate({
+          ...expertiseBaseContext,
+          expectations: group.expectations as any,
+          networkLogs: group.networkLogs,
+        });
+        allOutcomes.push(...outcomes);
+
+        // Create findings for unmet expectations based on configured severity.
+        for (const outcome of outcomes) {
+          const findingType = getFindingTypeForOutcome(outcome);
+          if (findingType) {
+            await api.createTestRunFinding({
+              testElementRunId: testElementRun.id,
+              type: findingType,
+              title: `[${expertise.name}] ${outcome.expected}`,
+              description: outcome.observed,
+            });
+            events.onFindingCreated({
+              type: findingType,
+              title: `[${expertise.name}] ${outcome.expected}`,
+            });
+          }
         }
       }
     }
@@ -390,6 +443,7 @@ function parseStoredSteps(stepsJson: unknown): Array<{
   expectations: Array<{
     expectationType: string;
     expectedValue?: string;
+    timeoutMs?: number;
     severity: string;
     description: string;
     playwrightCode: string;
@@ -409,6 +463,7 @@ function parseStoredSteps(stepsJson: unknown): Array<{
       expectations: Array<{
         expectationType: string;
         expectedValue?: string;
+        timeoutMs?: number;
         severity: string;
         description: string;
         playwrightCode: string;
@@ -461,6 +516,34 @@ function buildDependencyChain(
   }
 
   return chain;
+}
+
+function filterNetworkLogsForStep(
+  networkLogs: NetworkLogEntry[],
+  startedAtMs: number,
+  endedAtMs: number,
+  expectations: Array<{
+    timeoutMs?: number;
+  }>
+): NetworkLogEntry[] {
+  const timedEntries = networkLogs.filter(
+    entry => typeof entry.timestampMs === "number"
+  );
+  if (timedEntries.length === 0) {
+    return networkLogs;
+  }
+
+  const bufferMs = Math.max(
+    250,
+    ...expectations.map(expectation => expectation.timeoutMs ?? 2000)
+  );
+  const windowStart = startedAtMs - 100;
+  const windowEnd = endedAtMs + bufferMs;
+
+  return timedEntries.filter(entry => {
+    const timestampMs = entry.timestampMs ?? 0;
+    return timestampMs >= windowStart && timestampMs <= windowEnd;
+  });
 }
 
 function getFindingTypeForOutcome(

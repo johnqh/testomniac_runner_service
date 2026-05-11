@@ -8,6 +8,7 @@ export interface RuntimeArtifacts {
     url: string;
     status: number;
     contentType: string;
+    timestampMs?: number;
   }>;
 }
 

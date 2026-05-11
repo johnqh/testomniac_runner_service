@@ -1180,6 +1180,10 @@ export class PageAnalyzer {
           }
         ),
         this.makeExpectation(
+          ExpectationType.NoDuplicateMutationRequests,
+          `Submitting ${formLabel} should not trigger duplicate mutation requests`
+        ),
+        this.makeExpectation(
           "feedback_visible",
           `Submitting ${formLabel} should provide visible user feedback`,
           {
@@ -1297,6 +1301,10 @@ export class PageAnalyzer {
           {
             expectedValue: "mutation",
           }
+        ),
+        this.makeExpectation(
+          ExpectationType.NoDuplicateMutationRequests,
+          `Submitting ${formLabel} after correction should not trigger duplicate mutation requests`
         ),
         this.makeExpectation(
           "feedback_visible",
@@ -1709,6 +1717,7 @@ export class PageAnalyzer {
             `Searching via ${formLabel} should issue a GET request`,
             {
               expectedValue: "GET",
+              timeoutMs: 3000,
               expectedTextTokens: ["search", "q=", "query", "term"],
             }
           ),
@@ -1745,6 +1754,7 @@ export class PageAnalyzer {
             `No-result search via ${formLabel} should still issue a GET request`,
             {
               expectedValue: "GET",
+              timeoutMs: 3000,
               expectedTextTokens: ["search", "q=", "query", "term"],
             }
           ),
@@ -1811,7 +1821,12 @@ export class PageAnalyzer {
                 "Adding an item should trigger a backend mutation request",
                 {
                   expectedValue: "mutation",
+                  timeoutMs: 3000,
                 }
+              ),
+              this.makeExpectation(
+                ExpectationType.NoDuplicateMutationRequests,
+                "Adding an item should not trigger duplicate mutation requests"
               ),
               this.makeExpectation(
                 "feedback_visible",
@@ -1841,6 +1856,7 @@ export class PageAnalyzer {
                 "Proceeding to checkout should trigger a network request or document transition",
                 {
                   expectedValue: "ANY",
+                  timeoutMs: 3000,
                   expectedTextTokens: ["checkout"],
                 }
               ),
@@ -1887,7 +1903,12 @@ export class PageAnalyzer {
                 "Removing an item should trigger a backend mutation request",
                 {
                   expectedValue: "mutation",
+                  timeoutMs: 3000,
                 }
+              ),
+              this.makeExpectation(
+                ExpectationType.NoDuplicateMutationRequests,
+                "Removing an item should not trigger duplicate mutation requests"
               ),
               this.makeExpectation(
                 "feedback_visible",
@@ -1996,7 +2017,12 @@ export class PageAnalyzer {
                 "Adjusting quantity should trigger a backend mutation request",
                 {
                   expectedValue: "mutation",
+                  timeoutMs: 3000,
                 }
+              ),
+              this.makeExpectation(
+                ExpectationType.NoDuplicateMutationRequests,
+                "Adjusting quantity should not trigger duplicate mutation requests"
               ),
               this.makeExpectation(
                 "loading_completes",

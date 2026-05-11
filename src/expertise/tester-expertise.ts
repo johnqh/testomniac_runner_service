@@ -31,7 +31,10 @@ import {
   checkFieldErrorClearsAfterFix,
   checkRequiredErrorShownForField,
 } from "./tester/validation-checks";
-import { checkNetworkRequestMade } from "./tester/network-intent-checks";
+import {
+  checkNetworkRequestMade,
+  checkNoDuplicateMutationRequests,
+} from "./tester/network-intent-checks";
 import {
   checkEmptyStateVisible,
   checkResultsChanged,
@@ -108,6 +111,8 @@ export class TesterExpertise implements Expertise {
         return checkCountChanged(expectation, context);
       case "network_request_made":
         return checkNetworkRequestMade(expectation, context);
+      case "no_duplicate_mutation_requests":
+        return checkNoDuplicateMutationRequests(expectation, context);
       case "dialog_closed":
         return checkDialogClosed(expectation, context);
       case "focus_returned":
