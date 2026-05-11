@@ -33,7 +33,11 @@ export interface ScanEventHandler {
     passed: boolean;
   }): void;
   onTestRunCompleted(run: { testRunId: number; passed: boolean }): void;
-  onFindingCreated(finding: { type: string; title: string }): void;
+  onFindingCreated(finding: {
+    type: string;
+    title: string;
+    description?: string;
+  }): void;
   onStatsUpdated(stats: {
     pagesFound: number;
     pageStatesFound: number;

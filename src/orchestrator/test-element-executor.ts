@@ -213,6 +213,8 @@ export async function executeTestElement(
       await captureUiSnapshot(adapter)
     );
     const finalControlStates = ensureArray(await captureControlStates(adapter));
+    const currentUrl = await adapter.getUrl();
+    await emitLiveScreenshot(adapter, events, currentUrl);
     const scaffoldSelectorByItemSelector = await mapItemsToScaffolds(
       adapter,
       scaffolds,
@@ -250,7 +252,6 @@ export async function executeTestElement(
       expectations = [...expectations, ...generated];
     }
 
-    const currentUrl = await adapter.getUrl();
     const expertiseBaseContext: Omit<
       ExpertiseContext,
       | "networkLogs"
@@ -322,6 +323,7 @@ export async function executeTestElement(
             events.onFindingCreated({
               type: findingType,
               title: `[${expertise.name}] ${outcome.expected}`,
+              description: outcome.observed,
             });
           }
         }
@@ -444,11 +446,32 @@ export async function executeTestElement(
       description: errorMessage,
     });
 
-    events.onFindingCreated({ type: "error", title: "Test execution error" });
+    events.onFindingCreated({
+      type: "error",
+      title: "Test execution error",
+      description: errorMessage,
+    });
     events.onTestElementRunCompleted({
       testElementRunId: testElementRun.id,
       passed: false,
     });
+  }
+}
+
+async function emitLiveScreenshot(
+  adapter: BrowserAdapter,
+  events: ScanEventHandler,
+  pageUrl: string
+): Promise<void> {
+  try {
+    const bytes = await adapter.screenshot({ type: "png" });
+    const base64 = Buffer.from(bytes).toString("base64");
+    events.onScreenshotCaptured({
+      dataUrl: `data:image/png;base64,${base64}`,
+      pageUrl,
+    });
+  } catch {
+    // Best effort only.
   }
 }
 

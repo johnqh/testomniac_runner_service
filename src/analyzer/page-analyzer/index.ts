@@ -280,7 +280,7 @@ export class PageAnalyzer {
     startingPageStateId?: number,
     dependencyTestElementId?: number
   ): GeneratedTestElement {
-    const label = item.accessibleName || item.textContent || item.selector;
+    const label = this.describeActionableItem(item);
     return {
       title: `Hover over ${label}`,
       type: "interaction",
@@ -322,7 +322,7 @@ export class PageAnalyzer {
     startingPageStateId?: number,
     dependencyTestElementId?: number
   ): GeneratedTestElement {
-    const label = item.accessibleName || item.textContent || item.selector;
+    const label = this.describeActionableItem(item);
     return {
       title: `Click ${label}`,
       type: "interaction",
@@ -3122,7 +3122,7 @@ export class PageAnalyzer {
     uid?: string,
     startingPageStateId?: number
   ): GeneratedTestElement {
-    const label = item.accessibleName || item.textContent || item.selector;
+    const label = this.describeActionableItem(item);
     const role = (item.role ?? "").toLowerCase();
     const inputType = (item.inputType ?? "").toLowerCase();
     const isTab = role === "tab";
@@ -3344,14 +3344,28 @@ export class PageAnalyzer {
   }
 
   private describeActionableItem(item: ActionableItem): string {
-    return (
+    const described = (
       item.accessibleName ||
       item.textContent ||
       String(item.attributes?._containerTitle ?? "") ||
       String(item.attributes?.labelText ?? "") ||
-      String(item.attributes?.placeholder ?? "") ||
-      item.selector
-    );
+      String(item.attributes?.placeholder ?? "")
+    ).trim();
+    if (described) return described;
+
+    const selector = item.selector ?? "";
+    if (selector.includes("data-tmnc-id")) {
+      const role = item.role?.trim();
+      const inputType = item.inputType?.trim();
+      if (role) return role;
+      if (inputType) return inputType;
+      if (item.actionKind === "navigate") return "link";
+      if (item.actionKind === "fill") return "input";
+      if (item.actionKind === "select") return "select";
+      return "control";
+    }
+
+    return selector || item.actionKind || "control";
   }
 
   private semanticText(item: ActionableItem): string {
