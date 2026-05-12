@@ -7,6 +7,15 @@ export function checkPageLoaded(
 ): Outcome {
   const html = typeof context.html === "string" ? context.html : "";
   const hasHtml = html.length > 0 && html.includes("<");
+  const documentFailure = findCurrentDocumentFailure(context);
+
+  if (documentFailure) {
+    return {
+      expected: description,
+      observed: `Page returned HTTP ${documentFailure.status} for ${documentFailure.url}`,
+      result: "error",
+    };
+  }
 
   if (!hasHtml) {
     return {
@@ -144,6 +153,43 @@ function isSameOrigin(url: string, origin: string): boolean {
   } catch {
     return false;
   }
+}
+
+function normalizeComparableUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const pathname = parsed.pathname.replace(/\/+$/, "") || "/";
+    return `${parsed.origin}${pathname}${parsed.search}`;
+  } catch {
+    return null;
+  }
+}
+
+function findCurrentDocumentFailure(
+  context: ExpertiseContext
+): NetworkLogEntry | null {
+  const pageOrigin = getPageOrigin(context);
+  const currentUrl = normalizeComparableUrl(
+    context.currentUrl || context.initialUrl || ""
+  );
+
+  if (!pageOrigin || !currentUrl) {
+    return null;
+  }
+
+  return (
+    context.networkLogs.find(entry => {
+      if (entry.status < 400) return false;
+      if (!isSameOrigin(entry.url, pageOrigin)) return false;
+      if (
+        !looksDocumentLike(entry.url, (entry.contentType || "").toLowerCase())
+      )
+        return false;
+
+      const entryUrl = normalizeComparableUrl(entry.url);
+      return entryUrl === currentUrl;
+    }) ?? null
+  );
 }
 
 function looksDocumentLike(url: string, contentType: string): boolean {

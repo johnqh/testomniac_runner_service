@@ -109,7 +109,6 @@ export class PageAnalyzer {
       return;
     }
 
-    await generateNavigationTestElements(this, resolvedContext);
     await generateRenderTestElements(this, resolvedContext);
     await generateFormTestElements(this, resolvedContext);
     await generateSemanticJourneyTestElements(this, resolvedContext);
@@ -119,6 +118,7 @@ export class PageAnalyzer {
     await generateContentTestElements(this, resolvedContext);
     await generateKeyboardAndDisclosureTestElements(this, resolvedContext);
     await generateVariantTestElements(this, resolvedContext);
+    await generateNavigationTestElements(this, resolvedContext);
   }
 
   async reconcileGeneratedSurfaceElements(
@@ -414,7 +414,7 @@ export class PageAnalyzer {
       .map(part => (part == null ? "" : String(part).trim()))
       .filter(Boolean);
     const raw = normalized.join("||");
-    const digest = createHash("sha1").update(raw).digest("hex").slice(0, 16);
+    const digest = createHash("sha256").update(raw).digest("hex").slice(0, 16);
     const prefix = normalized
       .slice(0, 3)
       .map(part =>

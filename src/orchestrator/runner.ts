@@ -1,6 +1,10 @@
 import type { BrowserAdapter } from "../adapter";
 import type { ApiClient } from "../api/client";
 import type {
+  TestElementResponse,
+  TestElementRunResponse,
+} from "@sudobility/testomniac_types";
+import type {
   RunCheckpoint,
   RunConfig,
   ScanEventHandler,
@@ -27,6 +31,7 @@ export async function runTestRun(
   const pageStateIdsFound = new Set<number>();
   const completedTestElementRunIds = new Set<number>();
   let findingsFound = 0;
+  let activeDependencyBranch: number[] = [];
 
   // Wrap event handler to track stats
   const wrappedEvents: ScanEventHandler = {
@@ -79,6 +84,28 @@ export async function runTestRun(
     }
   }
 
+  async function hydratePersistedDiscoveryStats(
+    runnerId: number,
+    testEnvironmentId?: number | null
+  ): Promise<void> {
+    const pages = await api.getPagesByRunner(runnerId);
+    const relevantPages = pages.filter(page =>
+      testEnvironmentId == null
+        ? true
+        : page.testEnvironmentId === testEnvironmentId
+    );
+
+    await Promise.all(
+      relevantPages.map(async page => {
+        pageIdsFound.add(page.id);
+        const pageStates = await api.getPageStates(page.id);
+        for (const pageState of pageStates) {
+          pageStateIdsFound.add(pageState.id);
+        }
+      })
+    );
+  }
+
   async function waitForCheckpoint(checkpoint: RunCheckpoint): Promise<void> {
     if (config.signal?.aborted) {
       throw createAbortError();
@@ -117,6 +144,18 @@ export async function runTestRun(
     // Set up analyzer for discovery mode
     const analyzer = testRun.discovery ? new PageAnalyzer() : null;
 
+    if (testRun.discovery) {
+      try {
+        await hydratePersistedDiscoveryStats(
+          config.runnerId,
+          testRun.testEnvironmentId
+        );
+        await emitStats();
+      } catch {
+        // best effort hydration for live counters
+      }
+    }
+
     // Get navigation surface for discovery context
     let navigationSurface = null;
     if (testRun.discovery) {
@@ -147,6 +186,7 @@ export async function runTestRun(
       }
 
       const currentSurfaceRun = openSurfaceRuns[0];
+      activeDependencyBranch = [];
 
       // Iterate open element runs in this surface
       let hasOpenCases = true;
@@ -161,7 +201,12 @@ export async function runTestRun(
           break;
         }
 
-        const currentCaseRun = openCaseRuns[0];
+        const testElements = await api.getTestElementsByRunner(config.runnerId);
+        const currentCaseRun = selectNextOpenTestElementRun(
+          openCaseRuns,
+          testElements,
+          activeDependencyBranch
+        );
 
         // Execute the test element
         await executeTestElement(
@@ -178,6 +223,10 @@ export async function runTestRun(
                 bundleRun,
               }
             : undefined
+        );
+        activeDependencyBranch = buildDependencyChainIds(
+          currentCaseRun.testElementId,
+          testElements
         );
 
         await waitForCheckpoint("after_test_element");
@@ -245,6 +294,65 @@ export async function runTestRun(
 
     throw error;
   }
+}
+
+function selectNextOpenTestElementRun(
+  openRuns: TestElementRunResponse[],
+  testElements: TestElementResponse[],
+  activeDependencyBranch: number[]
+): TestElementRunResponse {
+  if (openRuns.length <= 1 || activeDependencyBranch.length === 0) {
+    return openRuns[0]!;
+  }
+
+  const testElementById = new Map(
+    testElements.map(testElement => [testElement.id, testElement])
+  );
+  const runsByDependency = new Map<number | null, TestElementRunResponse[]>();
+
+  for (const openRun of openRuns) {
+    const dependencyTestElementId =
+      testElementById.get(openRun.testElementId)?.dependencyTestElementId ??
+      null;
+    const bucket = runsByDependency.get(dependencyTestElementId) ?? [];
+    bucket.push(openRun);
+    runsByDependency.set(dependencyTestElementId, bucket);
+  }
+
+  for (let index = activeDependencyBranch.length - 1; index >= 0; index -= 1) {
+    const parentTestElementId = activeDependencyBranch[index]!;
+    const branchChildren = runsByDependency.get(parentTestElementId) ?? [];
+    if (branchChildren.length > 0) {
+      return branchChildren[0]!;
+    }
+  }
+
+  return openRuns[0]!;
+}
+
+function buildDependencyChainIds(
+  testElementId: number,
+  testElements: TestElementResponse[]
+): number[] {
+  const testElementById = new Map(
+    testElements.map(testElement => [testElement.id, testElement])
+  );
+  const chain: number[] = [];
+  const seen = new Set<number>();
+  let current = testElementById.get(testElementId);
+
+  while (current) {
+    if (seen.has(current.id)) {
+      break;
+    }
+    seen.add(current.id);
+    chain.unshift(current.id);
+    current = current.dependencyTestElementId
+      ? testElementById.get(current.dependencyTestElementId)
+      : undefined;
+  }
+
+  return chain;
 }
 
 function createAbortError(): Error {

@@ -7,7 +7,18 @@ export async function generateHoverFollowUpCases(
   context: AnalyzerContext
 ): Promise<void> {
   const selector = analyzer.getPrimarySelector(testElement);
-  if (!selector || !context.currentPageStateId) return;
+  if (!selector || !context.currentPageStateId) {
+    console.info("[PageAnalyzer][hover-follow-up] skipped", {
+      reason: !selector ? "missing-selector" : "missing-current-page-state",
+      testElementId: context.currentTestElementId,
+      title: testElement.title,
+      selector,
+      currentPageStateId: context.currentPageStateId,
+      beginningPageStateId: context.beginningPageStateId,
+      currentPath: context.currentPath,
+    });
+    return;
+  }
 
   const beginningItems =
     context.beginningPageStateId > 0
@@ -27,16 +38,52 @@ export async function generateHoverFollowUpCases(
 
   const hoveredItem =
     context.actionableItems.find(item => item.selector === selector) ?? null;
+  const startingItem =
+    beginningItems.find(item => item.selector === selector) ?? null;
+  const stableHoveredItem = hoveredItem ?? startingItem;
+  const stayedOnSamePageState =
+    context.beginningPageStateId > 0 &&
+    context.currentPageStateId === context.beginningPageStateId;
 
-  if (revealedItems.length === 0 && hoveredItem) {
+  console.info("[PageAnalyzer][hover-follow-up] evaluated", {
+    testElementId: context.currentTestElementId,
+    title: testElement.title,
+    selector,
+    currentPath: context.currentPath,
+    currentPageStateId: context.currentPageStateId,
+    beginningPageStateId: context.beginningPageStateId,
+    stayedOnSamePageState,
+    beginningItemsCount: beginningItems.length,
+    actionableItemsCount: context.actionableItems.length,
+    revealedItemsCount: revealedItems.length,
+    hasHoveredItem: Boolean(hoveredItem),
+    hasStartingItem: Boolean(startingItem),
+    hasStableHoveredItem: Boolean(stableHoveredItem),
+  });
+
+  if (
+    (stayedOnSamePageState || revealedItems.length === 0) &&
+    stableHoveredItem
+  ) {
     const clickCase = analyzer.buildClickTestElement(
-      hoveredItem,
+      stableHoveredItem,
       context.currentPath,
       context.sizeClass,
       context.uid,
       context.currentPageStateId,
       context.currentTestElementId
     );
+    console.info("[PageAnalyzer][hover-follow-up] generating-click", {
+      testElementId: context.currentTestElementId,
+      sourceTitle: testElement.title,
+      selector,
+      generatedKey: analyzer.getGeneratedKey(clickCase),
+      clickTitle: clickCase.title,
+      currentPageStateId: context.currentPageStateId,
+      beginningPageStateId: context.beginningPageStateId,
+      stayedOnSamePageState,
+      revealedItemsCount: revealedItems.length,
+    });
     await analyzer.reconcileGeneratedSurfaceElements(context, {
       surfaceId: context.currentTestSurfaceId,
       surfaceTitle: "",
@@ -55,6 +102,20 @@ export async function generateHoverFollowUpCases(
     });
     return;
   }
+
+  console.info("[PageAnalyzer][hover-follow-up] generating-hover-follow-ups", {
+    testElementId: context.currentTestElementId,
+    sourceTitle: testElement.title,
+    selector,
+    currentPageStateId: context.currentPageStateId,
+    beginningPageStateId: context.beginningPageStateId,
+    stayedOnSamePageState,
+    revealedItemsCount: revealedItems.length,
+    revealedSelectors: revealedItems
+      .map((item: any) => item.selector)
+      .filter(Boolean)
+      .slice(0, 10),
+  });
 
   const desiredKeys = revealedItems.map((item: any) =>
     analyzer.getGeneratedKey(

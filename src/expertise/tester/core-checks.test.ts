@@ -31,6 +31,45 @@ describe("checkPageLoaded", () => {
     expect(outcome.result).toBe("error");
     expect(outcome.observed).toContain("empty");
   });
+
+  it("fails when the current document returns a same-origin 404", () => {
+    const outcome = checkPageLoaded(
+      {
+        html: "<html><body><h1>404 Not Found</h1></body></html>",
+        initialHtml: "",
+        scaffolds: [],
+        patterns: [],
+        consoleLogs: [],
+        networkLogs: [
+          {
+            method: "GET",
+            url: "https://academybugs.com/terms-and-conditions",
+            status: 404,
+            contentType: "text/html",
+          },
+        ],
+        expectations: [],
+        initialUiSnapshot: {
+          dialogCount: 0,
+          toastCount: 0,
+          feedbackTexts: [],
+        },
+        finalUiSnapshot: {
+          dialogCount: 0,
+          toastCount: 0,
+          feedbackTexts: [],
+        },
+        initialControlStates: [],
+        finalControlStates: [],
+        initialUrl: "https://academybugs.com/",
+        currentUrl: "https://academybugs.com/terms-and-conditions",
+      },
+      "Page should load with valid HTML"
+    );
+
+    expect(outcome.result).toBe("error");
+    expect(outcome.observed).toContain("HTTP 404");
+  });
 });
 
 describe("checkNoNetworkErrors", () => {
