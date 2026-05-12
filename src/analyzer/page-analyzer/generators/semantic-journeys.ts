@@ -23,7 +23,7 @@ export async function generateSemanticJourneyTestElements(
       startingPageStateId: context.currentPageStateId,
       startingPath: context.currentPath,
       sizeClass: context.sizeClass,
-      priority: 2,
+      priority: 6,
       surface_tags: ["e2e", "semantic-journey"],
       uid: context.uid,
     },

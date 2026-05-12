@@ -16,7 +16,7 @@ export async function generateRenderTestElements(
       startingPageStateId: context.currentPageStateId,
       startingPath: context.currentPath,
       sizeClass,
-      priority: 2,
+      priority: 5,
       surface_tags: ["render"],
       uid,
     },

@@ -54,7 +54,7 @@ export async function generateDialogLifecycleTestElements(
       startingPageStateId: context.currentPageStateId,
       startingPath: context.currentPath,
       sizeClass: context.sizeClass,
-      priority: 2,
+      priority: 4,
       surface_tags: ["dialog"],
       uid: context.uid,
     },

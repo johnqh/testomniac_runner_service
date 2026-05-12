@@ -29,7 +29,7 @@ export async function generateContentTestElements(
       startingPageStateId: context.currentPageStateId,
       startingPath: context.currentPath,
       sizeClass,
-      priority: 3,
+      priority: 1,
       surface_tags: ["page-content"],
       uid,
     },
