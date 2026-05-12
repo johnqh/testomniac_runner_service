@@ -377,7 +377,11 @@ export async function executeTestElement(
       const url = new URL(currentUrl);
       const currentPath = `${url.pathname}${url.search}`;
 
-      const page = await api.findOrCreatePage(testRun.runnerId, currentPath);
+      const page = await api.findOrCreatePage(
+        testRun.runnerId,
+        currentPath,
+        testRun.testEnvironmentId ?? undefined
+      );
       events.onPageFound({
         relativePath: currentPath,
         pageId: page.id,

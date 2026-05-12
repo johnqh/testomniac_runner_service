@@ -182,9 +182,14 @@ export class ApiClient {
 
   findOrCreatePage(
     runnerId: number,
-    relativePath: string
+    relativePath: string,
+    testEnvironmentId?: number
   ): Promise<PageResponse> {
-    const body: FindOrCreatePageRequest = { runnerId, relativePath };
+    const body: FindOrCreatePageRequest = {
+      runnerId,
+      relativePath,
+      testEnvironmentId,
+    };
     return this.post("/pages", body);
   }
 
