@@ -3,6 +3,7 @@ import type { ApiClient } from "../api/client";
 import { ExpectationSeverity } from "@sudobility/testomniac_types";
 import type {
   NetworkLogEntry,
+  TestInteractionResponse,
   TestInteractionRunResponse,
   TestRunResponse,
   TestSurfaceResponse,
@@ -173,14 +174,15 @@ export async function executeTestInteraction(
         testInteraction,
       ])
     );
-    const testInteraction = testInteractionById.get(
+    const loadedTestInteraction = testInteractionById.get(
       testInteractionRun.testInteractionId
     );
-    if (!testInteraction) {
+    if (!loadedTestInteraction) {
       throw new Error(
         `Test case ${testInteractionRun.testInteractionId} not found`
       );
     }
+    let testInteraction = loadedTestInteraction;
     logExecutor("interaction:loaded", {
       testRunId: testRun.id,
       testInteractionRunId: testInteractionRun.id,
@@ -196,7 +198,7 @@ export async function executeTestInteraction(
     });
 
     // Parse steps from JSON
-    const steps = parseStoredSteps(testInteraction.stepsJson);
+    let steps = parseStoredSteps(testInteraction.stepsJson);
     const dependencyChain = buildDependencyChain(
       testInteraction,
       testInteractionById
@@ -275,7 +277,8 @@ export async function executeTestInteraction(
 
     currentPhase = "executing-steps";
     // Execute test actions
-    for (const step of steps) {
+    for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
+      const step = steps[stepIndex];
       const replayAction = prepareActionForReplay(step.action);
       const startedAtMs = Date.now();
       const beforeSnapshot = previousSnapshot;
@@ -313,6 +316,25 @@ export async function executeTestInteraction(
           afterUrl: afterSnapshot.url,
           durationMs: Date.now() - startedAtMs,
         });
+        const refreshed = await maybeRefreshInteractionActions({
+          adapter,
+          analyzer,
+          api,
+          testRun,
+          testInteraction,
+          testInteractionRun,
+          steps,
+        });
+        if (refreshed) {
+          testInteraction = refreshed.testInteraction;
+          steps = refreshed.steps;
+          logExecutor("interaction:steps-reloaded", {
+            testInteractionRunId: testInteractionRun.id,
+            testInteractionId: testInteraction.id,
+            completedStepIndex: stepIndex,
+            stepsCount: steps.length,
+          });
+        }
       } catch (error) {
         const afterSnapshot = await captureExecutionSnapshotSafe(
           adapter,
@@ -881,6 +903,85 @@ function isMustPassFailure(outcome: Outcome): boolean {
 
 function isNonBlockingFailure(outcome: Outcome): boolean {
   return getFindingTypeForOutcome(outcome) === "warning";
+}
+
+async function maybeRefreshInteractionActions(params: {
+  adapter: BrowserAdapter;
+  analyzer: PageAnalyzer | null;
+  api: ApiClient;
+  testRun: TestRunResponse;
+  testInteraction: TestInteractionResponse;
+  testInteractionRun: TestInteractionRunResponse;
+  steps: StoredStep[];
+}): Promise<{
+  testInteraction: TestInteractionResponse;
+  steps: StoredStep[];
+} | null> {
+  if (!params.analyzer) {
+    return null;
+  }
+
+  const currentUrl = await params.adapter.getUrl();
+  const url = new URL(currentUrl);
+  const currentPath = `${url.pathname}${url.search}`;
+  const actionableItems = ensureArray(
+    await extractActionableItems(params.adapter)
+  );
+
+  const appendResult = await params.analyzer.maybeAppendActionToInteraction(
+    {
+      title: params.testInteraction.title,
+      type: params.testInteraction.testType as
+        | "navigation"
+        | "render"
+        | "interaction"
+        | "form"
+        | "form_negative"
+        | "password"
+        | "e2e",
+      sizeClass: params.testInteraction.sizeClass as "desktop" | "mobile",
+      surface_tags: params.testInteraction.surfaceTags ?? [],
+      priority: params.testInteraction.priority ?? 0,
+      startingPageStateId: params.testInteraction.startingPageStateId ?? 0,
+      startingPath: params.testInteraction.startingPath ?? "",
+      steps: params.steps as any,
+      globalExpectations: parseStoredExpectations(
+        params.testInteraction.globalExpectationsJson
+      ) as any,
+    },
+    {
+      runnerId: params.testRun.runnerId,
+      testEnvironmentId: params.testRun.testEnvironmentId ?? undefined,
+      sizeClass: params.testRun.sizeClass as "desktop" | "mobile",
+      uid: params.testRun.createdByUserId ?? undefined,
+      currentTestInteractionId: params.testInteraction.id,
+      currentTestSurfaceId: params.testInteraction.testSurfaceId,
+      currentSurfaceRunId: params.testInteractionRun.testSurfaceRunId,
+      beginningPageStateId: params.testInteraction.startingPageStateId ?? 0,
+      currentPath,
+      actionableItems,
+      api: params.api,
+    }
+  );
+
+  if (!appendResult.appended) {
+    return null;
+  }
+
+  const allTestInteractions = await params.api.getTestInteractionsByRunner(
+    params.testRun.runnerId
+  );
+  const reloaded = allTestInteractions.find(
+    candidate => candidate.id === params.testInteraction.id
+  );
+  if (!reloaded) {
+    return null;
+  }
+
+  return {
+    testInteraction: reloaded,
+    steps: parseStoredSteps(reloaded.stepsJson),
+  };
 }
 
 async function executeAction(

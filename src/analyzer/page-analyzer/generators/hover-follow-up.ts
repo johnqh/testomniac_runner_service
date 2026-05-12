@@ -70,40 +70,23 @@ export async function generateHoverFollowUpCases(
     (stayedOnSamePageState || revealedItems.length === 0) &&
     stableHoveredItem
   ) {
-    const clickCase = analyzer.buildClickTestInteraction(
-      stableHoveredItem,
-      context.currentPath,
-      context.sizeClass,
-      context.uid,
-      context.currentPageStateId,
-      context.currentTestInteractionId
+    console.info(
+      "[PageAnalyzer][hover-follow-up] inline-click-already-required",
+      {
+        testInteractionId: context.currentTestInteractionId,
+        sourceTitle: testInteraction.title,
+        selector,
+        currentPageStateId: context.currentPageStateId,
+        beginningPageStateId: context.beginningPageStateId,
+        stayedOnSamePageState,
+        revealedItemsCount: revealedItems.length,
+      }
     );
-    console.info("[PageAnalyzer][hover-follow-up] generating-click", {
-      testInteractionId: context.currentTestInteractionId,
-      sourceTitle: testInteraction.title,
-      selector,
-      generatedKey: analyzer.getGeneratedKey(clickCase),
-      clickTitle: clickCase.title,
-      currentPageStateId: context.currentPageStateId,
-      beginningPageStateId: context.beginningPageStateId,
-      stayedOnSamePageState,
-      revealedItemsCount: revealedItems.length,
-    });
     await analyzer.reconcileGeneratedSurfaceElements(context, {
       surfaceId: context.currentTestSurfaceId,
       surfaceTitle: "",
-      desiredKeys: [analyzer.getGeneratedKey(clickCase)],
+      desiredKeys: [],
       dependencyTestInteractionId: context.currentTestInteractionId,
-    });
-    const tc = await context.api.ensureTestInteraction(
-      context.runnerId,
-      context.currentTestSurfaceId,
-      clickCase,
-      context.testEnvironmentId
-    );
-    await context.api.createTestInteractionRun({
-      testInteractionId: tc.id,
-      testSurfaceRunId: context.currentSurfaceRunId ?? undefined,
     });
     return;
   }

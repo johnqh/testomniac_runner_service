@@ -14,7 +14,10 @@ import {
   ExpectationType,
   ExpectationSeverity,
 } from "@sudobility/testomniac_types";
-import { buildReplaySelectorFromActionableItem } from "../../browser/replay-selector";
+import {
+  buildReplaySelectorFromActionableItem,
+  matchesActionableItemSelector,
+} from "../../browser/replay-selector";
 import { computeHashes } from "../../browser/page-utils";
 import type { ApiClient } from "../../api/client";
 import type { DetectedScaffoldRegion } from "../../scanner/component-detector";
@@ -44,6 +47,11 @@ type AnalyzerFormField = FormField & {
 
 type GeneratedTestInteraction = TestInteraction & {
   generatedKey?: string;
+};
+
+type AppendActionResult = {
+  testInteraction: TestInteraction;
+  appended: boolean;
 };
 
 function logAnalyzer(step: string, details?: Record<string, unknown>): void {
@@ -93,6 +101,114 @@ export class PageAnalyzer {
     }
 
     return expectations;
+  }
+
+  async maybeAppendActionToInteraction(
+    testInteraction: TestInteraction,
+    context: Pick<
+      AnalyzerContext,
+      | "runnerId"
+      | "testEnvironmentId"
+      | "sizeClass"
+      | "uid"
+      | "currentTestInteractionId"
+      | "currentTestSurfaceId"
+      | "currentSurfaceRunId"
+      | "beginningPageStateId"
+      | "currentPath"
+      | "actionableItems"
+      | "api"
+    >
+  ): Promise<AppendActionResult> {
+    if (!this.isHoverOnly(testInteraction)) {
+      return { testInteraction, appended: false };
+    }
+
+    const selector = this.getPrimarySelector(testInteraction);
+    if (!selector) {
+      return { testInteraction, appended: false };
+    }
+
+    const beginningItems =
+      context.beginningPageStateId > 0
+        ? await context.api.getItemsByPageState(context.beginningPageStateId)
+        : [];
+    const beginningKeys = new Set(
+      beginningItems.map(item => this.getItemKey(item)).filter(Boolean)
+    );
+    const revealedItems = this.selectRepresentativeItems(
+      context.actionableItems.filter(item => {
+        if (!this.isMouseActionable(item)) return false;
+        const key = this.getItemKey(item);
+        return Boolean(key) && !beginningKeys.has(key);
+      })
+    );
+    const currentHoveredItem =
+      context.actionableItems.find(item =>
+        matchesActionableItemSelector(selector, item)
+      ) ?? null;
+    const stableHoveredItem =
+      currentHoveredItem ??
+      beginningItems.find(item =>
+        matchesActionableItemSelector(selector, item)
+      ) ??
+      null;
+
+    logAnalyzer("generate:hover-inline-evaluated", {
+      sourceTitle: testInteraction.title,
+      currentTestInteractionId: context.currentTestInteractionId,
+      currentSurfaceRunId: context.currentSurfaceRunId ?? null,
+      selector,
+      beginningItemsCount: beginningItems.length,
+      actionableItemsCount: context.actionableItems.length,
+      revealedItemsCount: revealedItems.length,
+      hasCurrentHoveredItem: Boolean(currentHoveredItem),
+      hasStableHoveredItem: Boolean(stableHoveredItem),
+    });
+
+    if (!stableHoveredItem || !currentHoveredItem || revealedItems.length > 0) {
+      return { testInteraction, appended: false };
+    }
+
+    const clickStep =
+      this.buildClickTestInteraction(
+        currentHoveredItem,
+        context.currentPath,
+        context.sizeClass,
+        context.uid,
+        testInteraction.startingPageStateId,
+        undefined
+      ).steps?.[0] ?? null;
+    if (!clickStep) {
+      return { testInteraction, appended: false };
+    }
+
+    const updatedInteraction: TestInteraction = {
+      ...testInteraction,
+      steps: [
+        ...(Array.isArray(testInteraction.steps) ? testInteraction.steps : []),
+        clickStep,
+      ],
+    };
+
+    await context.api.ensureTestInteraction(
+      context.runnerId,
+      context.currentTestSurfaceId,
+      updatedInteraction,
+      context.testEnvironmentId
+    );
+    logAnalyzer("generate:hover-inline-click-appended", {
+      sourceTitle: testInteraction.title,
+      currentTestInteractionId: context.currentTestInteractionId,
+      currentSurfaceRunId: context.currentSurfaceRunId ?? null,
+      selector,
+      appendedActionType: clickStep.action.actionType,
+    });
+
+    return {
+      testInteraction: updatedInteraction,
+      appended: true,
+    };
   }
 
   /**
