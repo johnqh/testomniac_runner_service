@@ -18,6 +18,7 @@ export async function generateContentTestInteractions(
     await analyzer.reconcileGeneratedSurfaceElements(context, {
       surfaceTitle,
       desiredKeys: [],
+      dependencyTestInteractionId: context.currentTestInteractionId,
     });
     return;
   }
@@ -55,14 +56,16 @@ export async function generateContentTestInteractions(
           context.currentPath,
           sizeClass,
           uid,
-          context.currentPageStateId
+          context.currentPageStateId,
+          context.currentTestInteractionId
         )
       : analyzer.buildHoverTestInteraction(
           item,
           context.currentPath,
           sizeClass,
           uid,
-          context.currentPageStateId
+          context.currentPageStateId,
+          context.currentTestInteractionId
         );
     desiredKeys.push(analyzer.getGeneratedKey(testInteraction));
     const tc = await api.ensureTestInteraction(
@@ -81,5 +84,6 @@ export async function generateContentTestInteractions(
     surfaceId: surface.id,
     surfaceTitle,
     desiredKeys,
+    dependencyTestInteractionId: context.currentTestInteractionId,
   });
 }

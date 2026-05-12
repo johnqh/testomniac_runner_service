@@ -57,14 +57,16 @@ export async function generateScaffoldTestInteractions(
             context.currentPath,
             sizeClass,
             uid,
-            context.currentPageStateId
+            context.currentPageStateId,
+            context.currentTestInteractionId
           )
         : analyzer.buildHoverTestInteraction(
             item,
             context.currentPath,
             sizeClass,
             uid,
-            context.currentPageStateId
+            context.currentPageStateId,
+            context.currentTestInteractionId
           );
       desiredKeys.push(analyzer.getGeneratedKey(testInteraction));
       const tc = await api.ensureTestInteraction(
@@ -84,6 +86,7 @@ export async function generateScaffoldTestInteractions(
       surfaceId: surface.id,
       surfaceTitle,
       desiredKeys,
+      dependencyTestInteractionId: context.currentTestInteractionId,
     });
   }
 
@@ -96,6 +99,7 @@ export async function generateScaffoldTestInteractions(
         surfaceId: surface.id,
         surfaceTitle: surface.title,
         desiredKeys: [],
+        dependencyTestInteractionId: context.currentTestInteractionId,
       });
     }
   }
@@ -105,6 +109,7 @@ export async function generateScaffoldTestInteractions(
     await analyzer.reconcileGeneratedSurfaceElements(context, {
       surfaceTitle,
       desiredKeys,
+      dependencyTestInteractionId: context.currentTestInteractionId,
     });
   }
 }

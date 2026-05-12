@@ -16,6 +16,28 @@ import type { Expertise } from "../expertise/types";
 import { PageAnalyzer } from "../analyzer";
 import { executeTestInteraction } from "./test-interaction-executor";
 
+function logRunner(step: string, details?: Record<string, unknown>): void {
+  console.info("[Runner]", step, details ?? {});
+}
+
+function summarizeInteraction(
+  testInteraction: TestInteractionResponse | undefined
+): Record<string, unknown> | null {
+  if (!testInteraction) {
+    return null;
+  }
+
+  return {
+    id: testInteraction.id,
+    title: testInteraction.title,
+    priority: testInteraction.priority,
+    dependencyTestInteractionId:
+      testInteraction.dependencyTestInteractionId ?? null,
+    surfaceTags: testInteraction.surfaceTags,
+    startingPath: testInteraction.startingPath ?? null,
+  };
+}
+
 /**
  * Main entry point for the runner execution loop.
  *
@@ -143,6 +165,16 @@ export async function runTestRun(
       );
     }
 
+    logRunner("test-run:loaded", {
+      testRunId: testRun.id,
+      discovery: testRun.discovery,
+      runnerId: testRun.runnerId,
+      bundleRunId: testRun.testSurfaceBundleRunId,
+      testEnvironmentId: testRun.testEnvironmentId ?? null,
+      sizeClass: testRun.sizeClass,
+      scanUrl: testRun.scanUrl ?? null,
+    });
+
     // Set up analyzer for discovery mode
     const analyzer = testRun.discovery ? new PageAnalyzer() : null;
 
@@ -174,76 +206,125 @@ export async function runTestRun(
       ? await api.getTestSurfaceBundleRun(testRun.testSurfaceBundleRunId)
       : null;
 
-    // Execution loop: iterate open surface runs in the bundle
-    let hasOpenSurfaces = true;
-    while (hasOpenSurfaces) {
+    // Execution loop: select the next executable interaction across the bundle.
+    while (true) {
       await waitForCheckpoint("before_surface");
 
       const openSurfaceRuns = await api.getOpenTestSurfaceRuns(
         testRun.testSurfaceBundleRunId
       );
+      logRunner("surface-runs:open", {
+        bundleRunId: testRun.testSurfaceBundleRunId,
+        count: openSurfaceRuns.length,
+        openSurfaceRunIds: openSurfaceRuns.map(surfaceRun => surfaceRun.id),
+      });
       if (openSurfaceRuns.length === 0) {
-        hasOpenSurfaces = false;
         break;
       }
 
       const testSurfaces = await api.getTestSurfacesByRunner(config.runnerId);
-      const currentSurfaceRun = selectNextOpenTestSurfaceRun(
-        openSurfaceRuns,
-        testSurfaces
+      const testInteractions = await api.getTestInteractionsByRunner(
+        config.runnerId
       );
-      activeDependencyBranch = [];
 
-      // Iterate open element runs in this surface
-      let hasOpenCases = true;
-      while (hasOpenCases) {
-        await waitForCheckpoint("before_test_interaction");
+      const pendingInteractionRunsBySurface = await loadPendingInteractionRuns(
+        api,
+        openSurfaceRuns
+      );
 
-        const openCaseRuns = await api.getOpenTestInteractionRuns(
-          currentSurfaceRun.id
-        );
-        if (openCaseRuns.length === 0) {
-          hasOpenCases = false;
-          break;
-        }
-
-        const testInteractions = await api.getTestInteractionsByRunner(
-          config.runnerId
-        );
-        const currentCaseRun = selectNextOpenTestInteractionRun(
-          openCaseRuns,
-          testInteractions,
-          activeDependencyBranch
-        );
-
-        // Execute the test element
-        await executeTestInteraction(
-          adapter,
-          currentCaseRun,
-          testRun,
-          expertises,
-          analyzer,
-          api,
-          wrappedEvents,
-          navigationSurface && bundleRun
-            ? {
-                navigationSurface,
-                bundleRun,
-              }
-            : undefined
-        );
-        activeDependencyBranch = buildDependencyChainIds(
-          currentCaseRun.testInteractionId,
-          testInteractions
-        );
-
-        await waitForCheckpoint("after_test_interaction");
+      const exhaustedSurfaceRuns = pendingInteractionRunsBySurface.filter(
+        entry => entry.allPendingRuns.length === 0
+      );
+      for (const exhaustedSurfaceRun of exhaustedSurfaceRuns) {
+        logRunner("surface-runs:completing-exhausted", {
+          surfaceRunId: exhaustedSurfaceRun.surfaceRun.id,
+          surface: summarizeSurface(
+            testSurfaces.find(
+              surface =>
+                surface.id === exhaustedSurfaceRun.surfaceRun.testSurfaceId
+            )
+          ),
+        });
+        await api.completeTestSurfaceRun(exhaustedSurfaceRun.surfaceRun.id, {
+          status: "completed",
+        });
       }
 
-      // All elements done in this surface — mark surface run completed
-      await api.completeTestSurfaceRun(currentSurfaceRun.id, {
-        status: "completed",
+      const runnableSurfaceEntries = pendingInteractionRunsBySurface.filter(
+        entry => entry.eligibleRuns.length > 0
+      );
+      const blockedSurfaceEntries = pendingInteractionRunsBySurface.filter(
+        entry =>
+          entry.allPendingRuns.length > 0 && entry.eligibleRuns.length === 0
+      );
+
+      logRunner("interaction-runs:bundle-state", {
+        activeDependencyBranch,
+        runnableSurfaceRuns: runnableSurfaceEntries.map(entry => ({
+          surfaceRunId: entry.surfaceRun.id,
+          eligibleRunIds: entry.eligibleRuns.map(run => run.id),
+          allPendingRunIds: entry.allPendingRuns.map(run => run.id),
+        })),
+        blockedSurfaceRuns: blockedSurfaceEntries.map(entry => ({
+          surfaceRunId: entry.surfaceRun.id,
+          allPendingRunIds: entry.allPendingRuns.map(run => run.id),
+        })),
       });
+
+      if (runnableSurfaceEntries.length === 0) {
+        if (blockedSurfaceEntries.length > 0) {
+          throw new Error(
+            `Blocked interaction tree detected for bundle run ${testRun.testSurfaceBundleRunId}`
+          );
+        }
+        continue;
+      }
+
+      await waitForCheckpoint("before_test_interaction");
+
+      const selected = selectNextInteractionAcrossBundle(
+        runnableSurfaceEntries,
+        testSurfaces,
+        testInteractions,
+        activeDependencyBranch
+      );
+      const selectedInteraction = testInteractions.find(
+        testInteraction =>
+          testInteraction.id === selected.testInteractionRun.testInteractionId
+      );
+      logRunner("interaction-runs:selected", {
+        selectedRunId: selected.testInteractionRun.id,
+        selectedSurfaceRunId: selected.surfaceRun.id,
+        activeDependencyBranch,
+        selectedInteraction: summarizeInteraction(selectedInteraction),
+      });
+
+      await executeTestInteraction(
+        adapter,
+        selected.testInteractionRun,
+        testRun,
+        expertises,
+        analyzer,
+        api,
+        wrappedEvents,
+        navigationSurface && bundleRun
+          ? {
+              navigationSurface,
+              bundleRun,
+            }
+          : undefined
+      );
+      activeDependencyBranch = buildDependencyChainIds(
+        selected.testInteractionRun.testInteractionId,
+        testInteractions
+      );
+      logRunner("interaction-runs:completed", {
+        completedRunId: selected.testInteractionRun.id,
+        completedSurfaceRunId: selected.surfaceRun.id,
+        nextActiveDependencyBranch: activeDependencyBranch,
+      });
+
+      await waitForCheckpoint("after_test_interaction");
     }
 
     await waitForCheckpoint("before_completion");
@@ -304,12 +385,12 @@ export async function runTestRun(
   }
 }
 
-function selectNextOpenTestInteractionRun(
+export function selectNextOpenTestInteractionRun(
   openRuns: TestInteractionRunResponse[],
   testInteractions: TestInteractionResponse[],
   activeDependencyBranch: number[]
 ): TestInteractionRunResponse {
-  if (openRuns.length <= 1 || activeDependencyBranch.length === 0) {
+  if (openRuns.length <= 1) {
     return openRuns[0]!;
   }
 
@@ -337,11 +418,76 @@ function selectNextOpenTestInteractionRun(
     const parentTestInteractionId = activeDependencyBranch[index]!;
     const branchChildren = runsByDependency.get(parentTestInteractionId) ?? [];
     if (branchChildren.length > 0) {
-      return branchChildren[0]!;
+      const sortedBranchChildren = sortOpenTestInteractionRuns(
+        branchChildren,
+        testInteractionById
+      );
+      logRunner("interaction-runs:branch-candidates", {
+        parentTestInteractionId,
+        activeDependencyBranch,
+        candidates: sortedBranchChildren.map(run => ({
+          runId: run.id,
+          interaction: summarizeInteraction(
+            testInteractionById.get(run.testInteractionId)
+          ),
+        })),
+      });
+      return sortedBranchChildren[0]!;
     }
   }
 
-  return openRuns[0]!;
+  const sortedOpenRuns = sortOpenTestInteractionRuns(
+    openRuns,
+    testInteractionById
+  );
+  logRunner("interaction-runs:global-candidates", {
+    activeDependencyBranch,
+    candidates: sortedOpenRuns.map(run => ({
+      runId: run.id,
+      interaction: summarizeInteraction(
+        testInteractionById.get(run.testInteractionId)
+      ),
+    })),
+  });
+  return sortedOpenRuns[0]!;
+}
+
+function sortOpenTestInteractionRuns(
+  openRuns: TestInteractionRunResponse[],
+  testInteractionById: Map<number, TestInteractionResponse>
+): TestInteractionRunResponse[] {
+  return [...openRuns].sort((left, right) => {
+    const leftInteraction = testInteractionById.get(left.testInteractionId);
+    const rightInteraction = testInteractionById.get(right.testInteractionId);
+
+    const hoverDiff =
+      Number(isHoverInteraction(rightInteraction)) -
+      Number(isHoverInteraction(leftInteraction));
+    if (hoverDiff !== 0) {
+      return hoverDiff;
+    }
+
+    const priorityDiff =
+      (leftInteraction?.priority ?? 999) - (rightInteraction?.priority ?? 999);
+    if (priorityDiff !== 0) {
+      return priorityDiff;
+    }
+
+    return left.id - right.id;
+  });
+}
+
+function isHoverInteraction(
+  testInteraction: TestInteractionResponse | undefined
+): boolean {
+  if (!testInteraction) {
+    return false;
+  }
+
+  return (
+    testInteraction.surfaceTags.includes("hover") ||
+    testInteraction.title.startsWith("Hover over ")
+  );
 }
 
 function selectNextOpenTestSurfaceRun(
@@ -390,6 +536,98 @@ function getSurfaceExecutionGroup(
   if (title.startsWith("Journeys: ")) return 5;
   if (title === "Direct Navigations") return 6;
   return 7;
+}
+
+function summarizeSurface(
+  testSurface: TestSurfaceResponse | undefined
+): Record<string, unknown> | null {
+  if (!testSurface) {
+    return null;
+  }
+
+  return {
+    id: testSurface.id,
+    title: testSurface.title,
+    priority: testSurface.priority,
+    startingPath: testSurface.startingPath,
+    dependencyTestInteractionId:
+      testSurface.dependencyTestInteractionId ?? null,
+    surfaceTags: testSurface.surfaceTags,
+  };
+}
+
+type PendingInteractionRunsBySurface = {
+  surfaceRun: TestSurfaceRunResponse;
+  eligibleRuns: TestInteractionRunResponse[];
+  allPendingRuns: TestInteractionRunResponse[];
+};
+
+async function loadPendingInteractionRuns(
+  api: ApiClient,
+  openSurfaceRuns: TestSurfaceRunResponse[]
+): Promise<PendingInteractionRunsBySurface[]> {
+  return Promise.all(
+    openSurfaceRuns.map(async surfaceRun => ({
+      surfaceRun,
+      eligibleRuns: await api.getOpenTestInteractionRuns(surfaceRun.id),
+      allPendingRuns: await api.getOpenTestInteractionRuns(surfaceRun.id, true),
+    }))
+  );
+}
+
+function selectNextInteractionAcrossBundle(
+  runnableSurfaceEntries: PendingInteractionRunsBySurface[],
+  testSurfaces: TestSurfaceResponse[],
+  testInteractions: TestInteractionResponse[],
+  activeDependencyBranch: number[]
+): {
+  surfaceRun: TestSurfaceRunResponse;
+  testInteractionRun: TestInteractionRunResponse;
+} {
+  if (activeDependencyBranch.length > 0) {
+    const branchCandidates = runnableSurfaceEntries.flatMap(
+      entry => entry.eligibleRuns
+    );
+    const selectedRun = selectNextOpenTestInteractionRun(
+      branchCandidates,
+      testInteractions,
+      activeDependencyBranch
+    );
+    const selectedSurfaceEntry = runnableSurfaceEntries.find(entry =>
+      entry.eligibleRuns.some(run => run.id === selectedRun.id)
+    );
+    if (!selectedSurfaceEntry) {
+      throw new Error(
+        `Selected interaction run ${selectedRun.id} is not attached to a runnable surface`
+      );
+    }
+    return {
+      surfaceRun: selectedSurfaceEntry.surfaceRun,
+      testInteractionRun: selectedRun,
+    };
+  }
+
+  const selectedSurfaceRun = selectNextOpenTestSurfaceRun(
+    runnableSurfaceEntries.map(entry => entry.surfaceRun),
+    testSurfaces
+  );
+  const selectedSurfaceEntry = runnableSurfaceEntries.find(
+    entry => entry.surfaceRun.id === selectedSurfaceRun.id
+  );
+  if (!selectedSurfaceEntry) {
+    throw new Error(
+      `Selected surface run ${selectedSurfaceRun.id} has no runnable interactions`
+    );
+  }
+
+  return {
+    surfaceRun: selectedSurfaceRun,
+    testInteractionRun: selectNextOpenTestInteractionRun(
+      selectedSurfaceEntry.eligibleRuns,
+      testInteractions,
+      []
+    ),
+  };
 }
 
 function buildDependencyChainIds(

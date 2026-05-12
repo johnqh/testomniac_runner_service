@@ -750,10 +750,11 @@ export class ApiClient {
   }
 
   getOpenTestInteractionRuns(
-    testSurfaceRunId: number
+    testSurfaceRunId: number,
+    includeBlocked = false
   ): Promise<TestInteractionRunResponse[]> {
     return this.get(
-      `/test-interaction-runs?testSurfaceRunId=${testSurfaceRunId}&status=pending`
+      `/test-interaction-runs?testSurfaceRunId=${testSurfaceRunId}&status=pending&includeBlocked=${includeBlocked ? "true" : "false"}`
     );
   }
 

@@ -72,6 +72,21 @@ type ExpectationEvaluationGroup = {
 
 type SnapshotLike = Partial<ExecutionSnapshot> | null | undefined;
 
+function logExecutor(step: string, details?: Record<string, unknown>): void {
+  console.info("[Executor]", step, details ?? {});
+}
+
+function summarizeStoredStep(step: StoredStep): Record<string, unknown> {
+  return {
+    actionType: step.action.actionType,
+    path: step.action.path ?? null,
+    value: step.action.value ?? null,
+    description: step.description,
+    expectationsCount: step.expectations.length,
+    continueOnFailure: step.continueOnFailure,
+  };
+}
+
 /**
  * Execute a single test element: run actions, decompose page, evaluate expertises,
  * set outcomes, create findings, and optionally discover new test elements.
@@ -139,6 +154,19 @@ export async function executeTestInteraction(
         `Test case ${testInteractionRun.testInteractionId} not found`
       );
     }
+    logExecutor("interaction:loaded", {
+      testRunId: testRun.id,
+      testInteractionRunId: testInteractionRun.id,
+      testInteractionId: testInteraction.id,
+      title: testInteraction.title,
+      testType: testInteraction.testType,
+      priority: testInteraction.priority,
+      dependencyTestInteractionId:
+        testInteraction.dependencyTestInteractionId ?? null,
+      surfaceTags: testInteraction.surfaceTags,
+      startingPath: testInteraction.startingPath ?? null,
+      currentSurfaceRunId: testInteractionRun.testSurfaceRunId ?? null,
+    });
 
     // Parse steps from JSON
     const steps = parseStoredSteps(testInteraction.stepsJson);
@@ -150,10 +178,27 @@ export async function executeTestInteraction(
     const journeySteps = dependencyChain.flatMap(item =>
       parseStoredSteps(item.stepsJson)
     );
+    logExecutor("interaction:parsed", {
+      testInteractionRunId: testInteractionRun.id,
+      testInteractionId: testInteraction.id,
+      steps: steps.map(summarizeStoredStep),
+      dependencyChain: dependencyChain.map(item => ({
+        id: item.id,
+        dependencyTestInteractionId: item.dependencyTestInteractionId ?? null,
+        stepsCount: parseStoredSteps(item.stepsJson).length,
+      })),
+      setupCaseIds: setupCases.map(item => item.id),
+      journeyStepsCount: journeySteps.length,
+    });
 
     // Record beginning page state
     const _beginningUrl = await adapter.getUrl();
     const beginningPageStateId = testInteraction.startingPageStateId ?? 0;
+    logExecutor("interaction:starting-state", {
+      testInteractionRunId: testInteractionRun.id,
+      beginningUrl: _beginningUrl,
+      beginningPageStateId,
+    });
 
     // Navigate to starting path if needed
     if (testInteraction.startingPath) {
@@ -163,13 +208,28 @@ export async function executeTestInteraction(
       const absoluteUrl = testInteraction.startingPath.startsWith("http")
         ? testInteraction.startingPath
         : new URL(testInteraction.startingPath, baseUrl).toString();
+      logExecutor("interaction:navigate-to-start", {
+        testInteractionRunId: testInteractionRun.id,
+        absoluteUrl,
+        baseUrl,
+      });
       await adapter.goto(absoluteUrl, { waitUntil: "networkidle0" });
     }
 
     // Recreate the dependent target state before running this case itself.
     for (const setupCase of setupCases) {
+      logExecutor("interaction:replay-setup-case", {
+        testInteractionRunId: testInteractionRun.id,
+        setupTestInteractionId: setupCase.id,
+        setupStepsCount: parseStoredSteps(setupCase.stepsJson).length,
+      });
       const setupSteps = parseStoredSteps(setupCase.stepsJson);
       for (const step of setupSteps) {
+        logExecutor("interaction:replay-setup-step", {
+          testInteractionRunId: testInteractionRun.id,
+          setupTestInteractionId: setupCase.id,
+          step: summarizeStoredStep(step),
+        });
         await executeAction(adapter, step.action, testRun);
       }
     }
@@ -184,6 +244,12 @@ export async function executeTestInteraction(
     for (const step of steps) {
       const startedAtMs = Date.now();
       const beforeSnapshot = previousSnapshot;
+      logExecutor("interaction:step-start", {
+        testInteractionRunId: testInteractionRun.id,
+        testInteractionId: testInteraction.id,
+        step: summarizeStoredStep(step),
+        beforeUrl: beforeSnapshot.url,
+      });
       try {
         await executeAction(adapter, step.action, testRun);
         const afterSnapshot = await captureExecutionSnapshot(adapter);
@@ -194,6 +260,13 @@ export async function executeTestInteraction(
           endedAtMs: Date.now(),
           beforeSnapshot,
           afterSnapshot,
+        });
+        logExecutor("interaction:step-complete", {
+          testInteractionRunId: testInteractionRun.id,
+          testInteractionId: testInteraction.id,
+          step: summarizeStoredStep(step),
+          afterUrl: afterSnapshot.url,
+          durationMs: Date.now() - startedAtMs,
         });
       } catch (error) {
         const afterSnapshot = await captureExecutionSnapshotSafe(
@@ -207,6 +280,17 @@ export async function executeTestInteraction(
           endedAtMs: Date.now(),
           beforeSnapshot,
           afterSnapshot,
+        });
+        logExecutor("interaction:step-error", {
+          testInteractionRunId: testInteractionRun.id,
+          testInteractionId: testInteraction.id,
+          step: summarizeStoredStep(step),
+          error:
+            error instanceof Error
+              ? { name: error.name, message: error.message }
+              : error,
+          durationMs: Date.now() - startedAtMs,
+          continueOnFailure: step.continueOnFailure,
         });
         if (!step.continueOnFailure) {
           throw error;
@@ -232,6 +316,22 @@ export async function executeTestInteraction(
       scaffolds,
       items
     );
+    logExecutor("interaction:decomposed", {
+      testInteractionRunId: testInteractionRun.id,
+      testInteractionId: testInteraction.id,
+      htmlLength: html.length,
+      scaffoldsCount: scaffolds.length,
+      patternsCount: patterns.length,
+      actionableItemsCount: items.length,
+      formsCount: forms.length,
+      currentUrl,
+      hoverActionableItemsCount: items.filter(
+        item =>
+          item.visible &&
+          !item.disabled &&
+          (item.actionKind === "click" || item.actionKind === "navigate")
+      ).length,
+    });
 
     // Parse global expectations
     const globalExpectations = parseStoredExpectations(
@@ -440,6 +540,13 @@ export async function executeTestInteraction(
         parsedTestInteraction,
         analyzerCtx
       );
+      logExecutor("interaction:follow-up-generation-complete", {
+        testInteractionRunId: testInteractionRun.id,
+        testInteractionId: testInteraction.id,
+        currentPath,
+        currentPageStateId: analyzerCtx.currentPageStateId,
+        beginningPageStateId: analyzerCtx.beginningPageStateId,
+      });
     }
   } catch (error) {
     const durationMs = Date.now() - startTime;
@@ -457,6 +564,13 @@ export async function executeTestInteraction(
       errorMessage,
       consoleLog: consoleLogs.join("\n") || undefined,
       networkLog: JSON.stringify(networkLogs) || undefined,
+    });
+    logExecutor("interaction:failed", {
+      testInteractionRunId: testInteractionRun.id,
+      testInteractionId: testInteractionRun.testInteractionId,
+      phase: currentPhase,
+      durationMs,
+      errorMessage,
     });
 
     await api.createTestRunFinding({

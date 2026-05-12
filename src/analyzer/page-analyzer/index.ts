@@ -45,6 +45,10 @@ type GeneratedTestInteraction = TestInteraction & {
   generatedKey?: string;
 };
 
+function logAnalyzer(step: string, details?: Record<string, unknown>): void {
+  console.info("[PageAnalyzer]", step, details ?? {});
+}
+
 /**
  * PageAnalyzer generates expectations and discovers new test elements
  * during discovery mode.
@@ -98,6 +102,21 @@ export class PageAnalyzer {
     testInteraction: TestInteraction,
     context: AnalyzerContext
   ): Promise<void> {
+    logAnalyzer("generate:start", {
+      sourceTitle: testInteraction.title,
+      sourceType: testInteraction.type,
+      sourcePriority: testInteraction.priority,
+      sourceSurfaceTags: testInteraction.surface_tags,
+      currentTestInteractionId: context.currentTestInteractionId,
+      currentTestSurfaceId: context.currentTestSurfaceId,
+      currentSurfaceRunId: context.currentSurfaceRunId ?? null,
+      beginningPageStateId: context.beginningPageStateId,
+      currentPageStateId: context.currentPageStateId,
+      currentPath: context.currentPath,
+      actionableItemsCount: context.actionableItems.length,
+      formsCount: context.forms.length,
+      scaffoldsCount: context.scaffolds.length,
+    });
     const normalizedContext = this.normalizeContext(context);
     const currentPageStateId =
       await this.ensureTargetPageState(normalizedContext);
@@ -105,12 +124,32 @@ export class PageAnalyzer {
       ...normalizedContext,
       currentPageStateId,
     };
+    logAnalyzer("generate:resolved-context", {
+      sourceTitle: testInteraction.title,
+      sourceType: testInteraction.type,
+      currentTestInteractionId: resolvedContext.currentTestInteractionId,
+      currentTestSurfaceId: resolvedContext.currentTestSurfaceId,
+      currentSurfaceRunId: resolvedContext.currentSurfaceRunId ?? null,
+      beginningPageStateId: resolvedContext.beginningPageStateId,
+      currentPageStateId: resolvedContext.currentPageStateId,
+      currentPath: resolvedContext.currentPath,
+    });
 
     if (this.isHoverOnly(testInteraction)) {
+      logAnalyzer("generate:hover-only", {
+        sourceTitle: testInteraction.title,
+        currentTestInteractionId: resolvedContext.currentTestInteractionId,
+        currentPageStateId: resolvedContext.currentPageStateId,
+      });
       await generateHoverFollowUpCases(this, testInteraction, resolvedContext);
       return;
     }
 
+    logAnalyzer("generate:full-pass", {
+      sourceTitle: testInteraction.title,
+      currentTestInteractionId: resolvedContext.currentTestInteractionId,
+      currentPageStateId: resolvedContext.currentPageStateId,
+    });
     await generateRenderTestInteractions(this, resolvedContext);
     await generateFormTestInteractions(this, resolvedContext);
     await generateSemanticJourneyTestInteractions(this, resolvedContext);
@@ -136,7 +175,15 @@ export class PageAnalyzer {
       params.surfaceId != null
         ? { id: params.surfaceId, title: params.surfaceTitle }
         : await this.findExistingSurfaceByTitle(context, params.surfaceTitle);
-    if (!surface) return;
+    if (!surface) {
+      logAnalyzer("reconcile:surface-missing", {
+        requestedSurfaceId: params.surfaceId ?? null,
+        requestedSurfaceTitle: params.surfaceTitle,
+        dependencyTestInteractionId: params.dependencyTestInteractionId ?? null,
+        desiredKeysCount: params.desiredKeys.length,
+      });
+      return;
+    }
 
     const existing = await context.api.getTestInteractionsByTestSurface(
       surface.id,
@@ -163,8 +210,22 @@ export class PageAnalyzer {
       })
       .map(testInteraction => testInteraction.id);
 
+    logAnalyzer("reconcile:evaluated", {
+      surfaceId: surface.id,
+      surfaceTitle: surface.title,
+      dependencyTestInteractionId: params.dependencyTestInteractionId ?? null,
+      desiredKeysCount: desiredKeys.size,
+      existingCount: existing.length,
+      obsoleteIds,
+    });
+
     if (obsoleteIds.length === 0) return;
     await context.api.retireTestInteractions(obsoleteIds);
+    logAnalyzer("reconcile:retired", {
+      surfaceId: surface.id,
+      surfaceTitle: surface.title,
+      obsoleteIds,
+    });
   }
 
   private async findExistingSurfaceByTitle(
@@ -204,12 +265,23 @@ export class PageAnalyzer {
       surfaceRun => surfaceRun.testSurfaceId === testSurfaceId
     );
     if (existing) {
+      logAnalyzer("surface-run:reused", {
+        bundleRunId,
+        testSurfaceId,
+        surfaceRunId: existing.id,
+      });
       return existing;
     }
-    return api.createTestSurfaceRun({
+    const created = await api.createTestSurfaceRun({
       testSurfaceId,
       testSurfaceBundleRunId: bundleRunId,
     });
+    logAnalyzer("surface-run:created", {
+      bundleRunId,
+      testSurfaceId,
+      surfaceRunId: created.id,
+    });
+    return created;
   }
 
   private isMouseActionable(item: ActionableItem): boolean {
@@ -288,7 +360,7 @@ export class PageAnalyzer {
       type: "interaction",
       sizeClass,
       surface_tags: ["interaction", "hover"],
-      priority: 4,
+      priority: 1,
       dependencyTestInteractionId,
       startingPageStateId,
       startingPath,
@@ -3133,7 +3205,8 @@ export class PageAnalyzer {
     startingPath: string,
     sizeClass: SizeClass,
     uid?: string,
-    startingPageStateId?: number
+    startingPageStateId?: number,
+    dependencyTestInteractionId?: number
   ): GeneratedTestInteraction {
     const label = this.describeActionableItem(item);
     const role = (item.role ?? "").toLowerCase();
@@ -3212,6 +3285,7 @@ export class PageAnalyzer {
         role || inputType || item.actionKind || "control",
       ],
       priority: 3,
+      dependencyTestInteractionId,
       startingPageStateId,
       startingPath,
       steps: [
@@ -3237,6 +3311,7 @@ export class PageAnalyzer {
       generatedKey: this.buildGeneratedKey(
         "control",
         startingPageStateId,
+        dependencyTestInteractionId,
         isImmutable ? "immutable" : "enabled",
         role || inputType || item.actionKind || "control",
         item.stableKey ?? item.selector ?? label
