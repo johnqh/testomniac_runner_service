@@ -1,13 +1,15 @@
-import type { TestElement } from "../domain/types";
+import type { TestInteraction } from "../domain/types";
 
-export function exportAsPlaywrightScript(testElement: TestElement): string {
+export function exportAsPlaywrightScript(
+  testInteraction: TestInteraction
+): string {
   const lines: string[] = [
     "import { test, expect } from '@playwright/test';",
     "",
-    `test('${escapeSingleQuotes(testElement.title)}', async ({ page }) => {`,
+    `test('${escapeSingleQuotes(testInteraction.title)}', async ({ page }) => {`,
   ];
 
-  for (const step of testElement.steps) {
+  for (const step of testInteraction.steps) {
     // Emit the action
     lines.push(`  ${step.action.playwrightCode}`);
 

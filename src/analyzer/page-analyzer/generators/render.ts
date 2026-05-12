@@ -1,6 +1,6 @@
 import type { AnalyzerContext } from "../types";
 
-export async function generateRenderTestElements(
+export async function generateRenderTestInteractions(
   analyzer: any,
   context: AnalyzerContext
 ): Promise<void> {
@@ -34,27 +34,27 @@ export async function generateRenderTestElements(
     bundleRun.id
   );
 
-  const testElement = analyzer.buildRenderTestElement(
+  const testInteraction = analyzer.buildRenderTestInteraction(
     context.currentPath,
     sizeClass,
     uid,
     context.currentPageStateId,
     context.pageId
   );
-  const tc = await api.ensureTestElement(
+  const tc = await api.ensureTestInteraction(
     runnerId,
     surface.id,
-    testElement,
+    testInteraction,
     testEnvironmentId
   );
-  await api.createTestElementRun({
-    testElementId: tc.id,
+  await api.createTestInteractionRun({
+    testInteractionId: tc.id,
     testSurfaceRunId: surfaceRun.id,
   });
 
   await analyzer.reconcileGeneratedSurfaceElements(context, {
     surfaceId: surface.id,
     surfaceTitle,
-    desiredKeys: [analyzer.getGeneratedKey(testElement)],
+    desiredKeys: [analyzer.getGeneratedKey(testInteraction)],
   });
 }

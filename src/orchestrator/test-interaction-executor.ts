@@ -3,7 +3,7 @@ import type { ApiClient } from "../api/client";
 import { ExpectationSeverity } from "@sudobility/testomniac_types";
 import type {
   NetworkLogEntry,
-  TestElementRunResponse,
+  TestInteractionRunResponse,
   TestRunResponse,
   TestSurfaceResponse,
   TestSurfaceBundleRunResponse,
@@ -76,9 +76,9 @@ type SnapshotLike = Partial<ExecutionSnapshot> | null | undefined;
  * Execute a single test element: run actions, decompose page, evaluate expertises,
  * set outcomes, create findings, and optionally discover new test elements.
  */
-export async function executeTestElement(
+export async function executeTestInteraction(
   adapter: BrowserAdapter,
-  testElementRun: TestElementRunResponse,
+  testInteractionRun: TestInteractionRunResponse,
   testRun: TestRunResponse,
   expertises: Expertise[],
   analyzer: PageAnalyzer | null,
@@ -121,19 +121,31 @@ export async function executeTestElement(
   });
 
   try {
-    currentPhase = "loading-test-elements";
-    const allTestElements = await api.getTestElementsByRunner(testRun.runnerId);
-    const testElementById = new Map(
-      allTestElements.map(testElement => [testElement.id, testElement])
+    currentPhase = "loading-test-interactions";
+    const allTestInteractions = await api.getTestInteractionsByRunner(
+      testRun.runnerId
     );
-    const testElement = testElementById.get(testElementRun.testElementId);
-    if (!testElement) {
-      throw new Error(`Test case ${testElementRun.testElementId} not found`);
+    const testInteractionById = new Map(
+      allTestInteractions.map(testInteraction => [
+        testInteraction.id,
+        testInteraction,
+      ])
+    );
+    const testInteraction = testInteractionById.get(
+      testInteractionRun.testInteractionId
+    );
+    if (!testInteraction) {
+      throw new Error(
+        `Test case ${testInteractionRun.testInteractionId} not found`
+      );
     }
 
     // Parse steps from JSON
-    const steps = parseStoredSteps(testElement.stepsJson);
-    const dependencyChain = buildDependencyChain(testElement, testElementById);
+    const steps = parseStoredSteps(testInteraction.stepsJson);
+    const dependencyChain = buildDependencyChain(
+      testInteraction,
+      testInteractionById
+    );
     const setupCases = dependencyChain.slice(0, -1);
     const journeySteps = dependencyChain.flatMap(item =>
       parseStoredSteps(item.stepsJson)
@@ -141,16 +153,16 @@ export async function executeTestElement(
 
     // Record beginning page state
     const _beginningUrl = await adapter.getUrl();
-    const beginningPageStateId = testElement.startingPageStateId ?? 0;
+    const beginningPageStateId = testInteraction.startingPageStateId ?? 0;
 
     // Navigate to starting path if needed
-    if (testElement.startingPath) {
+    if (testInteraction.startingPath) {
       const baseUrl = testRun.scanUrl
         ? new URL(testRun.scanUrl).origin
         : "http://localhost";
-      const absoluteUrl = testElement.startingPath.startsWith("http")
-        ? testElement.startingPath
-        : new URL(testElement.startingPath, baseUrl).toString();
+      const absoluteUrl = testInteraction.startingPath.startsWith("http")
+        ? testInteraction.startingPath
+        : new URL(testInteraction.startingPath, baseUrl).toString();
       await adapter.goto(absoluteUrl, { waitUntil: "networkidle0" });
     }
 
@@ -223,16 +235,16 @@ export async function executeTestElement(
 
     // Parse global expectations
     const globalExpectations = parseStoredExpectations(
-      testElement.globalExpectationsJson
+      testInteraction.globalExpectationsJson
     );
     const stepExpectations = steps.flatMap(step => step.expectations ?? []);
 
     // If discovery mode: generate baseline expectations
     let expectations = [...stepExpectations, ...globalExpectations];
-    if (analyzer && testElement.stepsJson) {
-      const parsedTestElement = {
-        title: testElement.title,
-        type: testElement.testType as
+    if (analyzer && testInteraction.stepsJson) {
+      const parsedTestInteraction = {
+        title: testInteraction.title,
+        type: testInteraction.testType as
           | "navigation"
           | "render"
           | "interaction"
@@ -240,15 +252,15 @@ export async function executeTestElement(
           | "form_negative"
           | "password"
           | "e2e",
-        sizeClass: testElement.sizeClass as "desktop" | "mobile",
-        surface_tags: testElement.surfaceTags,
-        priority: testElement.priority,
-        startingPageStateId: testElement.startingPageStateId ?? 0,
-        startingPath: testElement.startingPath ?? "",
+        sizeClass: testInteraction.sizeClass as "desktop" | "mobile",
+        surface_tags: testInteraction.surfaceTags,
+        priority: testInteraction.priority,
+        startingPageStateId: testInteraction.startingPageStateId ?? 0,
+        startingPath: testInteraction.startingPath ?? "",
         steps: steps as any,
         globalExpectations: globalExpectations as any,
       };
-      const generated = analyzer.generateExpectations(parsedTestElement);
+      const generated = analyzer.generateExpectations(parsedTestInteraction);
       expectations = [...expectations, ...generated];
     }
 
@@ -268,7 +280,7 @@ export async function executeTestElement(
       scaffolds,
       patterns,
       consoleLogs,
-      startingPath: testElement.startingPath ?? undefined,
+      startingPath: testInteraction.startingPath ?? undefined,
     };
 
     // Evaluate all expertises
@@ -315,7 +327,7 @@ export async function executeTestElement(
           const findingType = getFindingTypeForOutcome(outcome);
           if (findingType) {
             await api.createTestRunFinding({
-              testElementRunId: testElementRun.id,
+              testInteractionRunId: testInteractionRun.id,
               type: findingType,
               title: `[${expertise.name}] ${outcome.expected}`,
               description: outcome.observed,
@@ -347,11 +359,11 @@ export async function executeTestElement(
         : "completed";
 
     currentPhase = "healing-superseded-findings";
-    await api.clearSupersededFindings(testElementRun.id);
+    await api.clearSupersededFindings(testInteractionRun.id);
 
     // Complete test element run
     const durationMs = Date.now() - startTime;
-    await api.completeTestElementRun(testElementRun.id, {
+    await api.completeTestInteractionRun(testInteractionRun.id, {
       status,
       durationMs,
       expectedOutcome: expectedOutcome || undefined,
@@ -365,8 +377,8 @@ export async function executeTestElement(
         : {}),
     });
 
-    events.onTestElementRunCompleted({
-      testElementRunId: testElementRun.id,
+    events.onTestInteractionRunCompleted({
+      testInteractionRunId: testInteractionRun.id,
       passed: !hasErrors,
     });
 
@@ -392,9 +404,9 @@ export async function executeTestElement(
         testEnvironmentId: testRun.testEnvironmentId ?? undefined,
         sizeClass: testRun.sizeClass as "desktop" | "mobile",
         uid: testRun.createdByUserId ?? undefined,
-        currentTestElementId: testElement.id,
-        currentTestSurfaceId: testElement.testSurfaceId,
-        currentSurfaceRunId: testElementRun.testSurfaceRunId,
+        currentTestInteractionId: testInteraction.id,
+        currentTestSurfaceId: testInteraction.testSurfaceId,
+        currentSurfaceRunId: testInteractionRun.testSurfaceRunId,
         html: normalizeHtml(html),
         currentPageStateId: 0,
         beginningPageStateId: beginningPageStateId,
@@ -412,19 +424,22 @@ export async function executeTestElement(
         events,
       };
 
-      const parsedTestElement = {
-        title: testElement.title,
-        type: testElement.testType as any,
-        sizeClass: testElement.sizeClass as any,
-        surface_tags: testElement.surfaceTags,
-        priority: testElement.priority,
-        startingPageStateId: testElement.startingPageStateId ?? 0,
-        startingPath: testElement.startingPath ?? "",
+      const parsedTestInteraction = {
+        title: testInteraction.title,
+        type: testInteraction.testType as any,
+        sizeClass: testInteraction.sizeClass as any,
+        surface_tags: testInteraction.surfaceTags,
+        priority: testInteraction.priority,
+        startingPageStateId: testInteraction.startingPageStateId ?? 0,
+        startingPath: testInteraction.startingPath ?? "",
         steps: steps as any,
         globalExpectations: globalExpectations as any,
       };
 
-      await analyzer.generateTestElements(parsedTestElement, analyzerCtx);
+      await analyzer.generateTestInteractions(
+        parsedTestInteraction,
+        analyzerCtx
+      );
     }
   } catch (error) {
     const durationMs = Date.now() - startTime;
@@ -436,7 +451,7 @@ export async function executeTestElement(
           : JSON.stringify(error);
     const errorMessage = `Phase: ${currentPhase}\n${detail}`;
 
-    await api.completeTestElementRun(testElementRun.id, {
+    await api.completeTestInteractionRun(testInteractionRun.id, {
       status: "failed",
       durationMs,
       errorMessage,
@@ -445,7 +460,7 @@ export async function executeTestElement(
     });
 
     await api.createTestRunFinding({
-      testElementRunId: testElementRun.id,
+      testInteractionRunId: testInteractionRun.id,
       type: "error",
       title: `Test execution error`,
       description: errorMessage,
@@ -456,8 +471,8 @@ export async function executeTestElement(
       title: "Test execution error",
       description: errorMessage,
     });
-    events.onTestElementRunCompleted({
-      testElementRunId: testElementRun.id,
+    events.onTestInteractionRunCompleted({
+      testInteractionRunId: testInteractionRun.id,
       passed: false,
     });
   }
@@ -580,32 +595,32 @@ function parseStoredExpectations(value: unknown): StoredExpectation[] {
 }
 
 function buildDependencyChain(
-  testElement: {
+  testInteraction: {
     id: number;
-    dependencyTestElementId: number | null;
+    dependencyTestInteractionId: number | null;
   },
-  testElementById: Map<
+  testInteractionById: Map<
     number,
     {
       id: number;
-      dependencyTestElementId: number | null;
+      dependencyTestInteractionId: number | null;
       stepsJson: unknown;
     }
   >
 ) {
   const chain: Array<{
     id: number;
-    dependencyTestElementId: number | null;
+    dependencyTestInteractionId: number | null;
     stepsJson: unknown;
   }> = [];
   const seen = new Set<number>();
   let current:
     | {
         id: number;
-        dependencyTestElementId: number | null;
+        dependencyTestInteractionId: number | null;
         stepsJson: unknown;
       }
-    | undefined = testElementById.get(testElement.id);
+    | undefined = testInteractionById.get(testInteraction.id);
 
   while (current) {
     if (seen.has(current.id)) {
@@ -615,8 +630,8 @@ function buildDependencyChain(
     }
     seen.add(current.id);
     chain.unshift(current);
-    current = current.dependencyTestElementId
-      ? testElementById.get(current.dependencyTestElementId)
+    current = current.dependencyTestInteractionId
+      ? testInteractionById.get(current.dependencyTestInteractionId)
       : undefined;
   }
 

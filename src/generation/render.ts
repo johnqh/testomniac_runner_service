@@ -1,6 +1,6 @@
 import type {
-  TestElement,
-  LegacyTestElement,
+  TestInteraction,
+  LegacyTestInteraction,
   LegacyTestAction,
   TestStep,
   Expectation,
@@ -13,13 +13,13 @@ import {
 } from "../domain/types";
 import { assignSurfaceTags } from "./surface-tagger";
 
-export interface GeneratedTestElement {
-  testElement: TestElement;
+export interface GeneratedTestInteraction {
+  testInteraction: TestInteraction;
 }
 
-/** @deprecated Use GeneratedTestElement instead */
-export interface LegacyGeneratedTestElement {
-  testElement: LegacyTestElement;
+/** @deprecated Use GeneratedTestInteraction instead */
+export interface LegacyGeneratedTestInteraction {
+  testInteraction: LegacyTestInteraction;
   actions: LegacyTestAction[];
 }
 
@@ -42,7 +42,9 @@ interface RenderInput {
   elements: RenderElement[];
 }
 
-export function generateRenderTest(input: RenderInput): GeneratedTestElement {
+export function generateRenderTest(
+  input: RenderInput
+): GeneratedTestInteraction {
   const steps: TestStep[] = [];
 
   // Step 1: Navigate
@@ -111,7 +113,7 @@ export function generateRenderTest(input: RenderInput): GeneratedTestElement {
   });
 
   return {
-    testElement: {
+    testInteraction: {
       title: `Render — ${input.pageName}`,
       type: "render",
       sizeClass: input.sizeClass,

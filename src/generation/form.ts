@@ -1,5 +1,5 @@
 import type { LegacyTestAction, SizeClass } from "../domain/types";
-import type { LegacyGeneratedTestElement } from "./render";
+import type { LegacyGeneratedTestInteraction } from "./render";
 import { assignSurfaceTags } from "./surface-tagger";
 
 interface FormInput {
@@ -14,7 +14,9 @@ interface FormInput {
   submitSelector?: string;
 }
 
-export function generateFormTest(input: FormInput): LegacyGeneratedTestElement {
+export function generateFormTest(
+  input: FormInput
+): LegacyGeneratedTestInteraction {
   const actions: LegacyTestAction[] = [
     { action: "navigate", url: input.url },
     { action: "waitForLoad" },
@@ -47,7 +49,7 @@ export function generateFormTest(input: FormInput): LegacyGeneratedTestElement {
   actions.push({ action: "waitForNavigation" });
   actions.push({ action: "assertUrlChanged" });
   return {
-    testElement: {
+    testInteraction: {
       name: `Form — ${input.pageName}`,
       type: "form",
       sizeClass: input.sizeClass,

@@ -1,10 +1,10 @@
 import type { AnalyzerContext } from "../types";
 
-export async function generateKeyboardAndDisclosureTestElements(
+export async function generateKeyboardAndDisclosureTestInteractions(
   analyzer: any,
   context: AnalyzerContext
 ): Promise<void> {
-  const tests = analyzer.buildKeyboardAndDisclosureTestElements(context);
+  const tests = analyzer.buildKeyboardAndDisclosureTestInteractions(context);
   const surfaceTitle = `Keyboard: ${context.currentPath}`;
   if (tests.length === 0) {
     await analyzer.reconcileGeneratedSurfaceElements(context, {
@@ -42,14 +42,14 @@ export async function generateKeyboardAndDisclosureTestElements(
   );
 
   for (const test of tests) {
-    const tc = await api.ensureTestElement(
+    const tc = await api.ensureTestInteraction(
       runnerId,
       surface.id,
       test,
       testEnvironmentId
     );
-    await api.createTestElementRun({
-      testElementId: tc.id,
+    await api.createTestInteractionRun({
+      testInteractionId: tc.id,
       testSurfaceRunId: surfaceRun.id,
     });
   }

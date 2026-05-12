@@ -1,8 +1,8 @@
 import type { BrowserAdapter } from "../adapter";
 import type { ApiClient } from "../api/client";
 import type {
-  TestElementResponse,
-  TestElementRunResponse,
+  TestInteractionResponse,
+  TestInteractionRunResponse,
   TestSurfaceResponse,
   TestSurfaceRunResponse,
 } from "@sudobility/testomniac_types";
@@ -14,7 +14,7 @@ import type {
 } from "./types";
 import type { Expertise } from "../expertise/types";
 import { PageAnalyzer } from "../analyzer";
-import { executeTestElement } from "./test-element-executor";
+import { executeTestInteraction } from "./test-interaction-executor";
 
 /**
  * Main entry point for the runner execution loop.
@@ -31,7 +31,7 @@ export async function runTestRun(
   const startTime = Date.now();
   const pageIdsFound = new Set<number>();
   const pageStateIdsFound = new Set<number>();
-  const completedTestElementRunIds = new Set<number>();
+  const completedTestInteractionRunIds = new Set<number>();
   let findingsFound = 0;
   let activeDependencyBranch: number[] = [];
 
@@ -48,9 +48,9 @@ export async function runTestRun(
       events.onPageStateCreated(state);
       void emitStats();
     },
-    onTestElementRunCompleted(run) {
-      completedTestElementRunIds.add(run.testElementRunId);
-      events.onTestElementRunCompleted(run);
+    onTestInteractionRunCompleted(run) {
+      completedTestInteractionRunIds.add(run.testInteractionRunId);
+      events.onTestInteractionRunCompleted(run);
       void emitStats();
     },
     onTestRunCompleted(run) {
@@ -66,7 +66,7 @@ export async function runTestRun(
   async function emitStats() {
     const pagesFound = pageIdsFound.size;
     const pageStatesFound = pageStateIdsFound.size;
-    const testRunsCompleted = completedTestElementRunIds.size;
+    const testRunsCompleted = completedTestInteractionRunIds.size;
 
     events.onStatsUpdated({
       pagesFound,
@@ -197,9 +197,9 @@ export async function runTestRun(
       // Iterate open element runs in this surface
       let hasOpenCases = true;
       while (hasOpenCases) {
-        await waitForCheckpoint("before_test_element");
+        await waitForCheckpoint("before_test_interaction");
 
-        const openCaseRuns = await api.getOpenTestElementRuns(
+        const openCaseRuns = await api.getOpenTestInteractionRuns(
           currentSurfaceRun.id
         );
         if (openCaseRuns.length === 0) {
@@ -207,15 +207,17 @@ export async function runTestRun(
           break;
         }
 
-        const testElements = await api.getTestElementsByRunner(config.runnerId);
-        const currentCaseRun = selectNextOpenTestElementRun(
+        const testInteractions = await api.getTestInteractionsByRunner(
+          config.runnerId
+        );
+        const currentCaseRun = selectNextOpenTestInteractionRun(
           openCaseRuns,
-          testElements,
+          testInteractions,
           activeDependencyBranch
         );
 
         // Execute the test element
-        await executeTestElement(
+        await executeTestInteraction(
           adapter,
           currentCaseRun,
           testRun,
@@ -231,11 +233,11 @@ export async function runTestRun(
             : undefined
         );
         activeDependencyBranch = buildDependencyChainIds(
-          currentCaseRun.testElementId,
-          testElements
+          currentCaseRun.testInteractionId,
+          testInteractions
         );
 
-        await waitForCheckpoint("after_test_element");
+        await waitForCheckpoint("after_test_interaction");
       }
 
       // All elements done in this surface — mark surface run completed
@@ -254,7 +256,7 @@ export async function runTestRun(
     const durationMs = Date.now() - startTime;
     const pagesFound = pageIdsFound.size;
     const pageStatesFound = pageStateIdsFound.size;
-    const testRunsCompleted = completedTestElementRunIds.size;
+    const testRunsCompleted = completedTestInteractionRunIds.size;
     await api.completeTestRun(config.testRunId, {
       status: "completed",
       totalDurationMs: durationMs,
@@ -302,32 +304,38 @@ export async function runTestRun(
   }
 }
 
-function selectNextOpenTestElementRun(
-  openRuns: TestElementRunResponse[],
-  testElements: TestElementResponse[],
+function selectNextOpenTestInteractionRun(
+  openRuns: TestInteractionRunResponse[],
+  testInteractions: TestInteractionResponse[],
   activeDependencyBranch: number[]
-): TestElementRunResponse {
+): TestInteractionRunResponse {
   if (openRuns.length <= 1 || activeDependencyBranch.length === 0) {
     return openRuns[0]!;
   }
 
-  const testElementById = new Map(
-    testElements.map(testElement => [testElement.id, testElement])
+  const testInteractionById = new Map(
+    testInteractions.map(testInteraction => [
+      testInteraction.id,
+      testInteraction,
+    ])
   );
-  const runsByDependency = new Map<number | null, TestElementRunResponse[]>();
+  const runsByDependency = new Map<
+    number | null,
+    TestInteractionRunResponse[]
+  >();
 
   for (const openRun of openRuns) {
-    const dependencyTestElementId =
-      testElementById.get(openRun.testElementId)?.dependencyTestElementId ??
-      null;
-    const bucket = runsByDependency.get(dependencyTestElementId) ?? [];
+    const dependencyTestInteractionId =
+      testInteractionById.get(openRun.testInteractionId)
+        ?.dependencyTestInteractionId ?? null;
+    const bucket = runsByDependency.get(dependencyTestInteractionId) ?? [];
     bucket.push(openRun);
-    runsByDependency.set(dependencyTestElementId, bucket);
+    runsByDependency.set(dependencyTestInteractionId, bucket);
   }
 
   for (let index = activeDependencyBranch.length - 1; index >= 0; index -= 1) {
-    const parentTestElementId = activeDependencyBranch[index]!;
-    const branchChildren = runsByDependency.get(parentTestElementId) ?? [];
+    const parentTestInteractionId = activeDependencyBranch[index]!;
+    const branchChildren = runsByDependency.get(parentTestInteractionId) ?? [];
     if (branchChildren.length > 0) {
       return branchChildren[0]!;
     }
@@ -385,15 +393,18 @@ function getSurfaceExecutionGroup(
 }
 
 function buildDependencyChainIds(
-  testElementId: number,
-  testElements: TestElementResponse[]
+  testInteractionId: number,
+  testInteractions: TestInteractionResponse[]
 ): number[] {
-  const testElementById = new Map(
-    testElements.map(testElement => [testElement.id, testElement])
+  const testInteractionById = new Map(
+    testInteractions.map(testInteraction => [
+      testInteraction.id,
+      testInteraction,
+    ])
   );
   const chain: number[] = [];
   const seen = new Set<number>();
-  let current = testElementById.get(testElementId);
+  let current = testInteractionById.get(testInteractionId);
 
   while (current) {
     if (seen.has(current.id)) {
@@ -401,8 +412,8 @@ function buildDependencyChainIds(
     }
     seen.add(current.id);
     chain.unshift(current.id);
-    current = current.dependencyTestElementId
-      ? testElementById.get(current.dependencyTestElementId)
+    current = current.dependencyTestInteractionId
+      ? testInteractionById.get(current.dependencyTestInteractionId)
       : undefined;
   }
 

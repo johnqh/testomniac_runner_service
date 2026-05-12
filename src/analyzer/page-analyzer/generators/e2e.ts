@@ -1,6 +1,6 @@
 import type { AnalyzerContext } from "../types";
 
-export async function generateE2ETestElements(
+export async function generateE2ETestInteractions(
   analyzer: any,
   context: AnalyzerContext
 ): Promise<void> {
@@ -41,21 +41,21 @@ export async function generateE2ETestElements(
     bundleRun.id
   );
 
-  const e2e = analyzer.buildE2ETestElement(
+  const e2e = analyzer.buildE2ETestInteraction(
     context.currentPath,
     sizeClass,
     uid,
     context.currentPageStateId,
     context.journeySteps
   );
-  const tc = await api.ensureTestElement(
+  const tc = await api.ensureTestInteraction(
     runnerId,
     surface.id,
     e2e,
     testEnvironmentId
   );
-  await api.createTestElementRun({
-    testElementId: tc.id,
+  await api.createTestInteractionRun({
+    testInteractionId: tc.id,
     testSurfaceRunId: surfaceRun.id,
   });
 

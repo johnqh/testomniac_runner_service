@@ -1,5 +1,5 @@
 import type { SizeClass } from "../domain/types";
-import type { LegacyGeneratedTestElement } from "./render";
+import type { LegacyGeneratedTestInteraction } from "./render";
 import { assignSurfaceTags } from "./surface-tagger";
 
 interface NavigationInput {
@@ -14,10 +14,10 @@ interface NavigationInput {
 
 export function generateNavigationTest(
   input: NavigationInput
-): LegacyGeneratedTestElement {
+): LegacyGeneratedTestInteraction {
   const pattern = new URL(input.toUrl).pathname;
   return {
-    testElement: {
+    testInteraction: {
       name: `Navigation — ${input.fromPageName} → ${input.toPageName}`,
       type: "navigation",
       sizeClass: input.sizeClass,

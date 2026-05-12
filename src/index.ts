@@ -85,27 +85,27 @@ export {
 
 // Generation (new)
 export {
-  generateTestElements,
+  generateTestInteractions,
   type GeneratorOptions,
 } from "./generation/generator";
 export { assignPriority, assignSurfaceTags } from "./generation/surface-tagger";
 export {
   generateRenderTest,
-  type GeneratedTestElement,
+  type GeneratedTestInteraction,
 } from "./generation/render";
 export { generateInteractionTest } from "./generation/interaction";
 export { generateFormTest } from "./generation/form";
 export { generateFormNegativeTests } from "./generation/form-negative";
 export {
   generatePasswordTests,
-  type PasswordTestElement,
+  type PasswordTestInteraction,
 } from "./generation/password";
 export { generateNavigationTest } from "./generation/navigation";
 export { generateE2ETest, enumerateE2EPaths } from "./generation/e2e";
 
 // Orchestrator (new)
 export { runTestRun } from "./orchestrator/runner";
-export { executeTestElement } from "./orchestrator/test-element-executor";
+export { executeTestInteraction } from "./orchestrator/test-interaction-executor";
 export type {
   RunConfig,
   ScanEventHandler,

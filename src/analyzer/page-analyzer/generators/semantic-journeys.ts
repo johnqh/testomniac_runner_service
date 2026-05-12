@@ -1,10 +1,10 @@
 import type { AnalyzerContext } from "../types";
 
-export async function generateSemanticJourneyTestElements(
+export async function generateSemanticJourneyTestInteractions(
   analyzer: any,
   context: AnalyzerContext
 ): Promise<void> {
-  const journeys = analyzer.buildSemanticJourneyTestElements(context);
+  const journeys = analyzer.buildSemanticJourneyTestInteractions(context);
   const surfaceTitle = `Journeys: ${context.currentPath}`;
   if (journeys.length === 0) {
     await analyzer.reconcileGeneratedSurfaceElements(context, {
@@ -42,14 +42,14 @@ export async function generateSemanticJourneyTestElements(
   );
 
   for (const journey of journeys) {
-    const tc = await api.ensureTestElement(
+    const tc = await api.ensureTestInteraction(
       runnerId,
       surface.id,
       journey,
       testEnvironmentId
     );
-    await api.createTestElementRun({
-      testElementId: tc.id,
+    await api.createTestInteractionRun({
+      testInteractionId: tc.id,
       testSurfaceRunId: surfaceRun.id,
     });
   }

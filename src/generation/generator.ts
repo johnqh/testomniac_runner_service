@@ -1,4 +1,4 @@
-import { generateRenderTest, type GeneratedTestElement } from "./render";
+import { generateRenderTest, type GeneratedTestInteraction } from "./render";
 import { assignPriority } from "./surface-tagger";
 import type { SizeClass } from "../domain/types";
 import type { ApiClient } from "../api/client";
@@ -12,11 +12,11 @@ export interface GeneratorOptions {
   elementIdentities?: ElementIdentityResponse[];
 }
 
-export async function generateTestElements(
+export async function generateTestInteractions(
   options: GeneratorOptions
-): Promise<GeneratedTestElement[]> {
+): Promise<GeneratedTestInteraction[]> {
   const { runnerId, sizeClass, api } = options;
-  const results: GeneratedTestElement[] = [];
+  const results: GeneratedTestInteraction[] = [];
   const allPages = await api.getPagesByRunner(runnerId);
 
   // Load element identities if not provided

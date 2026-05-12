@@ -1,7 +1,7 @@
-import type { TestElement } from "@sudobility/testomniac_types";
+import type { TestInteraction } from "@sudobility/testomniac_types";
 import type { AnalyzerContext } from "../types";
 
-export async function generateDialogLifecycleTestElements(
+export async function generateDialogLifecycleTestInteractions(
   analyzer: any,
   context: AnalyzerContext
 ): Promise<void> {
@@ -24,10 +24,10 @@ export async function generateDialogLifecycleTestElements(
     )
   );
 
-  const tests: TestElement[] = [];
+  const tests: TestInteraction[] = [];
   for (const item of closeCandidates) {
     tests.push(
-      analyzer.buildDialogCloseTestElement(
+      analyzer.buildDialogCloseTestInteraction(
         item,
         context.currentPath,
         context.sizeClass,
@@ -37,7 +37,7 @@ export async function generateDialogLifecycleTestElements(
     );
   }
   tests.push(
-    analyzer.buildEscapeDialogTestElement(
+    analyzer.buildEscapeDialogTestInteraction(
       context.currentPath,
       context.sizeClass,
       context.uid,
@@ -72,18 +72,18 @@ export async function generateDialogLifecycleTestElements(
     bundleRun.id
   );
 
-  const desiredKeys = tests.map((test: TestElement) =>
+  const desiredKeys = tests.map((test: TestInteraction) =>
     analyzer.getGeneratedKey(test)
   );
   for (const test of tests) {
-    const tc = await api.ensureTestElement(
+    const tc = await api.ensureTestInteraction(
       runnerId,
       surface.id,
       test,
       testEnvironmentId
     );
-    await api.createTestElementRun({
-      testElementId: tc.id,
+    await api.createTestInteractionRun({
+      testInteractionId: tc.id,
       testSurfaceRunId: surfaceRun.id,
     });
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildExpectationEvaluationGroups } from "./test-element-executor";
+import { buildExpectationEvaluationGroups } from "./test-interaction-executor";
 
 describe("buildExpectationEvaluationGroups", () => {
   it("uses per-step snapshots for step expectations and final snapshots for generated expectations", () => {

@@ -1,6 +1,6 @@
 import type { AnalyzerContext } from "../types";
 
-export async function generateNavigationTestElements(
+export async function generateNavigationTestInteractions(
   analyzer: any,
   context: AnalyzerContext
 ): Promise<void> {
@@ -45,21 +45,21 @@ export async function generateNavigationTestElements(
     const path = analyzer.extractRelativePath(link.href);
     if (!path) continue;
 
-    const testElement = analyzer.buildNavigationTestElement(
+    const testInteraction = analyzer.buildNavigationTestInteraction(
       path,
       sizeClass,
       uid,
       context.currentPageStateId
     );
-    desiredKeys.push(analyzer.getGeneratedKey(testElement));
-    const tc = await api.ensureTestElement(
+    desiredKeys.push(analyzer.getGeneratedKey(testInteraction));
+    const tc = await api.ensureTestInteraction(
       runnerId,
       navigationSurface.id,
-      testElement,
+      testInteraction,
       testEnvironmentId
     );
-    await api.createTestElementRun({
-      testElementId: tc.id,
+    await api.createTestInteractionRun({
+      testInteractionId: tc.id,
       testSurfaceRunId: surfaceRun.id,
     });
   }

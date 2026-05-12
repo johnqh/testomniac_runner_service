@@ -16,8 +16,8 @@ export interface RunConfig {
 export type RunCheckpoint =
   | "before_claim"
   | "before_surface"
-  | "before_test_element"
-  | "after_test_element"
+  | "before_test_interaction"
+  | "after_test_interaction"
   | "before_completion";
 
 export interface ScanEventHandler {
@@ -28,8 +28,8 @@ export interface ScanEventHandler {
     screenshotPath?: string;
   }): void;
   onTestSurfaceCreated(surface: { surfaceId: number; title: string }): void;
-  onTestElementRunCompleted(run: {
-    testElementRunId: number;
+  onTestInteractionRunCompleted(run: {
+    testInteractionRunId: number;
     passed: boolean;
   }): void;
   onTestRunCompleted(run: { testRunId: number; passed: boolean }): void;

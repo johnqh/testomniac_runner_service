@@ -1,17 +1,17 @@
-import type { TestElement } from "@sudobility/testomniac_types";
+import type { TestInteraction } from "@sudobility/testomniac_types";
 import type { AnalyzerContext } from "../types";
 
 export async function generateHoverFollowUpCases(
   analyzer: any,
-  testElement: TestElement,
+  testInteraction: TestInteraction,
   context: AnalyzerContext
 ): Promise<void> {
-  const selector = analyzer.getPrimarySelector(testElement);
+  const selector = analyzer.getPrimarySelector(testInteraction);
   if (!selector || !context.currentPageStateId) {
     console.info("[PageAnalyzer][hover-follow-up] skipped", {
       reason: !selector ? "missing-selector" : "missing-current-page-state",
-      testElementId: context.currentTestElementId,
-      title: testElement.title,
+      testInteractionId: context.currentTestInteractionId,
+      title: testInteraction.title,
       selector,
       currentPageStateId: context.currentPageStateId,
       beginningPageStateId: context.beginningPageStateId,
@@ -46,8 +46,8 @@ export async function generateHoverFollowUpCases(
     context.currentPageStateId === context.beginningPageStateId;
 
   console.info("[PageAnalyzer][hover-follow-up] evaluated", {
-    testElementId: context.currentTestElementId,
-    title: testElement.title,
+    testInteractionId: context.currentTestInteractionId,
+    title: testInteraction.title,
     selector,
     currentPath: context.currentPath,
     currentPageStateId: context.currentPageStateId,
@@ -65,17 +65,17 @@ export async function generateHoverFollowUpCases(
     (stayedOnSamePageState || revealedItems.length === 0) &&
     stableHoveredItem
   ) {
-    const clickCase = analyzer.buildClickTestElement(
+    const clickCase = analyzer.buildClickTestInteraction(
       stableHoveredItem,
       context.currentPath,
       context.sizeClass,
       context.uid,
       context.currentPageStateId,
-      context.currentTestElementId
+      context.currentTestInteractionId
     );
     console.info("[PageAnalyzer][hover-follow-up] generating-click", {
-      testElementId: context.currentTestElementId,
-      sourceTitle: testElement.title,
+      testInteractionId: context.currentTestInteractionId,
+      sourceTitle: testInteraction.title,
       selector,
       generatedKey: analyzer.getGeneratedKey(clickCase),
       clickTitle: clickCase.title,
@@ -88,24 +88,24 @@ export async function generateHoverFollowUpCases(
       surfaceId: context.currentTestSurfaceId,
       surfaceTitle: "",
       desiredKeys: [analyzer.getGeneratedKey(clickCase)],
-      dependencyTestElementId: context.currentTestElementId,
+      dependencyTestInteractionId: context.currentTestInteractionId,
     });
-    const tc = await context.api.ensureTestElement(
+    const tc = await context.api.ensureTestInteraction(
       context.runnerId,
       context.currentTestSurfaceId,
       clickCase,
       context.testEnvironmentId
     );
-    await context.api.createTestElementRun({
-      testElementId: tc.id,
+    await context.api.createTestInteractionRun({
+      testInteractionId: tc.id,
       testSurfaceRunId: context.currentSurfaceRunId ?? undefined,
     });
     return;
   }
 
   console.info("[PageAnalyzer][hover-follow-up] generating-hover-follow-ups", {
-    testElementId: context.currentTestElementId,
-    sourceTitle: testElement.title,
+    testInteractionId: context.currentTestInteractionId,
+    sourceTitle: testInteraction.title,
     selector,
     currentPageStateId: context.currentPageStateId,
     beginningPageStateId: context.beginningPageStateId,
@@ -119,13 +119,13 @@ export async function generateHoverFollowUpCases(
 
   const desiredKeys = revealedItems.map((item: any) =>
     analyzer.getGeneratedKey(
-      analyzer.buildHoverTestElement(
+      analyzer.buildHoverTestInteraction(
         item,
         context.currentPath,
         context.sizeClass,
         context.uid,
         context.currentPageStateId,
-        context.currentTestElementId
+        context.currentTestInteractionId
       )
     )
   );
@@ -133,26 +133,26 @@ export async function generateHoverFollowUpCases(
     surfaceId: context.currentTestSurfaceId,
     surfaceTitle: "",
     desiredKeys,
-    dependencyTestElementId: context.currentTestElementId,
+    dependencyTestInteractionId: context.currentTestInteractionId,
   });
 
   for (const item of revealedItems) {
-    const nextHover = analyzer.buildHoverTestElement(
+    const nextHover = analyzer.buildHoverTestInteraction(
       item,
       context.currentPath,
       context.sizeClass,
       context.uid,
       context.currentPageStateId,
-      context.currentTestElementId
+      context.currentTestInteractionId
     );
-    const tc = await context.api.ensureTestElement(
+    const tc = await context.api.ensureTestInteraction(
       context.runnerId,
       context.currentTestSurfaceId,
       nextHover,
       context.testEnvironmentId
     );
-    await context.api.createTestElementRun({
-      testElementId: tc.id,
+    await context.api.createTestInteractionRun({
+      testInteractionId: tc.id,
       testSurfaceRunId: context.currentSurfaceRunId ?? undefined,
     });
   }

@@ -15,7 +15,7 @@ export interface AnalyzerContext {
   testEnvironmentId?: number;
   sizeClass: SizeClass;
   uid?: string;
-  currentTestElementId: number;
+  currentTestInteractionId: number;
   currentTestSurfaceId: number;
   currentSurfaceRunId: number | null;
   html: string;

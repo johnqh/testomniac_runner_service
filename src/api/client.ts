@@ -17,12 +17,12 @@ import type {
   InputValueResponse,
   InsertFormRequest,
   FormResponse,
-  TestElementResponse,
+  TestInteractionResponse,
   CreateTestRunRequest,
   TestRunResponse,
-  CreateTestElementRunRequest,
-  TestElementRunResponse,
-  CompleteTestElementRunRequest,
+  CreateTestInteractionRunRequest,
+  TestInteractionRunResponse,
+  CompleteTestInteractionRunRequest,
   CreateTestSurfaceRunRequest,
   CompleteTestSurfaceRunRequest,
   TestSurfaceRunResponse,
@@ -39,8 +39,8 @@ import type {
   PageHashes,
   DecomposedPageHashes,
   ActionableItem,
-  TestElement,
-  LegacyTestElement,
+  TestInteraction,
+  LegacyTestInteraction,
   FormInfo,
   CreateElementIdentityRequest,
   UpdateElementIdentityRequest,
@@ -59,11 +59,11 @@ import type {
   TestSurface,
   TestSurfaceResponse,
   InsertTestSurfaceRequest,
-  InsertTestElementRequest,
+  InsertTestInteractionRequest,
 } from "@sudobility/testomniac_types";
 
 type CompleteRunPayload = CompleteTestRunRequest;
-type InsertTestElementRequestCompat = InsertTestElementRequest & {
+type InsertTestInteractionRequestCompat = InsertTestInteractionRequest & {
   isGenerated?: boolean;
 };
 
@@ -144,23 +144,26 @@ export class ApiClient {
   // Test Element Runs
   // ===========================================================================
 
-  createTestElementRun(
-    request: CreateTestElementRunRequest
-  ): Promise<TestElementRunResponse> {
-    return this.post("/test-element-runs", request);
+  createTestInteractionRun(
+    request: CreateTestInteractionRunRequest
+  ): Promise<TestInteractionRunResponse> {
+    return this.post("/test-interaction-runs", request);
   }
 
-  completeTestElementRun(
-    testElementRunId: number,
-    payload: CompleteTestElementRunRequest
+  completeTestInteractionRun(
+    testInteractionRunId: number,
+    payload: CompleteTestInteractionRunRequest
   ): Promise<void> {
-    return this.put(`/test-element-runs/${testElementRunId}/complete`, payload);
+    return this.put(
+      `/test-interaction-runs/${testInteractionRunId}/complete`,
+      payload
+    );
   }
 
-  clearSupersededFindings(testElementRunId: number): Promise<void> {
+  clearSupersededFindings(testInteractionRunId: number): Promise<void> {
     return this.request<void>(
       "DELETE",
-      `/test-element-runs/${testElementRunId}/superseded-findings`
+      `/test-interaction-runs/${testInteractionRunId}/superseded-findings`
     );
   }
 
@@ -416,18 +419,25 @@ export class ApiClient {
   // Test Elements
   // ===========================================================================
 
-  insertTestElement(
+  insertTestInteraction(
     runnerId: number,
-    testElement: TestElement | LegacyTestElement,
+    testInteraction: TestInteraction | LegacyTestInteraction,
     testSurfaceId?: number,
     testEnvironmentId?: number
-  ): Promise<TestElementResponse> {
-    const body = { runnerId, testSurfaceId, testEnvironmentId, testElement };
-    return this.post("/test-elements", body);
+  ): Promise<TestInteractionResponse> {
+    const body = {
+      runnerId,
+      testSurfaceId,
+      testEnvironmentId,
+      testInteraction,
+    };
+    return this.post("/test-interactions", body);
   }
 
-  getTestElementsByRunner(runnerId: number): Promise<TestElementResponse[]> {
-    return this.get(`/test-elements?runnerId=${runnerId}`);
+  getTestInteractionsByRunner(
+    runnerId: number
+  ): Promise<TestInteractionResponse[]> {
+    return this.get(`/test-interactions?runnerId=${runnerId}`);
   }
 
   // ===========================================================================
@@ -440,8 +450,10 @@ export class ApiClient {
     return this.post("/test-actions", params);
   }
 
-  getTestActionsByCase(testElementId: number): Promise<TestActionResponse[]> {
-    return this.get(`/test-actions?testElementId=${testElementId}`);
+  getTestActionsByCase(
+    testInteractionId: number
+  ): Promise<TestActionResponse[]> {
+    return this.get(`/test-actions?testInteractionId=${testInteractionId}`);
   }
 
   // ===========================================================================
@@ -633,24 +645,24 @@ export class ApiClient {
     return this.post("/test-surfaces", body);
   }
 
-  ensureTestElement(
+  ensureTestInteraction(
     runnerId: number,
     testSurfaceId: number,
-    testElement: TestElement,
+    testInteraction: TestInteraction,
     testEnvironmentId?: number
-  ): Promise<TestElementResponse> {
-    const body: InsertTestElementRequestCompat = {
+  ): Promise<TestInteractionResponse> {
+    const body: InsertTestInteractionRequestCompat = {
       runnerId,
       testSurfaceId,
       testEnvironmentId,
-      testElement,
+      testInteraction,
       isGenerated: true,
     };
-    return this.post("/test-elements", body);
+    return this.post("/test-interactions", body);
   }
 
-  retireTestElements(testElementIds: number[]): Promise<void> {
-    return this.put("/test-elements/retire", { testElementIds });
+  retireTestInteractions(testInteractionIds: number[]): Promise<void> {
+    return this.put("/test-interactions/retire", { testInteractionIds });
   }
 
   ensureBundleSurfaceLink(
@@ -724,12 +736,12 @@ export class ApiClient {
   // Queries for execution loop
   // ===========================================================================
 
-  getTestElementsByTestSurface(
+  getTestInteractionsByTestSurface(
     testSurfaceId: number,
     includeInactive = false
-  ): Promise<TestElementResponse[]> {
+  ): Promise<TestInteractionResponse[]> {
     return this.get(
-      `/test-elements?testSurfaceId=${testSurfaceId}&includeInactive=${includeInactive ? "true" : "false"}`
+      `/test-interactions?testSurfaceId=${testSurfaceId}&includeInactive=${includeInactive ? "true" : "false"}`
     );
   }
 
@@ -737,11 +749,11 @@ export class ApiClient {
     return this.get(`/test-surface-bundle-surfaces?bundleId=${bundleId}`);
   }
 
-  getOpenTestElementRuns(
+  getOpenTestInteractionRuns(
     testSurfaceRunId: number
-  ): Promise<TestElementRunResponse[]> {
+  ): Promise<TestInteractionRunResponse[]> {
     return this.get(
-      `/test-element-runs?testSurfaceRunId=${testSurfaceRunId}&status=pending`
+      `/test-interaction-runs?testSurfaceRunId=${testSurfaceRunId}&status=pending`
     );
   }
 

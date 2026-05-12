@@ -1,6 +1,6 @@
 import type { AnalyzerContext } from "../types";
 
-export async function generateFormTestElements(
+export async function generateFormTestInteractions(
   analyzer: any,
   context: AnalyzerContext
 ): Promise<void> {
@@ -49,7 +49,7 @@ export async function generateFormTestElements(
 
     const validValues = analyzer.planFormValues(form, context.actionableItems);
     if (analyzer.isSearchForm(form)) {
-      const searchTests = analyzer.buildSearchTestElements(
+      const searchTests = analyzer.buildSearchTestInteractions(
         form,
         formLabel,
         context.currentPath,
@@ -62,21 +62,21 @@ export async function generateFormTestElements(
 
       for (const searchTest of searchTests) {
         desiredKeys.push(analyzer.getGeneratedKey(searchTest));
-        const searchElement = await api.ensureTestElement(
+        const searchElement = await api.ensureTestInteraction(
           runnerId,
           surface.id,
           searchTest,
           testEnvironmentId
         );
-        await api.createTestElementRun({
-          testElementId: searchElement.id,
+        await api.createTestInteractionRun({
+          testInteractionId: searchElement.id,
           testSurfaceRunId: surfaceRun.id,
         });
       }
       continue;
     }
 
-    const positive = analyzer.buildFormTestElement(
+    const positive = analyzer.buildFormTestInteraction(
       form,
       formLabel,
       formType,
@@ -87,21 +87,21 @@ export async function generateFormTestElements(
       validValues
     );
     desiredKeys.push(analyzer.getGeneratedKey(positive));
-    const positiveElement = await api.ensureTestElement(
+    const positiveElement = await api.ensureTestInteraction(
       runnerId,
       surface.id,
       positive,
       testEnvironmentId
     );
-    await api.createTestElementRun({
-      testElementId: positiveElement.id,
+    await api.createTestInteractionRun({
+      testInteractionId: positiveElement.id,
       testSurfaceRunId: surfaceRun.id,
     });
 
     for (const field of form.fields.filter((field: any) =>
       analyzer.isNegativeCandidateField(field)
     )) {
-      const negative = analyzer.buildNegativeFormTestElement(
+      const negative = analyzer.buildNegativeFormTestInteraction(
         form,
         formLabel,
         formType,
@@ -113,18 +113,18 @@ export async function generateFormTestElements(
         validValues
       );
       desiredKeys.push(analyzer.getGeneratedKey(negative));
-      const negativeElement = await api.ensureTestElement(
+      const negativeElement = await api.ensureTestInteraction(
         runnerId,
         surface.id,
         negative,
         testEnvironmentId
       );
-      await api.createTestElementRun({
-        testElementId: negativeElement.id,
+      await api.createTestInteractionRun({
+        testInteractionId: negativeElement.id,
         testSurfaceRunId: surfaceRun.id,
       });
 
-      const correction = analyzer.buildFormCorrectionTestElement(
+      const correction = analyzer.buildFormCorrectionTestInteraction(
         form,
         formLabel,
         formType,
@@ -136,20 +136,20 @@ export async function generateFormTestElements(
         validValues
       );
       desiredKeys.push(analyzer.getGeneratedKey(correction));
-      const correctionElement = await api.ensureTestElement(
+      const correctionElement = await api.ensureTestInteraction(
         runnerId,
         surface.id,
         correction,
         testEnvironmentId
       );
-      await api.createTestElementRun({
-        testElementId: correctionElement.id,
+      await api.createTestInteractionRun({
+        testInteractionId: correctionElement.id,
         testSurfaceRunId: surfaceRun.id,
       });
     }
 
     if (analyzer.isPasswordScenario(formType, form)) {
-      const passwordTests = analyzer.buildPasswordTestElements(
+      const passwordTests = analyzer.buildPasswordTestInteractions(
         form,
         formLabel,
         formType,
@@ -165,14 +165,14 @@ export async function generateFormTestElements(
 
       for (const passwordTest of passwordTests) {
         desiredKeys.push(analyzer.getGeneratedKey(passwordTest));
-        const passwordElement = await api.ensureTestElement(
+        const passwordElement = await api.ensureTestInteraction(
           runnerId,
           surface.id,
           passwordTest,
           testEnvironmentId
         );
-        await api.createTestElementRun({
-          testElementId: passwordElement.id,
+        await api.createTestInteractionRun({
+          testInteractionId: passwordElement.id,
           testSurfaceRunId: surfaceRun.id,
         });
       }

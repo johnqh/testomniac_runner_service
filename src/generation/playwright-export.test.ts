@@ -5,9 +5,11 @@ import {
   ExpectationType,
   ExpectationSeverity,
 } from "../domain/types";
-import type { TestElement } from "../domain/types";
+import type { TestInteraction } from "../domain/types";
 
-function makeTestElement(overrides: Partial<TestElement>): TestElement {
+function makeTestInteraction(
+  overrides: Partial<TestInteraction>
+): TestInteraction {
   return {
     title: "Test",
     type: "render",
@@ -24,7 +26,7 @@ function makeTestElement(overrides: Partial<TestElement>): TestElement {
 
 describe("exportAsPlaywrightScript", () => {
   it("generates a render test with steps and expectations", () => {
-    const tc = makeTestElement({
+    const tc = makeTestInteraction({
       title: "Render — Home Page",
       steps: [
         {
@@ -77,7 +79,7 @@ describe("exportAsPlaywrightScript", () => {
   });
 
   it("generates steps with fill + click and expectations", () => {
-    const tc = makeTestElement({
+    const tc = makeTestInteraction({
       title: "Login flow",
       steps: [
         {

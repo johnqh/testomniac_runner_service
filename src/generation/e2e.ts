@@ -1,5 +1,5 @@
 import type { LegacyTestAction, SizeClass } from "../domain/types";
-import type { LegacyGeneratedTestElement } from "./render";
+import type { LegacyGeneratedTestInteraction } from "./render";
 import { assignSurfaceTags } from "./surface-tagger";
 
 interface E2EStep {
@@ -13,7 +13,9 @@ interface E2EInput {
   steps: E2EStep[];
 }
 
-export function generateE2ETest(input: E2EInput): LegacyGeneratedTestElement {
+export function generateE2ETest(
+  input: E2EInput
+): LegacyGeneratedTestInteraction {
   const actions: LegacyTestAction[] = [
     { action: "navigate", url: input.steps[0].url },
     { action: "waitForLoad" },
@@ -34,7 +36,7 @@ export function generateE2ETest(input: E2EInput): LegacyGeneratedTestElement {
   }
   const scenarioName = input.steps.map(s => s.pageName).join(" → ");
   return {
-    testElement: {
+    testInteraction: {
       name: `E2E — ${scenarioName}`,
       type: "e2e",
       sizeClass: input.sizeClass,

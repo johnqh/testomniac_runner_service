@@ -1,6 +1,6 @@
 import type { AnalyzerContext } from "../types";
 
-export async function generateScaffoldTestElements(
+export async function generateScaffoldTestInteractions(
   analyzer: any,
   context: AnalyzerContext
 ): Promise<void> {
@@ -51,30 +51,30 @@ export async function generateScaffoldTestElements(
 
     const desiredKeys: string[] = [];
     for (const item of scaffoldItems) {
-      const testElement = analyzer.shouldUseDirectControlInteraction(item)
-        ? analyzer.buildControlInteractionTestElement(
+      const testInteraction = analyzer.shouldUseDirectControlInteraction(item)
+        ? analyzer.buildControlInteractionTestInteraction(
             item,
             context.currentPath,
             sizeClass,
             uid,
             context.currentPageStateId
           )
-        : analyzer.buildHoverTestElement(
+        : analyzer.buildHoverTestInteraction(
             item,
             context.currentPath,
             sizeClass,
             uid,
             context.currentPageStateId
           );
-      desiredKeys.push(analyzer.getGeneratedKey(testElement));
-      const tc = await api.ensureTestElement(
+      desiredKeys.push(analyzer.getGeneratedKey(testInteraction));
+      const tc = await api.ensureTestInteraction(
         runnerId,
         surface.id,
-        testElement,
+        testInteraction,
         testEnvironmentId
       );
-      await api.createTestElementRun({
-        testElementId: tc.id,
+      await api.createTestInteractionRun({
+        testInteractionId: tc.id,
         testSurfaceRunId: surfaceRun.id,
       });
     }

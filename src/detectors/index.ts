@@ -25,6 +25,6 @@ export type {
 } from "./detection-rule";
 export {
   describeAction,
-  buildTestElementDescription,
+  buildTestInteractionDescription,
 } from "./action-description";
 export { getAllDetectionRules } from "./rules";

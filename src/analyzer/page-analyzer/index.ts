@@ -1,5 +1,5 @@
 import type {
-  TestElement,
+  TestInteraction,
   Expectation,
   ActionableItem,
   SizeClass,
@@ -22,16 +22,16 @@ import { fillValuePlanner } from "../../planners/fill-value-planner";
 import { AUTH_URL_PATTERNS, SIGNUP_URL_PATTERNS } from "../../config/constants";
 import type { AnalyzerContext } from "./types";
 import { generateHoverFollowUpCases } from "./generators/hover-follow-up";
-import { generateNavigationTestElements } from "./generators/navigation";
-import { generateScaffoldTestElements } from "./generators/scaffolds";
-import { generateRenderTestElements } from "./generators/render";
-import { generateFormTestElements } from "./generators/forms";
-import { generateE2ETestElements } from "./generators/e2e";
-import { generateSemanticJourneyTestElements } from "./generators/semantic-journeys";
-import { generateDialogLifecycleTestElements } from "./generators/dialogs";
-import { generateKeyboardAndDisclosureTestElements } from "./generators/keyboard-disclosure";
-import { generateVariantTestElements } from "./generators/variants";
-import { generateContentTestElements } from "./generators/content";
+import { generateNavigationTestInteractions } from "./generators/navigation";
+import { generateScaffoldTestInteractions } from "./generators/scaffolds";
+import { generateRenderTestInteractions } from "./generators/render";
+import { generateFormTestInteractions } from "./generators/forms";
+import { generateE2ETestInteractions } from "./generators/e2e";
+import { generateSemanticJourneyTestInteractions } from "./generators/semantic-journeys";
+import { generateDialogLifecycleTestInteractions } from "./generators/dialogs";
+import { generateKeyboardAndDisclosureTestInteractions } from "./generators/keyboard-disclosure";
+import { generateVariantTestInteractions } from "./generators/variants";
+import { generateContentTestInteractions } from "./generators/content";
 
 export type { AnalyzerContext } from "./types";
 
@@ -41,7 +41,7 @@ type AnalyzerFormField = FormField & {
   appearanceHint?: string;
 };
 
-type GeneratedTestElement = TestElement & {
+type GeneratedTestInteraction = TestInteraction & {
   generatedKey?: string;
 };
 
@@ -54,8 +54,10 @@ export class PageAnalyzer {
    * Generate baseline expectations for a test element.
    * Called BEFORE expertises evaluate.
    */
-  generateExpectations(testElement: TestElement): Expectation[] {
-    const steps = Array.isArray(testElement.steps) ? testElement.steps : [];
+  generateExpectations(testInteraction: TestInteraction): Expectation[] {
+    const steps = Array.isArray(testInteraction.steps)
+      ? testInteraction.steps
+      : [];
     const expectations: Expectation[] = [
       {
         expectationType: ExpectationType.PageLoaded,
@@ -92,8 +94,8 @@ export class PageAnalyzer {
    * Generate new test elements for scaffolds and page content.
    * Called AFTER expertises evaluate and the target page state is established.
    */
-  async generateTestElements(
-    testElement: TestElement,
+  async generateTestInteractions(
+    testInteraction: TestInteraction,
     context: AnalyzerContext
   ): Promise<void> {
     const normalizedContext = this.normalizeContext(context);
@@ -104,21 +106,21 @@ export class PageAnalyzer {
       currentPageStateId,
     };
 
-    if (this.isHoverOnly(testElement)) {
-      await generateHoverFollowUpCases(this, testElement, resolvedContext);
+    if (this.isHoverOnly(testInteraction)) {
+      await generateHoverFollowUpCases(this, testInteraction, resolvedContext);
       return;
     }
 
-    await generateRenderTestElements(this, resolvedContext);
-    await generateFormTestElements(this, resolvedContext);
-    await generateSemanticJourneyTestElements(this, resolvedContext);
-    await generateE2ETestElements(this, resolvedContext);
-    await generateDialogLifecycleTestElements(this, resolvedContext);
-    await generateScaffoldTestElements(this, resolvedContext);
-    await generateContentTestElements(this, resolvedContext);
-    await generateKeyboardAndDisclosureTestElements(this, resolvedContext);
-    await generateVariantTestElements(this, resolvedContext);
-    await generateNavigationTestElements(this, resolvedContext);
+    await generateRenderTestInteractions(this, resolvedContext);
+    await generateFormTestInteractions(this, resolvedContext);
+    await generateSemanticJourneyTestInteractions(this, resolvedContext);
+    await generateE2ETestInteractions(this, resolvedContext);
+    await generateDialogLifecycleTestInteractions(this, resolvedContext);
+    await generateScaffoldTestInteractions(this, resolvedContext);
+    await generateContentTestInteractions(this, resolvedContext);
+    await generateKeyboardAndDisclosureTestInteractions(this, resolvedContext);
+    await generateVariantTestInteractions(this, resolvedContext);
+    await generateNavigationTestInteractions(this, resolvedContext);
   }
 
   async reconcileGeneratedSurfaceElements(
@@ -127,7 +129,7 @@ export class PageAnalyzer {
       surfaceId?: number | null;
       surfaceTitle: string;
       desiredKeys: string[];
-      dependencyTestElementId?: number;
+      dependencyTestInteractionId?: number;
     }
   ): Promise<void> {
     const surface =
@@ -136,7 +138,7 @@ export class PageAnalyzer {
         : await this.findExistingSurfaceByTitle(context, params.surfaceTitle);
     if (!surface) return;
 
-    const existing = await context.api.getTestElementsByTestSurface(
+    const existing = await context.api.getTestInteractionsByTestSurface(
       surface.id,
       true
     );
@@ -144,25 +146,25 @@ export class PageAnalyzer {
       params.desiredKeys.map(key => key.trim()).filter(Boolean)
     );
     const obsoleteIds = existing
-      .filter(testElement => {
-        const isGenerated = Boolean((testElement as any).isGenerated);
-        const isActive = (testElement as any).isActive !== false;
+      .filter(testInteraction => {
+        const isGenerated = Boolean((testInteraction as any).isGenerated);
+        const isActive = (testInteraction as any).isActive !== false;
         if (!isGenerated || !isActive) return false;
-        if (testElement.startingPageStateId !== context.currentPageStateId)
+        if (testInteraction.startingPageStateId !== context.currentPageStateId)
           return false;
         if (
-          (testElement.dependencyTestElementId ?? null) !==
-          (params.dependencyTestElementId ?? null)
+          (testInteraction.dependencyTestInteractionId ?? null) !==
+          (params.dependencyTestInteractionId ?? null)
         ) {
           return false;
         }
-        const existingKey = this.getPersistedGeneratedKey(testElement);
+        const existingKey = this.getPersistedGeneratedKey(testInteraction);
         return !existingKey || !desiredKeys.has(existingKey);
       })
-      .map(testElement => testElement.id);
+      .map(testInteraction => testInteraction.id);
 
     if (obsoleteIds.length === 0) return;
-    await context.api.retireTestElements(obsoleteIds);
+    await context.api.retireTestInteractions(obsoleteIds);
   }
 
   private async findExistingSurfaceByTitle(
@@ -235,12 +237,12 @@ export class PageAnalyzer {
     }
   }
 
-  private buildNavigationTestElement(
+  private buildNavigationTestInteraction(
     path: string,
     sizeClass: SizeClass,
     uid?: string,
     startingPageStateId?: number
-  ): GeneratedTestElement {
+  ): GeneratedTestInteraction {
     return {
       title: `Navigate to ${path}`,
       type: "navigation",
@@ -272,14 +274,14 @@ export class PageAnalyzer {
     };
   }
 
-  private buildHoverTestElement(
+  private buildHoverTestInteraction(
     item: ActionableItem,
     startingPath: string,
     sizeClass: SizeClass,
     uid?: string,
     startingPageStateId?: number,
-    dependencyTestElementId?: number
-  ): GeneratedTestElement {
+    dependencyTestInteractionId?: number
+  ): GeneratedTestInteraction {
     const label = this.describeActionableItem(item);
     return {
       title: `Hover over ${label}`,
@@ -287,7 +289,7 @@ export class PageAnalyzer {
       sizeClass,
       surface_tags: ["interaction", "hover"],
       priority: 4,
-      dependencyTestElementId,
+      dependencyTestInteractionId,
       startingPageStateId,
       startingPath,
       steps: [
@@ -308,20 +310,20 @@ export class PageAnalyzer {
       generatedKey: this.buildGeneratedKey(
         "hover",
         startingPageStateId,
-        dependencyTestElementId,
+        dependencyTestInteractionId,
         item.stableKey ?? item.selector ?? label
       ),
     };
   }
 
-  private buildClickTestElement(
+  private buildClickTestInteraction(
     item: ActionableItem,
     startingPath: string,
     sizeClass: SizeClass,
     uid?: string,
     startingPageStateId?: number,
-    dependencyTestElementId?: number
-  ): GeneratedTestElement {
+    dependencyTestInteractionId?: number
+  ): GeneratedTestInteraction {
     const label = this.describeActionableItem(item);
     return {
       title: `Click ${label}`,
@@ -329,7 +331,7 @@ export class PageAnalyzer {
       sizeClass,
       surface_tags: ["interaction", "click"],
       priority: 5,
-      dependencyTestElementId,
+      dependencyTestInteractionId,
       startingPageStateId,
       startingPath,
       steps: [
@@ -350,22 +352,26 @@ export class PageAnalyzer {
       generatedKey: this.buildGeneratedKey(
         "click",
         startingPageStateId,
-        dependencyTestElementId,
+        dependencyTestInteractionId,
         item.stableKey ?? item.selector ?? label
       ),
     };
   }
 
-  private isHoverOnly(testElement: TestElement): boolean {
-    const steps = Array.isArray(testElement.steps) ? testElement.steps : [];
+  private isHoverOnly(testInteraction: TestInteraction): boolean {
+    const steps = Array.isArray(testInteraction.steps)
+      ? testInteraction.steps
+      : [];
     return (
       steps.length === 1 &&
       steps[0]?.action?.actionType === PlaywrightAction.Hover
     );
   }
 
-  private getPrimarySelector(testElement: TestElement): string | null {
-    const steps = Array.isArray(testElement.steps) ? testElement.steps : [];
+  private getPrimarySelector(testInteraction: TestInteraction): string | null {
+    const steps = Array.isArray(testInteraction.steps)
+      ? testInteraction.steps
+      : [];
     const step = steps[0];
     return step?.action.path ?? null;
   }
@@ -381,29 +387,31 @@ export class PageAnalyzer {
   }
 
   withGeneratedKey(
-    testElement: GeneratedTestElement,
+    testInteraction: GeneratedTestInteraction,
     ...parts: Array<string | number | null | undefined>
-  ): GeneratedTestElement {
+  ): GeneratedTestInteraction {
     return {
-      ...testElement,
+      ...testInteraction,
       generatedKey: this.buildGeneratedKey(...parts),
     };
   }
 
   getGeneratedKey(
-    testElement: Pick<GeneratedTestElement, "generatedKey" | "title">
+    testInteraction: Pick<GeneratedTestInteraction, "generatedKey" | "title">
   ): string {
-    return (testElement.generatedKey?.trim() || testElement.title).trim();
+    return (
+      testInteraction.generatedKey?.trim() || testInteraction.title
+    ).trim();
   }
 
   private getPersistedGeneratedKey(
-    testElement: Pick<TestElement, "title"> & {
+    testInteraction: Pick<TestInteraction, "title"> & {
       generatedKey?: string | null;
     }
   ): string | null {
-    const generatedKey = testElement.generatedKey?.trim();
+    const generatedKey = testInteraction.generatedKey?.trim();
     if (generatedKey) return generatedKey;
-    const title = testElement.title?.trim();
+    const title = testInteraction.title?.trim();
     return title || null;
   }
 
@@ -594,13 +602,13 @@ export class PageAnalyzer {
     return Array.isArray(forms) ? forms : [];
   }
 
-  private buildRenderTestElement(
+  private buildRenderTestInteraction(
     currentPath: string,
     sizeClass: SizeClass,
     uid: string | undefined,
     startingPageStateId: number,
     pageId: number
-  ): GeneratedTestElement {
+  ): GeneratedTestInteraction {
     return {
       title: `Render — ${currentPath}`,
       type: "render",
@@ -664,7 +672,7 @@ export class PageAnalyzer {
     };
   }
 
-  private buildFormTestElement(
+  private buildFormTestInteraction(
     form: FormInfo,
     formLabel: string,
     formType: "login" | "signup" | "other",
@@ -673,7 +681,7 @@ export class PageAnalyzer {
     uid: string | undefined,
     startingPageStateId: number,
     validValues: Record<string, string>
-  ): GeneratedTestElement {
+  ): GeneratedTestInteraction {
     const steps = this.buildFormSteps(form, validValues, undefined);
     return {
       title: `Form — ${formLabel}`,
@@ -754,7 +762,7 @@ export class PageAnalyzer {
     };
   }
 
-  private buildNegativeFormTestElement(
+  private buildNegativeFormTestInteraction(
     form: FormInfo,
     formLabel: string,
     formType: "login" | "signup" | "other",
@@ -764,7 +772,7 @@ export class PageAnalyzer {
     uid: string | undefined,
     startingPageStateId: number,
     validValues: Record<string, string>
-  ): GeneratedTestElement {
+  ): GeneratedTestInteraction {
     const steps = this.buildFormSteps(
       form,
       validValues,
@@ -813,7 +821,7 @@ export class PageAnalyzer {
     };
   }
 
-  private buildFormCorrectionTestElement(
+  private buildFormCorrectionTestInteraction(
     form: FormInfo,
     formLabel: string,
     formType: "login" | "signup" | "other",
@@ -823,7 +831,7 @@ export class PageAnalyzer {
     uid: string | undefined,
     startingPageStateId: number,
     validValues: Record<string, string>
-  ): GeneratedTestElement {
+  ): GeneratedTestInteraction {
     const steps = this.buildFormSteps(
       form,
       validValues,
@@ -913,7 +921,7 @@ export class PageAnalyzer {
     };
   }
 
-  private buildPasswordTestElements(
+  private buildPasswordTestInteractions(
     form: FormInfo,
     formLabel: string,
     formType: "login" | "signup" | "other",
@@ -923,7 +931,7 @@ export class PageAnalyzer {
     startingPageStateId: number,
     validValues: Record<string, string>,
     passwordRequirements: PasswordRequirementSnapshot
-  ): GeneratedTestElement[] {
+  ): GeneratedTestInteraction[] {
     const passwordFields = form.fields.filter(
       field => field.type === "password"
     );
@@ -973,13 +981,13 @@ export class PageAnalyzer {
     });
   }
 
-  private buildE2ETestElement(
+  private buildE2ETestInteraction(
     currentPath: string,
     sizeClass: SizeClass,
     uid: string | undefined,
     startingPageStateId: number,
     journeySteps: TestStep[]
-  ): GeneratedTestElement {
+  ): GeneratedTestInteraction {
     return {
       title: `E2E — Journey to ${currentPath}`,
       type: "e2e",
@@ -1336,7 +1344,7 @@ export class PageAnalyzer {
     return field.type === "search" || /\bsearch\b/.test(text);
   }
 
-  private buildSearchTestElements(
+  private buildSearchTestInteractions(
     form: FormInfo,
     formLabel: string,
     currentPath: string,
@@ -1345,7 +1353,7 @@ export class PageAnalyzer {
     startingPageStateId: number,
     validValues: Record<string, string>,
     actionableItems: ActionableItem[]
-  ): GeneratedTestElement[] {
+  ): GeneratedTestInteraction[] {
     const searchField = form.fields.find(field => this.isSearchField(field));
     if (!searchField) return [];
 
@@ -1358,7 +1366,7 @@ export class PageAnalyzer {
       [searchField.selector]: this.improbableSearchQuery(),
     };
 
-    const tests: GeneratedTestElement[] = [
+    const tests: GeneratedTestInteraction[] = [
       {
         title: `Search — ${formLabel}`,
         type: "form",
@@ -1574,15 +1582,15 @@ export class PageAnalyzer {
     return `${descriptor} @ ${form.selector}`;
   }
 
-  private buildSemanticJourneyTestElements(
+  private buildSemanticJourneyTestInteractions(
     context: AnalyzerContext
-  ): GeneratedTestElement[] {
+  ): GeneratedTestInteraction[] {
     const items = this.selectRepresentativeItems(
       context.actionableItems.filter(
         item => item.visible && !item.disabled && Boolean(item.selector)
       )
     );
-    const journeys: GeneratedTestElement[] = [];
+    const journeys: GeneratedTestInteraction[] = [];
     const collectionCount = this.estimateCollectionCount(context.html);
 
     const addToCart = items.find(item => this.isAddToCartItem(item));
@@ -1592,7 +1600,7 @@ export class PageAnalyzer {
     );
     if (addToCart && checkout) {
       journeys.push(
-        this.buildJourneyTestElement(
+        this.buildJourneyTestInteraction(
           "Commerce journey",
           ["commerce", "cart", "checkout"],
           context,
@@ -1757,7 +1765,7 @@ export class PageAnalyzer {
       }
 
       journeys.push(
-        this.buildJourneyTestElement(
+        this.buildJourneyTestInteraction(
           "Remove item from collection",
           ["commerce", "remove"],
           context,
@@ -1816,7 +1824,7 @@ export class PageAnalyzer {
       ];
 
       journeys.push(
-        this.buildJourneyTestElement(
+        this.buildJourneyTestInteraction(
           "Create or add collection record",
           ["list", "crud", "create"],
           context,
@@ -1834,7 +1842,7 @@ export class PageAnalyzer {
     const authEntry = items.find(item => this.isAuthEntryItem(item));
     if (authEntry) {
       journeys.push(
-        this.buildJourneyTestElement(
+        this.buildJourneyTestInteraction(
           "Authentication entry journey",
           ["auth"],
           context,
@@ -1867,7 +1875,7 @@ export class PageAnalyzer {
     );
     if (authEntry && protectedAction) {
       journeys.push(
-        this.buildJourneyTestElement(
+        this.buildJourneyTestInteraction(
           "Protected action auth gate journey",
           ["auth", "protected"],
           context,
@@ -1894,7 +1902,7 @@ export class PageAnalyzer {
     const logoutAction = items.find(item => this.isLogoutAction(item));
     if (logoutAction) {
       journeys.push(
-        this.buildJourneyTestElement(
+        this.buildJourneyTestInteraction(
           "Logout journey",
           ["auth", "logout"],
           context,
@@ -1935,7 +1943,7 @@ export class PageAnalyzer {
     const retryAction = items.find(item => this.isRetryAction(item));
     if (retryAction) {
       journeys.push(
-        this.buildJourneyTestElement(
+        this.buildJourneyTestInteraction(
           "Retry recovery journey",
           ["recovery", "retry"],
           context,
@@ -2004,13 +2012,18 @@ export class PageAnalyzer {
       }
 
       journeys.push(
-        this.buildJourneyTestElement("Media open journey", ["media"], context, [
-          this.buildJourneyAction(
-            mediaCandidate,
-            "Open media",
-            mediaExpectations
-          ),
-        ])
+        this.buildJourneyTestInteraction(
+          "Media open journey",
+          ["media"],
+          context,
+          [
+            this.buildJourneyAction(
+              mediaCandidate,
+              "Open media",
+              mediaExpectations
+            ),
+          ]
+        )
       );
     }
 
@@ -2061,7 +2074,7 @@ export class PageAnalyzer {
       ].filter(Boolean) as Expectation[];
 
       journeys.push(
-        this.buildJourneyTestElement(
+        this.buildJourneyTestInteraction(
           quantityDelta === -1
             ? "Quantity decrease journey"
             : quantityDelta === 1
@@ -2087,7 +2100,7 @@ export class PageAnalyzer {
     const filterAction = items.find(item => this.isFilterAction(item));
     if (filterAction) {
       journeys.push(
-        this.buildJourneyTestElement(
+        this.buildJourneyTestInteraction(
           "Filter results journey",
           ["filter"],
           context,
@@ -2110,7 +2123,7 @@ export class PageAnalyzer {
         )
       );
       journeys.push(
-        this.buildJourneyTestElement(
+        this.buildJourneyTestInteraction(
           "Filter persistence journey",
           ["filter", "reload"],
           context,
@@ -2139,7 +2152,7 @@ export class PageAnalyzer {
     const sortAction = items.find(item => this.isSortAction(item));
     if (sortAction) {
       journeys.push(
-        this.buildJourneyTestElement(
+        this.buildJourneyTestInteraction(
           "Sort results journey",
           ["sort"],
           context,
@@ -2166,7 +2179,7 @@ export class PageAnalyzer {
     const paginationAction = items.find(item => this.isPaginationAction(item));
     if (paginationAction) {
       journeys.push(
-        this.buildJourneyTestElement(
+        this.buildJourneyTestInteraction(
           "Pagination journey",
           ["list", "pagination"],
           context,
@@ -2200,7 +2213,7 @@ export class PageAnalyzer {
 
     if (addToCart) {
       journeys.push(
-        this.buildJourneyTestElement(
+        this.buildJourneyTestInteraction(
           "Cart persistence journey",
           ["commerce", "reload"],
           context,
@@ -2234,7 +2247,7 @@ export class PageAnalyzer {
 
     if (collectionCount > 0 && removeItem && createCollectionAction) {
       journeys.push(
-        this.buildJourneyTestElement(
+        this.buildJourneyTestInteraction(
           "Collection mutation recovery journey",
           ["list", "crud", "recovery"],
           context,
@@ -2283,7 +2296,7 @@ export class PageAnalyzer {
     );
     if (backCandidate) {
       journeys.push(
-        this.buildJourneyTestElement(
+        this.buildJourneyTestInteraction(
           "Back and forward navigation journey",
           ["navigation", "history"],
           context,
@@ -2316,12 +2329,12 @@ export class PageAnalyzer {
     return journeys;
   }
 
-  private buildJourneyTestElement(
+  private buildJourneyTestInteraction(
     title: string,
     surfaceTags: string[],
     context: AnalyzerContext,
     steps: TestStep[]
-  ): GeneratedTestElement {
+  ): GeneratedTestInteraction {
     return {
       title: `${title} — ${context.currentPath}`,
       type: "e2e",
@@ -2467,20 +2480,20 @@ export class PageAnalyzer {
     return field.type === "checkbox" || field.type === "radio";
   }
 
-  private buildKeyboardAndDisclosureTestElements(
+  private buildKeyboardAndDisclosureTestInteractions(
     context: AnalyzerContext
-  ): GeneratedTestElement[] {
+  ): GeneratedTestInteraction[] {
     const items = this.selectRepresentativeItems(
       context.actionableItems.filter(
         item => item.visible && !item.disabled && Boolean(item.selector)
       )
     );
-    const tests: GeneratedTestElement[] = [];
+    const tests: GeneratedTestInteraction[] = [];
 
     for (const item of items) {
       if (this.isDisclosureItem(item)) {
         tests.push(
-          this.buildDisclosureToggleTestElement(
+          this.buildDisclosureToggleTestInteraction(
             item,
             context.currentPath,
             context.sizeClass,
@@ -2489,7 +2502,7 @@ export class PageAnalyzer {
           )
         );
         tests.push(
-          this.buildKeyboardActivateTestElement(
+          this.buildKeyboardActivateTestInteraction(
             item,
             "Enter",
             "Activate disclosure with Enter",
@@ -2509,7 +2522,7 @@ export class PageAnalyzer {
           )
         );
         tests.push(
-          this.buildKeyboardActivateTestElement(
+          this.buildKeyboardActivateTestInteraction(
             item,
             " ",
             "Activate disclosure with Space",
@@ -2533,7 +2546,7 @@ export class PageAnalyzer {
 
       if (this.isKeyboardPrimaryAction(item)) {
         tests.push(
-          this.buildKeyboardActivateTestElement(
+          this.buildKeyboardActivateTestInteraction(
             item,
             "Enter",
             "Activate with Enter",
@@ -2553,7 +2566,7 @@ export class PageAnalyzer {
 
       if (this.isKeyboardToggleAction(item)) {
         tests.push(
-          this.buildKeyboardActivateTestElement(
+          this.buildKeyboardActivateTestInteraction(
             item,
             " ",
             "Toggle with Space",
@@ -2578,9 +2591,9 @@ export class PageAnalyzer {
     return tests;
   }
 
-  private buildVariantTestElements(
+  private buildVariantTestInteractions(
     context: AnalyzerContext
-  ): GeneratedTestElement[] {
+  ): GeneratedTestInteraction[] {
     const items = this.selectRepresentativeItems(
       context.actionableItems.filter(
         item =>
@@ -2592,8 +2605,8 @@ export class PageAnalyzer {
     );
 
     const tests = items
-      .map(item => this.buildVariantTestElement(item, context))
-      .filter((item): item is GeneratedTestElement => Boolean(item));
+      .map(item => this.buildVariantTestInteraction(item, context))
+      .filter((item): item is GeneratedTestInteraction => Boolean(item));
 
     const purchaseAction = context.actionableItems.find(
       item =>
@@ -2614,7 +2627,7 @@ export class PageAnalyzer {
       const requiredField = this.findRequiredVariantField(item, context.forms);
       if (requiredField && purchaseAction) {
         tests.push(
-          this.buildRequiredVariantGuardTestElement(
+          this.buildRequiredVariantGuardTestInteraction(
             item,
             requiredField,
             purchaseAction,
@@ -2627,10 +2640,10 @@ export class PageAnalyzer {
     return tests;
   }
 
-  private buildVariantTestElement(
+  private buildVariantTestInteraction(
     item: ActionableItem,
     context: AnalyzerContext
-  ): GeneratedTestElement | null {
+  ): GeneratedTestInteraction | null {
     const plannedValue = this.extractSelectableValue(item);
     if (!plannedValue || !item.selector) return null;
 
@@ -2691,7 +2704,7 @@ export class PageAnalyzer {
     item: ActionableItem,
     purchaseAction: ActionableItem | undefined,
     context: AnalyzerContext
-  ): GeneratedTestElement | null {
+  ): GeneratedTestInteraction | null {
     const plannedValue = this.extractSelectableValue(item);
     if (!plannedValue || !item.selector || !purchaseAction?.selector) {
       return null;
@@ -2817,12 +2830,12 @@ export class PageAnalyzer {
     };
   }
 
-  private buildRequiredVariantGuardTestElement(
+  private buildRequiredVariantGuardTestInteraction(
     item: ActionableItem,
     requiredField: FormField,
     purchaseAction: ActionableItem,
     context: AnalyzerContext
-  ): GeneratedTestElement {
+  ): GeneratedTestInteraction {
     const label = this.describeActionableItem(item);
     const purchaseLabel = this.describeActionableItem(purchaseAction);
 
@@ -2884,13 +2897,13 @@ export class PageAnalyzer {
     return undefined;
   }
 
-  private buildDisclosureToggleTestElement(
+  private buildDisclosureToggleTestInteraction(
     item: ActionableItem,
     startingPath: string,
     sizeClass: SizeClass,
     uid?: string,
     startingPageStateId?: number
-  ): GeneratedTestElement {
+  ): GeneratedTestInteraction {
     const label = this.describeActionableItem(item);
     return {
       title: `Toggle disclosure ${label}`,
@@ -2933,7 +2946,7 @@ export class PageAnalyzer {
     };
   }
 
-  private buildKeyboardActivateTestElement(
+  private buildKeyboardActivateTestInteraction(
     item: ActionableItem,
     key: string,
     titlePrefix: string,
@@ -2942,7 +2955,7 @@ export class PageAnalyzer {
     sizeClass: SizeClass,
     uid?: string,
     startingPageStateId?: number
-  ): GeneratedTestElement {
+  ): GeneratedTestInteraction {
     const label = this.describeActionableItem(item);
     return {
       title: `${titlePrefix} ${label}`,
@@ -3000,13 +3013,13 @@ export class PageAnalyzer {
     };
   }
 
-  private buildDialogCloseTestElement(
+  private buildDialogCloseTestInteraction(
     item: ActionableItem,
     startingPath: string,
     sizeClass: SizeClass,
     uid?: string,
     startingPageStateId?: number
-  ): GeneratedTestElement {
+  ): GeneratedTestInteraction {
     const label = this.describeActionableItem(item);
     return {
       title: `Close dialog via ${label}`,
@@ -3050,12 +3063,12 @@ export class PageAnalyzer {
     };
   }
 
-  private buildEscapeDialogTestElement(
+  private buildEscapeDialogTestInteraction(
     startingPath: string,
     sizeClass: SizeClass,
     uid?: string,
     startingPageStateId?: number
-  ): GeneratedTestElement {
+  ): GeneratedTestInteraction {
     return {
       title: "Close dialog with Escape",
       type: "interaction",
@@ -3115,13 +3128,13 @@ export class PageAnalyzer {
     );
   }
 
-  private buildControlInteractionTestElement(
+  private buildControlInteractionTestInteraction(
     item: ActionableItem,
     startingPath: string,
     sizeClass: SizeClass,
     uid?: string,
     startingPageStateId?: number
-  ): GeneratedTestElement {
+  ): GeneratedTestInteraction {
     const label = this.describeActionableItem(item);
     const role = (item.role ?? "").toLowerCase();
     const inputType = (item.inputType ?? "").toLowerCase();

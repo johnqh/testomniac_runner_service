@@ -1,5 +1,5 @@
 import type { LegacyTestAction, SizeClass } from "../domain/types";
-import type { LegacyGeneratedTestElement } from "./render";
+import type { LegacyGeneratedTestInteraction } from "./render";
 import { assignSurfaceTags } from "./surface-tagger";
 
 interface InteractionInput {
@@ -14,7 +14,7 @@ interface InteractionInput {
 
 export function generateInteractionTest(
   input: InteractionInput
-): LegacyGeneratedTestElement {
+): LegacyGeneratedTestInteraction {
   const actions: LegacyTestAction[] = [
     { action: "navigate", url: input.url },
     { action: "waitForLoad" },
@@ -28,7 +28,7 @@ export function generateInteractionTest(
     actions.push({ action: "assertUrl", pattern: input.expectedUrl });
   }
   return {
-    testElement: {
+    testInteraction: {
       name: `Interaction — ${input.pageName}`,
       type: "interaction",
       sizeClass: input.sizeClass,

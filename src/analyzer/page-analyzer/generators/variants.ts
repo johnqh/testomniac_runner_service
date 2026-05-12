@@ -1,10 +1,10 @@
 import type { AnalyzerContext } from "../types";
 
-export async function generateVariantTestElements(
+export async function generateVariantTestInteractions(
   analyzer: any,
   context: AnalyzerContext
 ): Promise<void> {
-  const tests = analyzer.buildVariantTestElements(context);
+  const tests = analyzer.buildVariantTestInteractions(context);
   const surfaceTitle = `Variants: ${context.currentPath}`;
   if (tests.length === 0) {
     await analyzer.reconcileGeneratedSurfaceElements(context, {
@@ -42,14 +42,14 @@ export async function generateVariantTestElements(
   );
 
   for (const test of tests) {
-    const tc = await api.ensureTestElement(
+    const tc = await api.ensureTestInteraction(
       runnerId,
       surface.id,
       test,
       testEnvironmentId
     );
-    await api.createTestElementRun({
-      testElementId: tc.id,
+    await api.createTestInteractionRun({
+      testInteractionId: tc.id,
       testSurfaceRunId: surfaceRun.id,
     });
   }
