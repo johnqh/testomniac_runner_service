@@ -1,3 +1,5 @@
+import { matchesControlSelector } from "../../browser/replay-selector";
+
 export interface ControlState {
   selector: string;
   tagName: string;
@@ -29,7 +31,7 @@ export function findControlBySelector(
   selector?: string
 ): ControlState | undefined {
   if (!selector) return undefined;
-  return states.find(state => state.selector === selector);
+  return states.find(state => matchesControlSelector(selector, state));
 }
 
 export function findControlPeers(

@@ -14,6 +14,7 @@ import {
   ExpectationType,
   ExpectationSeverity,
 } from "@sudobility/testomniac_types";
+import { buildReplaySelectorFromActionableItem } from "../../browser/replay-selector";
 import { computeHashes } from "../../browser/page-utils";
 import type { ApiClient } from "../../api/client";
 import type { DetectedScaffoldRegion } from "../../scanner/component-detector";
@@ -355,6 +356,7 @@ export class PageAnalyzer {
     dependencyTestInteractionId?: number
   ): GeneratedTestInteraction {
     const label = this.describeActionableItem(item);
+    const replaySelector = buildReplaySelectorFromActionableItem(item);
     return {
       title: `Hover over ${label}`,
       type: "interaction",
@@ -368,8 +370,8 @@ export class PageAnalyzer {
         {
           action: {
             actionType: PlaywrightAction.Hover,
-            path: item.selector ?? undefined,
-            playwrightCode: `await page.hover('${item.selector}')`,
+            path: replaySelector,
+            playwrightCode: `await page.hover('${replaySelector}')`,
             description: `Hover over ${label}`,
           },
           expectations: [],
@@ -397,6 +399,7 @@ export class PageAnalyzer {
     dependencyTestInteractionId?: number
   ): GeneratedTestInteraction {
     const label = this.describeActionableItem(item);
+    const replaySelector = buildReplaySelectorFromActionableItem(item);
     return {
       title: `Click ${label}`,
       type: "interaction",
@@ -410,8 +413,8 @@ export class PageAnalyzer {
         {
           action: {
             actionType: PlaywrightAction.Click,
-            path: item.selector ?? undefined,
-            playwrightCode: `await page.click('${item.selector}')`,
+            path: replaySelector,
+            playwrightCode: `await page.click('${replaySelector}')`,
             description: `Click ${label}`,
           },
           expectations: [],
@@ -3209,6 +3212,7 @@ export class PageAnalyzer {
     dependencyTestInteractionId?: number
   ): GeneratedTestInteraction {
     const label = this.describeActionableItem(item);
+    const replaySelector = buildReplaySelectorFromActionableItem(item);
     const role = (item.role ?? "").toLowerCase();
     const inputType = (item.inputType ?? "").toLowerCase();
     const isTab = role === "tab";
@@ -3231,34 +3235,34 @@ export class PageAnalyzer {
 
     let actionType: PlaywrightAction = PlaywrightAction.Click;
     let actionValue: string | undefined;
-    let playwrightCode = `await page.click('${item.selector}')`;
+    let playwrightCode = `await page.click('${replaySelector}')`;
     let description = `${isTab ? "Select" : "Activate"} ${label}`;
 
     if (isFillControl) {
       actionType = PlaywrightAction.Type;
       actionValue = plannedValue;
-      playwrightCode = `await page.locator('${item.selector}').type('${this.escapeSingleQuotes(plannedValue ?? "")}')`;
+      playwrightCode = `await page.locator('${replaySelector}').type('${this.escapeSingleQuotes(plannedValue ?? "")}')`;
       description = `Type into ${label}`;
     } else if (isSelectControl) {
       actionType = PlaywrightAction.SelectOption;
       actionValue = plannedValue;
-      playwrightCode = `await page.locator('${item.selector}').selectOption('${this.escapeSingleQuotes(plannedValue ?? "")}')`;
+      playwrightCode = `await page.locator('${replaySelector}').selectOption('${this.escapeSingleQuotes(plannedValue ?? "")}')`;
       description = `Select ${label}`;
     } else if (isRadioControl) {
       actionType = PlaywrightAction.Click;
-      playwrightCode = `await page.click('${item.selector}')`;
+      playwrightCode = `await page.click('${replaySelector}')`;
       description = `Select ${label}`;
     }
 
     const expectations = isImmutable
-      ? this.buildImmutableControlExpectations(item, label)
+      ? this.buildImmutableControlExpectations(item, label, replaySelector)
       : expectsInputValue
         ? [
             this.makeExpectation(
               ExpectationType.InputValue,
               `${description} should update the control value`,
               {
-                targetPath: item.selector,
+                targetPath: replaySelector,
                 expectedValue: plannedValue,
               }
             ),
@@ -3269,7 +3273,7 @@ export class PageAnalyzer {
                 ExpectationType.ElementChecked,
                 `${label} should react to user input`,
                 {
-                  targetPath: item.selector,
+                  targetPath: replaySelector,
                 }
               ),
             ]
@@ -3292,7 +3296,7 @@ export class PageAnalyzer {
         {
           action: {
             actionType,
-            path: item.selector ?? undefined,
+            path: replaySelector,
             value: actionValue,
             playwrightCode,
             description,
@@ -3321,7 +3325,8 @@ export class PageAnalyzer {
 
   private buildImmutableControlExpectations(
     item: ActionableItem,
-    label: string
+    label: string,
+    replaySelector: string
   ): Expectation[] {
     const role = (item.role ?? "").toLowerCase();
     const inputType = (item.inputType ?? "").toLowerCase();
@@ -3332,7 +3337,7 @@ export class PageAnalyzer {
           ExpectationType.InputValue,
           `${label} should not respond to user input while it appears disabled`,
           {
-            targetPath: item.selector,
+            targetPath: replaySelector,
             expectNoChange: true,
           }
         ),
@@ -3353,7 +3358,7 @@ export class PageAnalyzer {
           ExpectationType.ElementChecked,
           `${label} should not change state while it appears disabled`,
           {
-            targetPath: item.selector,
+            targetPath: replaySelector,
             expectNoChange: true,
           }
         ),

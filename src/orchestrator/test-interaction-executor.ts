@@ -14,6 +14,10 @@ import type { PageAnalyzer, AnalyzerContext } from "../analyzer";
 import { extractActionableItems } from "../extractors";
 import { extractForms } from "../extractors/form-extractor";
 import { captureControlStates } from "../browser/control-snapshot";
+import {
+  buildReplaySelectorFromDescription,
+  isTransientSnapshotSelector,
+} from "../browser/replay-selector";
 import { captureUiSnapshot, type UiSnapshot } from "../browser/ui-snapshot";
 import { detectScaffoldRegions } from "../scanner/component-detector";
 import { detectPatternsWithInstances } from "../scanner/pattern-detector";
@@ -84,6 +88,29 @@ function summarizeStoredStep(step: StoredStep): Record<string, unknown> {
     description: step.description,
     expectationsCount: step.expectations.length,
     continueOnFailure: step.continueOnFailure,
+  };
+}
+
+function prepareActionForReplay(
+  action: StoredStep["action"]
+): StoredStep["action"] {
+  if (!isTransientSnapshotSelector(action.path)) {
+    return action;
+  }
+
+  const replayPath = buildReplaySelectorFromDescription(
+    action.actionType,
+    action.description,
+    action.path
+  );
+
+  if (!replayPath) {
+    return action;
+  }
+
+  return {
+    ...action,
+    path: replayPath,
   };
 }
 
@@ -216,6 +243,8 @@ export async function executeTestInteraction(
       await adapter.goto(absoluteUrl, { waitUntil: "networkidle0" });
     }
 
+    currentPhase = "replaying-setup-interactions";
+
     // Recreate the dependent target state before running this case itself.
     for (const setupCase of setupCases) {
       logExecutor("interaction:replay-setup-case", {
@@ -225,12 +254,17 @@ export async function executeTestInteraction(
       });
       const setupSteps = parseStoredSteps(setupCase.stepsJson);
       for (const step of setupSteps) {
+        const replayAction = prepareActionForReplay(step.action);
+        currentPhase = `replaying-setup:${replayAction.actionType}`;
         logExecutor("interaction:replay-setup-step", {
           testInteractionRunId: testInteractionRun.id,
           setupTestInteractionId: setupCase.id,
-          step: summarizeStoredStep(step),
+          step: summarizeStoredStep({
+            ...step,
+            action: replayAction,
+          }),
         });
-        await executeAction(adapter, step.action, testRun);
+        await executeAction(adapter, replayAction, testRun);
       }
     }
 
@@ -242,20 +276,28 @@ export async function executeTestInteraction(
     currentPhase = "executing-steps";
     // Execute test actions
     for (const step of steps) {
+      const replayAction = prepareActionForReplay(step.action);
       const startedAtMs = Date.now();
       const beforeSnapshot = previousSnapshot;
+      currentPhase = `executing-step:${replayAction.actionType}`;
       logExecutor("interaction:step-start", {
         testInteractionRunId: testInteractionRun.id,
         testInteractionId: testInteraction.id,
-        step: summarizeStoredStep(step),
+        step: summarizeStoredStep({
+          ...step,
+          action: replayAction,
+        }),
         beforeUrl: beforeSnapshot.url,
       });
       try {
-        await executeAction(adapter, step.action, testRun);
+        await executeAction(adapter, replayAction, testRun);
         const afterSnapshot = await captureExecutionSnapshot(adapter);
         previousSnapshot = afterSnapshot;
         stepExecutions.push({
-          step,
+          step: {
+            ...step,
+            action: replayAction,
+          },
           startedAtMs,
           endedAtMs: Date.now(),
           beforeSnapshot,
@@ -264,7 +306,10 @@ export async function executeTestInteraction(
         logExecutor("interaction:step-complete", {
           testInteractionRunId: testInteractionRun.id,
           testInteractionId: testInteraction.id,
-          step: summarizeStoredStep(step),
+          step: summarizeStoredStep({
+            ...step,
+            action: replayAction,
+          }),
           afterUrl: afterSnapshot.url,
           durationMs: Date.now() - startedAtMs,
         });
@@ -275,7 +320,10 @@ export async function executeTestInteraction(
         );
         previousSnapshot = afterSnapshot;
         stepExecutions.push({
-          step,
+          step: {
+            ...step,
+            action: replayAction,
+          },
           startedAtMs,
           endedAtMs: Date.now(),
           beforeSnapshot,
@@ -284,7 +332,10 @@ export async function executeTestInteraction(
         logExecutor("interaction:step-error", {
           testInteractionRunId: testInteractionRun.id,
           testInteractionId: testInteraction.id,
-          step: summarizeStoredStep(step),
+          step: summarizeStoredStep({
+            ...step,
+            action: replayAction,
+          }),
           error:
             error instanceof Error
               ? { name: error.name, message: error.message }
