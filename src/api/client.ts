@@ -414,9 +414,10 @@ export class ApiClient {
   insertTestElement(
     runnerId: number,
     testElement: TestElement | LegacyTestElement,
-    testSurfaceId?: number
+    testSurfaceId?: number,
+    testEnvironmentId?: number
   ): Promise<TestElementResponse> {
-    const body = { runnerId, testSurfaceId, testElement };
+    const body = { runnerId, testSurfaceId, testEnvironmentId, testElement };
     return this.post("/test-elements", body);
   }
 
@@ -476,9 +477,14 @@ export class ApiClient {
 
   insertTestSurface(
     runnerId: number,
-    testSurface: TestSurface
+    testSurface: TestSurface,
+    testEnvironmentId?: number
   ): Promise<TestSurfaceResponse> {
-    const body: InsertTestSurfaceRequest = { runnerId, testSurface };
+    const body: InsertTestSurfaceRequest = {
+      runnerId,
+      testEnvironmentId,
+      testSurface,
+    };
     return this.post("/test-surfaces", body);
   }
 
@@ -611,20 +617,27 @@ export class ApiClient {
 
   ensureTestSurface(
     runnerId: number,
-    testSurface: TestSurface
+    testSurface: TestSurface,
+    testEnvironmentId?: number
   ): Promise<TestSurfaceResponse> {
-    const body: InsertTestSurfaceRequest = { runnerId, testSurface };
+    const body: InsertTestSurfaceRequest = {
+      runnerId,
+      testEnvironmentId,
+      testSurface,
+    };
     return this.post("/test-surfaces", body);
   }
 
   ensureTestElement(
     runnerId: number,
     testSurfaceId: number,
-    testElement: TestElement
+    testElement: TestElement,
+    testEnvironmentId?: number
   ): Promise<TestElementResponse> {
     const body: InsertTestElementRequestCompat = {
       runnerId,
       testSurfaceId,
+      testEnvironmentId,
       testElement,
       isGenerated: true,
     };

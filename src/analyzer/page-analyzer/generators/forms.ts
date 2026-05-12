@@ -13,17 +13,22 @@ export async function generateFormTestElements(
     return;
   }
 
-  const { api, runnerId, sizeClass, uid, bundleRun } = context;
-  const surface = await api.ensureTestSurface(runnerId, {
-    title: surfaceTitle,
-    description: `Form workflows for ${context.currentPath}`,
-    startingPageStateId: context.currentPageStateId,
-    startingPath: context.currentPath,
-    sizeClass,
-    priority: 2,
-    surface_tags: ["form"],
-    uid,
-  });
+  const { api, runnerId, testEnvironmentId, sizeClass, uid, bundleRun } =
+    context;
+  const surface = await api.ensureTestSurface(
+    runnerId,
+    {
+      title: surfaceTitle,
+      description: `Form workflows for ${context.currentPath}`,
+      startingPageStateId: context.currentPageStateId,
+      startingPath: context.currentPath,
+      sizeClass,
+      priority: 2,
+      surface_tags: ["form"],
+      uid,
+    },
+    testEnvironmentId
+  );
   context.events.onTestSurfaceCreated({
     surfaceId: surface.id,
     title: surface.title,
@@ -60,7 +65,8 @@ export async function generateFormTestElements(
         const searchElement = await api.ensureTestElement(
           runnerId,
           surface.id,
-          searchTest
+          searchTest,
+          testEnvironmentId
         );
         await api.createTestElementRun({
           testElementId: searchElement.id,
@@ -84,7 +90,8 @@ export async function generateFormTestElements(
     const positiveElement = await api.ensureTestElement(
       runnerId,
       surface.id,
-      positive
+      positive,
+      testEnvironmentId
     );
     await api.createTestElementRun({
       testElementId: positiveElement.id,
@@ -109,7 +116,8 @@ export async function generateFormTestElements(
       const negativeElement = await api.ensureTestElement(
         runnerId,
         surface.id,
-        negative
+        negative,
+        testEnvironmentId
       );
       await api.createTestElementRun({
         testElementId: negativeElement.id,
@@ -131,7 +139,8 @@ export async function generateFormTestElements(
       const correctionElement = await api.ensureTestElement(
         runnerId,
         surface.id,
-        correction
+        correction,
+        testEnvironmentId
       );
       await api.createTestElementRun({
         testElementId: correctionElement.id,
@@ -159,7 +168,8 @@ export async function generateFormTestElements(
         const passwordElement = await api.ensureTestElement(
           runnerId,
           surface.id,
-          passwordTest
+          passwordTest,
+          testEnvironmentId
         );
         await api.createTestElementRun({
           testElementId: passwordElement.id,

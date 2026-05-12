@@ -46,7 +46,8 @@ export async function generateHoverFollowUpCases(
     const tc = await context.api.ensureTestElement(
       context.runnerId,
       context.currentTestSurfaceId,
-      clickCase
+      clickCase,
+      context.testEnvironmentId
     );
     await context.api.createTestElementRun({
       testElementId: tc.id,
@@ -86,7 +87,8 @@ export async function generateHoverFollowUpCases(
     const tc = await context.api.ensureTestElement(
       context.runnerId,
       context.currentTestSurfaceId,
-      nextHover
+      nextHover,
+      context.testEnvironmentId
     );
     await context.api.createTestElementRun({
       testElementId: tc.id,

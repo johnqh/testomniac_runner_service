@@ -12,6 +12,7 @@ import type { DetectedScaffoldRegion } from "../../scanner/component-detector";
 
 export interface AnalyzerContext {
   runnerId: number;
+  testEnvironmentId?: number;
   sizeClass: SizeClass;
   uid?: string;
   currentTestElementId: number;

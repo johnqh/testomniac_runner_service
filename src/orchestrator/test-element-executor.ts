@@ -385,6 +385,7 @@ export async function executeTestElement(
 
       const analyzerCtx: AnalyzerContext = {
         runnerId: testRun.runnerId,
+        testEnvironmentId: testRun.testEnvironmentId ?? undefined,
         sizeClass: testRun.sizeClass as "desktop" | "mobile",
         uid: testRun.createdByUserId ?? undefined,
         currentTestElementId: testElement.id,

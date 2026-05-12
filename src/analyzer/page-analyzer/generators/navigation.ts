@@ -13,8 +13,15 @@ export async function generateNavigationTestElements(
     return;
   }
 
-  const { api, runnerId, sizeClass, uid, navigationSurface, bundleRun } =
-    context;
+  const {
+    api,
+    runnerId,
+    testEnvironmentId,
+    sizeClass,
+    uid,
+    navigationSurface,
+    bundleRun,
+  } = context;
   const links = analyzer.selectRepresentativeItems(
     context.actionableItems.filter(
       (item: any) => item.actionKind === "navigate" && item.href && item.visible
@@ -48,7 +55,8 @@ export async function generateNavigationTestElements(
     const tc = await api.ensureTestElement(
       runnerId,
       navigationSurface.id,
-      testElement
+      testElement,
+      testEnvironmentId
     );
     await api.createTestElementRun({
       testElementId: tc.id,

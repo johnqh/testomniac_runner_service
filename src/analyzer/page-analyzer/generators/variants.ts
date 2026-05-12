@@ -14,17 +14,21 @@ export async function generateVariantTestElements(
     return;
   }
 
-  const { api, runnerId, bundleRun } = context;
-  const surface = await api.ensureTestSurface(runnerId, {
-    title: surfaceTitle,
-    description: `Variant and option state checks for ${context.currentPath}`,
-    startingPageStateId: context.currentPageStateId,
-    startingPath: context.currentPath,
-    sizeClass: context.sizeClass,
-    priority: 2,
-    surface_tags: ["variant", "option"],
-    uid: context.uid,
-  });
+  const { api, runnerId, testEnvironmentId, bundleRun } = context;
+  const surface = await api.ensureTestSurface(
+    runnerId,
+    {
+      title: surfaceTitle,
+      description: `Variant and option state checks for ${context.currentPath}`,
+      startingPageStateId: context.currentPageStateId,
+      startingPath: context.currentPath,
+      sizeClass: context.sizeClass,
+      priority: 2,
+      surface_tags: ["variant", "option"],
+      uid: context.uid,
+    },
+    testEnvironmentId
+  );
   context.events.onTestSurfaceCreated({
     surfaceId: surface.id,
     title: surface.title,
@@ -38,7 +42,12 @@ export async function generateVariantTestElements(
   );
 
   for (const test of tests) {
-    const tc = await api.ensureTestElement(runnerId, surface.id, test);
+    const tc = await api.ensureTestElement(
+      runnerId,
+      surface.id,
+      test,
+      testEnvironmentId
+    );
     await api.createTestElementRun({
       testElementId: tc.id,
       testSurfaceRunId: surfaceRun.id,

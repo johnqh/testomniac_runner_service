@@ -4,19 +4,24 @@ export async function generateRenderTestElements(
   analyzer: any,
   context: AnalyzerContext
 ): Promise<void> {
-  const { api, runnerId, sizeClass, uid, bundleRun } = context;
+  const { api, runnerId, testEnvironmentId, sizeClass, uid, bundleRun } =
+    context;
   const surfaceTitle = `Render: ${context.currentPath}`;
 
-  const surface = await api.ensureTestSurface(runnerId, {
-    title: surfaceTitle,
-    description: `Render validation for ${context.currentPath}`,
-    startingPageStateId: context.currentPageStateId,
-    startingPath: context.currentPath,
-    sizeClass,
-    priority: 2,
-    surface_tags: ["render"],
-    uid,
-  });
+  const surface = await api.ensureTestSurface(
+    runnerId,
+    {
+      title: surfaceTitle,
+      description: `Render validation for ${context.currentPath}`,
+      startingPageStateId: context.currentPageStateId,
+      startingPath: context.currentPath,
+      sizeClass,
+      priority: 2,
+      surface_tags: ["render"],
+      uid,
+    },
+    testEnvironmentId
+  );
   context.events.onTestSurfaceCreated({
     surfaceId: surface.id,
     title: surface.title,
@@ -36,7 +41,12 @@ export async function generateRenderTestElements(
     context.currentPageStateId,
     context.pageId
   );
-  const tc = await api.ensureTestElement(runnerId, surface.id, testElement);
+  const tc = await api.ensureTestElement(
+    runnerId,
+    surface.id,
+    testElement,
+    testEnvironmentId
+  );
   await api.createTestElementRun({
     testElementId: tc.id,
     testSurfaceRunId: surfaceRun.id,

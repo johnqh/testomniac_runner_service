@@ -13,17 +13,22 @@ export async function generateE2ETestElements(
     return;
   }
 
-  const { api, runnerId, sizeClass, uid, bundleRun } = context;
-  const surface = await api.ensureTestSurface(runnerId, {
-    title: surfaceTitle,
-    description: `Dependency-derived journeys reaching ${context.currentPath}`,
-    startingPageStateId: context.currentPageStateId,
-    startingPath: context.currentPath,
-    sizeClass,
-    priority: 2,
-    surface_tags: ["e2e"],
-    uid,
-  });
+  const { api, runnerId, testEnvironmentId, sizeClass, uid, bundleRun } =
+    context;
+  const surface = await api.ensureTestSurface(
+    runnerId,
+    {
+      title: surfaceTitle,
+      description: `Dependency-derived journeys reaching ${context.currentPath}`,
+      startingPageStateId: context.currentPageStateId,
+      startingPath: context.currentPath,
+      sizeClass,
+      priority: 2,
+      surface_tags: ["e2e"],
+      uid,
+    },
+    testEnvironmentId
+  );
   context.events.onTestSurfaceCreated({
     surfaceId: surface.id,
     title: surface.title,
@@ -43,7 +48,12 @@ export async function generateE2ETestElements(
     context.currentPageStateId,
     context.journeySteps
   );
-  const tc = await api.ensureTestElement(runnerId, surface.id, e2e);
+  const tc = await api.ensureTestElement(
+    runnerId,
+    surface.id,
+    e2e,
+    testEnvironmentId
+  );
   await api.createTestElementRun({
     testElementId: tc.id,
     testSurfaceRunId: surfaceRun.id,

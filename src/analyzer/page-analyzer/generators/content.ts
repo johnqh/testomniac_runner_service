@@ -4,7 +4,8 @@ export async function generateContentTestElements(
   analyzer: any,
   context: AnalyzerContext
 ): Promise<void> {
-  const { api, runnerId, sizeClass, uid, bundleRun } = context;
+  const { api, runnerId, testEnvironmentId, sizeClass, uid, bundleRun } =
+    context;
 
   const contentItems = analyzer.selectRepresentativeItems(
     context.actionableItems.filter(
@@ -20,16 +21,20 @@ export async function generateContentTestElements(
     });
     return;
   }
-  const surface = await api.ensureTestSurface(runnerId, {
-    title: surfaceTitle,
-    description: `Tests for page content at ${context.currentPath}`,
-    startingPageStateId: context.currentPageStateId,
-    startingPath: context.currentPath,
-    sizeClass,
-    priority: 3,
-    surface_tags: ["page-content"],
-    uid,
-  });
+  const surface = await api.ensureTestSurface(
+    runnerId,
+    {
+      title: surfaceTitle,
+      description: `Tests for page content at ${context.currentPath}`,
+      startingPageStateId: context.currentPageStateId,
+      startingPath: context.currentPath,
+      sizeClass,
+      priority: 3,
+      surface_tags: ["page-content"],
+      uid,
+    },
+    testEnvironmentId
+  );
   context.events.onTestSurfaceCreated({
     surfaceId: surface.id,
     title: surface.title,
@@ -60,7 +65,12 @@ export async function generateContentTestElements(
           context.currentPageStateId
         );
     desiredKeys.push(analyzer.getGeneratedKey(testElement));
-    const tc = await api.ensureTestElement(runnerId, surface.id, testElement);
+    const tc = await api.ensureTestElement(
+      runnerId,
+      surface.id,
+      testElement,
+      testEnvironmentId
+    );
     await api.createTestElementRun({
       testElementId: tc.id,
       testSurfaceRunId: surfaceRun.id,
