@@ -1,4 +1,5 @@
 import type { TestInteraction } from "@sudobility/testomniac_types";
+import { matchesActionableItemSelector } from "../../../browser/replay-selector";
 import type { AnalyzerContext } from "../types";
 
 export async function generateHoverFollowUpCases(
@@ -37,9 +38,13 @@ export async function generateHoverFollowUpCases(
   );
 
   const hoveredItem =
-    context.actionableItems.find(item => item.selector === selector) ?? null;
+    context.actionableItems.find(item =>
+      matchesActionableItemSelector(selector, item)
+    ) ?? null;
   const startingItem =
-    beginningItems.find(item => item.selector === selector) ?? null;
+    beginningItems.find(item =>
+      matchesActionableItemSelector(selector, item)
+    ) ?? null;
   const stableHoveredItem = hoveredItem ?? startingItem;
   const stayedOnSamePageState =
     context.beginningPageStateId > 0 &&

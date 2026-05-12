@@ -1,4 +1,7 @@
-import type { ActionableItem } from "@sudobility/testomniac_types";
+import type {
+  ActionableItem,
+  ActionableItemResponse,
+} from "@sudobility/testomniac_types";
 import type { ControlState } from "../expertise/tester/control-state";
 
 const REPLAY_SELECTOR_PREFIX = "tmnc-replay:";
@@ -213,6 +216,132 @@ export function matchesControlSelector(
   return true;
 }
 
+export function matchesActionableItemSelector(
+  selector: string | undefined,
+  item: ActionableItem | ActionableItemResponse
+): boolean {
+  if (!selector) return false;
+
+  const itemSelector = item.selector ?? undefined;
+  if (!isReplaySelector(selector)) {
+    return itemSelector === selector;
+  }
+
+  const replay = parseReplaySelector(selector);
+  if (!replay) return false;
+
+  const tagName = normalizeText(item.tagName ?? "").toLowerCase();
+  const role = normalizeText(item.role ?? "").toLowerCase();
+  const inputType = normalizeText(
+    readActionableAttribute(item, "type")
+  ).toLowerCase();
+  const href = normalizeText(readActionableHref(item));
+  const accessibleName = normalizeText(item.accessibleName ?? "");
+  const textContent = normalizeText(readActionableTextContent(item));
+  const testId = normalizeText(readActionableAttribute(item, "_testId"));
+  const id = normalizeText(readActionableAttribute(item, "id"));
+  const name = normalizeText(readActionableAttribute(item, "name"));
+  const placeholder = normalizeText(
+    readActionableAttribute(item, "placeholder")
+  );
+
+  if (replay.css && itemSelector && replay.css === itemSelector) {
+    return true;
+  }
+
+  if (replay.tagName && replay.tagName.toLowerCase() !== tagName) {
+    return false;
+  }
+
+  if (replay.role && replay.role.toLowerCase() !== role) {
+    return false;
+  }
+
+  if (replay.inputType && replay.inputType.toLowerCase() !== inputType) {
+    return false;
+  }
+
+  if (replay.href && replay.href !== href) {
+    return false;
+  }
+
+  if (replay.testId && replay.testId !== testId) {
+    return false;
+  }
+
+  if (replay.id && replay.id !== id) {
+    return false;
+  }
+
+  if (replay.name && replay.name !== name) {
+    return false;
+  }
+
+  if (replay.placeholder && replay.placeholder !== placeholder) {
+    return false;
+  }
+
+  const targetNames = [
+    normalizeText(replay.accessibleName),
+    normalizeText(replay.textContent),
+  ].filter(Boolean);
+
+  if (targetNames.length > 0) {
+    const haystacks = [accessibleName, textContent, name, placeholder].filter(
+      Boolean
+    );
+    const matchesName = targetNames.some(target =>
+      haystacks.some(
+        value =>
+          value === target || value.includes(target) || target.includes(value)
+      )
+    );
+
+    if (!matchesName) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function asString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
+}
+
+function readActionableAttribute(
+  item: ActionableItem | ActionableItemResponse,
+  key: string
+): string | undefined {
+  if ("attributes" in item) {
+    return asString(item.attributes?.[key]);
+  }
+
+  if (
+    item.attributesJson &&
+    typeof item.attributesJson === "object" &&
+    !Array.isArray(item.attributesJson)
+  ) {
+    return asString((item.attributesJson as Record<string, unknown>)[key]);
+  }
+
+  return undefined;
+}
+
+function readActionableHref(
+  item: ActionableItem | ActionableItemResponse
+): string | undefined {
+  return "href" in item
+    ? (asString(item.href) ?? readActionableAttribute(item, "href"))
+    : undefined;
+}
+
+function readActionableTextContent(
+  item: ActionableItem | ActionableItemResponse
+): string | undefined {
+  if ("textContent" in item) {
+    return asString(item.textContent);
+  }
+
+  return readActionableAttribute(item, "textContent");
 }
