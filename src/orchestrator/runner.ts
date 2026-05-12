@@ -3,6 +3,8 @@ import type { ApiClient } from "../api/client";
 import type {
   TestElementResponse,
   TestElementRunResponse,
+  TestSurfaceResponse,
+  TestSurfaceRunResponse,
 } from "@sudobility/testomniac_types";
 import type {
   RunCheckpoint,
@@ -185,7 +187,11 @@ export async function runTestRun(
         break;
       }
 
-      const currentSurfaceRun = openSurfaceRuns[0];
+      const testSurfaces = await api.getTestSurfacesByRunner(config.runnerId);
+      const currentSurfaceRun = selectNextOpenTestSurfaceRun(
+        openSurfaceRuns,
+        testSurfaces
+      );
       activeDependencyBranch = [];
 
       // Iterate open element runs in this surface
@@ -328,6 +334,54 @@ function selectNextOpenTestElementRun(
   }
 
   return openRuns[0]!;
+}
+
+function selectNextOpenTestSurfaceRun(
+  openSurfaceRuns: TestSurfaceRunResponse[],
+  testSurfaces: TestSurfaceResponse[]
+): TestSurfaceRunResponse {
+  if (openSurfaceRuns.length <= 1) {
+    return openSurfaceRuns[0]!;
+  }
+
+  const testSurfaceById = new Map(
+    testSurfaces.map(testSurface => [testSurface.id, testSurface])
+  );
+
+  return [...openSurfaceRuns].sort((left, right) => {
+    const leftSurface = testSurfaceById.get(left.testSurfaceId);
+    const rightSurface = testSurfaceById.get(right.testSurfaceId);
+
+    const groupDiff =
+      getSurfaceExecutionGroup(leftSurface) -
+      getSurfaceExecutionGroup(rightSurface);
+    if (groupDiff !== 0) {
+      return groupDiff;
+    }
+
+    const priorityDiff =
+      (leftSurface?.priority ?? 999) - (rightSurface?.priority ?? 999);
+    if (priorityDiff !== 0) {
+      return priorityDiff;
+    }
+
+    return left.id - right.id;
+  })[0]!;
+}
+
+function getSurfaceExecutionGroup(
+  surface: TestSurfaceResponse | undefined
+): number {
+  const title = surface?.title ?? "";
+
+  if (title.startsWith("Page: ")) return 0;
+  if (title.startsWith("Variants: ")) return 1;
+  if (title.startsWith("Keyboard: ")) return 2;
+  if (title.startsWith("Dialogs: ")) return 3;
+  if (title.startsWith("Render: ")) return 4;
+  if (title.startsWith("Journeys: ")) return 5;
+  if (title === "Direct Navigations") return 6;
+  return 7;
 }
 
 function buildDependencyChainIds(
