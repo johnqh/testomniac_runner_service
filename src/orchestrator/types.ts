@@ -9,6 +9,7 @@ export interface RunConfig {
   uid?: string;
   runnerInstanceId: string;
   runnerInstanceName: string;
+  clickWaitMs?: number;
   waitForCheckpoint?: (checkpoint: RunCheckpoint) => Promise<void>;
   signal?: AbortSignal;
 }

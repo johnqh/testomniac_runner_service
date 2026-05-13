@@ -232,24 +232,6 @@ export async function runTestRun(
         openSurfaceRuns
       );
 
-      const exhaustedSurfaceRuns = pendingInteractionRunsBySurface.filter(
-        entry => entry.allPendingRuns.length === 0
-      );
-      for (const exhaustedSurfaceRun of exhaustedSurfaceRuns) {
-        logRunner("surface-runs:completing-exhausted", {
-          surfaceRunId: exhaustedSurfaceRun.surfaceRun.id,
-          surface: summarizeSurface(
-            testSurfaces.find(
-              surface =>
-                surface.id === exhaustedSurfaceRun.surfaceRun.testSurfaceId
-            )
-          ),
-        });
-        await api.completeTestSurfaceRun(exhaustedSurfaceRun.surfaceRun.id, {
-          status: "completed",
-        });
-      }
-
       const runnableSurfaceEntries = pendingInteractionRunsBySurface.filter(
         entry => entry.eligibleRuns.length > 0
       );
@@ -277,6 +259,23 @@ export async function runTestRun(
             `Blocked interaction tree detected for bundle run ${testRun.testSurfaceBundleRunId}`
           );
         }
+        // All open surface runs have zero pending interactions — complete them
+        for (const surfaceRun of openSurfaceRuns) {
+          const hasPending = pendingInteractionRunsBySurface.some(
+            entry =>
+              entry.surfaceRun.id === surfaceRun.id &&
+              entry.allPendingRuns.length > 0
+          );
+          if (!hasPending) {
+            logRunner("surface-runs:auto-completing", {
+              surfaceRunId: surfaceRun.id,
+              reason: "no pending interaction runs",
+            });
+            await api.completeTestSurfaceRun(surfaceRun.id, {
+              status: "completed",
+            });
+          }
+        }
         continue;
       }
 
@@ -292,6 +291,19 @@ export async function runTestRun(
         testInteraction =>
           testInteraction.id === selected.testInteractionRun.testInteractionId
       );
+      if (!selectedInteraction) {
+        logRunner("interaction-runs:missing-interaction", {
+          selectedRunId: selected.testInteractionRun.id,
+          selectedSurfaceRunId: selected.surfaceRun.id,
+          testInteractionId: selected.testInteractionRun.testInteractionId,
+          activeDependencyBranch,
+        });
+        await api.completeTestInteractionRun(selected.testInteractionRun.id, {
+          status: "cancelled",
+          errorMessage: "Interaction not active or missing from runner",
+        });
+        continue;
+      }
       logRunner("interaction-runs:selected", {
         selectedRunId: selected.testInteractionRun.id,
         selectedSurfaceRunId: selected.surfaceRun.id,
@@ -328,6 +340,15 @@ export async function runTestRun(
     }
 
     await waitForCheckpoint("before_completion");
+
+    const remainingSurfaceRuns = await api.getOpenTestSurfaceRuns(
+      testRun.testSurfaceBundleRunId
+    );
+    for (const surfaceRun of remainingSurfaceRuns) {
+      await api.completeTestSurfaceRun(surfaceRun.id, {
+        status: "completed",
+      });
+    }
 
     // All surfaces done — mark bundle run and test run completed
     await api.completeTestSurfaceBundleRun(testRun.testSurfaceBundleRunId, {
@@ -538,7 +559,7 @@ function getSurfaceExecutionGroup(
   return 7;
 }
 
-function summarizeSurface(
+function _summarizeSurface(
   testSurface: TestSurfaceResponse | undefined
 ): Record<string, unknown> | null {
   if (!testSurface) {

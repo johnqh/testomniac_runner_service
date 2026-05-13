@@ -65,6 +65,7 @@ import type {
 type CompleteRunPayload = CompleteTestRunRequest;
 type InsertTestInteractionRequestCompat = InsertTestInteractionRequest & {
   isGenerated?: boolean;
+  existingTestInteractionId?: number;
 };
 
 export class ApiClient {
@@ -89,6 +90,7 @@ export class ApiClient {
         "X-Scanner-Key": this.apiKey,
       },
       body: body ? JSON.stringify(body) : undefined,
+      cache: "no-store" as RequestCache,
     });
 
     const json = (await res.json()) as BaseResponse<T>;
@@ -578,6 +580,19 @@ export class ApiClient {
     return this.get(`/page-states/match-decomposed?${qs}`);
   }
 
+  findMatchingPageStateByContentBody(
+    pageId: number,
+    fixedBodyHash: string,
+    sizeClass: string
+  ): Promise<PageStateResponse | null> {
+    const qs = new URLSearchParams({
+      pageId: String(pageId),
+      sizeClass,
+      fixedBodyHash,
+    });
+    return this.get(`/page-states/match-content-body?${qs}`);
+  }
+
   // ===========================================================================
   // Page State Patterns
   // ===========================================================================
@@ -649,7 +664,8 @@ export class ApiClient {
     runnerId: number,
     testSurfaceId: number,
     testInteraction: TestInteraction,
-    testEnvironmentId?: number
+    testEnvironmentId?: number,
+    existingTestInteractionId?: number
   ): Promise<TestInteractionResponse> {
     const body: InsertTestInteractionRequestCompat = {
       runnerId,
@@ -657,6 +673,7 @@ export class ApiClient {
       testEnvironmentId,
       testInteraction,
       isGenerated: true,
+      existingTestInteractionId,
     };
     return this.post("/test-interactions", body);
   }

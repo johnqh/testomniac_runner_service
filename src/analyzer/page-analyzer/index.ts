@@ -18,9 +18,10 @@ import {
   buildReplaySelectorFromActionableItem,
   matchesActionableItemSelector,
 } from "../../browser/replay-selector";
-import { computeHashes } from "../../browser/page-utils";
+import { computeHashes, sha256, normalizeHtml } from "../../browser/page-utils";
 import type { ApiClient } from "../../api/client";
 import type { DetectedScaffoldRegion } from "../../scanner/component-detector";
+import { getBody, getContentBody } from "../../scanner/html-decomposer";
 import { createHash } from "node:crypto";
 import { fillValuePlanner } from "../../planners/fill-value-planner";
 import { AUTH_URL_PATTERNS, SIGNUP_URL_PATTERNS } from "../../config/constants";
@@ -63,6 +64,14 @@ function logAnalyzer(step: string, details?: Record<string, unknown>): void {
  * during discovery mode.
  */
 export class PageAnalyzer {
+  /** Paths for which full generation has already run in this test-run. */
+  private generatedPaths = new Set<string>();
+
+  /** Check whether generation already happened for a given path in this run. */
+  hasGeneratedForPath(path: string): boolean {
+    return this.generatedPaths.has(path);
+  }
+
   /**
    * Generate baseline expectations for a test element.
    * Called BEFORE expertises evaluate.
@@ -166,13 +175,35 @@ export class PageAnalyzer {
       hasStableHoveredItem: Boolean(stableHoveredItem),
     });
 
-    if (!stableHoveredItem || !currentHoveredItem || revealedItems.length > 0) {
+    if (!stableHoveredItem) {
       return { testInteraction, appended: false };
     }
 
+    // Prefer currentHoveredItem (ActionableItem); fall back to converting
+    // the ActionableItemResponse from beginning page state.
+    const fallback = stableHoveredItem as ActionableItemResponse;
+    const clickItem: ActionableItem = currentHoveredItem ?? {
+      stableKey: fallback.stableKey ?? fallback.selector ?? "",
+      selector: fallback.selector ?? "",
+      tagName: fallback.tagName ?? "",
+      role: fallback.role ?? undefined,
+      inputType: undefined,
+      actionKind:
+        (fallback.actionKind as ActionableItem["actionKind"]) ?? "click",
+      accessibleName: fallback.accessibleName ?? undefined,
+      textContent: undefined,
+      href: undefined,
+      disabled: fallback.disabled ?? false,
+      visible: fallback.visible ?? true,
+      attributes: (typeof fallback.attributesJson === "object" &&
+      fallback.attributesJson !== null
+        ? fallback.attributesJson
+        : {}) as Record<string, unknown>,
+    };
+
     const clickStep =
       this.buildClickTestInteraction(
-        currentHoveredItem,
+        clickItem,
         context.currentPath,
         context.sizeClass,
         context.uid,
@@ -195,7 +226,8 @@ export class PageAnalyzer {
       context.runnerId,
       context.currentTestSurfaceId,
       updatedInteraction,
-      context.testEnvironmentId
+      context.testEnvironmentId,
+      context.currentTestInteractionId
     );
     logAnalyzer("generate:hover-inline-click-appended", {
       sourceTitle: testInteraction.title,
@@ -262,21 +294,91 @@ export class PageAnalyzer {
       return;
     }
 
+    // Skip generation if we already generated tests for this path during this
+    // run.  The check is scoped to the PageAnalyzer instance (one per run) so
+    // previous runs on the same runner don't block re-discovery.
+    const currentPath = resolvedContext.currentPath.trim();
+    if (this.generatedPaths.has(currentPath)) {
+      logAnalyzer("generate:page-already-covered", {
+        sourceTitle: testInteraction.title,
+        currentTestInteractionId: resolvedContext.currentTestInteractionId,
+        currentPageStateId: resolvedContext.currentPageStateId,
+        currentPath,
+      });
+      return;
+    }
+    this.generatedPaths.add(currentPath);
+
+    // If a hover+click navigated to a new page, create a direct navigation
+    // interaction and use it as the dependency instead of the hover chain
+    let contextForFullPass = resolvedContext;
+    const normalizedStartingPath = (testInteraction.startingPath || "/").trim();
+    if (
+      this.isHoverBased(testInteraction) &&
+      normalizedStartingPath !== currentPath
+    ) {
+      const navInteraction = this.buildNavigationTestInteraction(
+        currentPath,
+        resolvedContext.sizeClass,
+        resolvedContext.uid,
+        resolvedContext.currentPageStateId > 0
+          ? resolvedContext.currentPageStateId
+          : undefined
+      );
+      const navSurfaceId = resolvedContext.navigationSurface.id;
+      const saved = await resolvedContext.api.ensureTestInteraction(
+        resolvedContext.runnerId,
+        navSurfaceId,
+        navInteraction as any,
+        resolvedContext.testEnvironmentId
+      );
+      // Also create a run for it so the runner can execute it
+      const surfaceRuns = await resolvedContext.api.getOpenTestSurfaceRuns(
+        resolvedContext.bundleRun.id
+      );
+      const navSurfaceRun = surfaceRuns.find(
+        sr => sr.testSurfaceId === navSurfaceId
+      );
+      if (navSurfaceRun) {
+        try {
+          await resolvedContext.api.createTestInteractionRun({
+            testInteractionId: saved.id,
+            testSurfaceRunId: navSurfaceRun.id,
+          });
+        } catch {
+          // Run may already exist
+        }
+      }
+      logAnalyzer("generate:navigation-dependency-created", {
+        sourceTitle: testInteraction.title,
+        navigationInteractionId: saved.id,
+        navigationPath: currentPath,
+        originalDependencyId: resolvedContext.currentTestInteractionId,
+      });
+      contextForFullPass = {
+        ...resolvedContext,
+        currentTestInteractionId: saved.id,
+      };
+    }
+
     logAnalyzer("generate:full-pass", {
       sourceTitle: testInteraction.title,
-      currentTestInteractionId: resolvedContext.currentTestInteractionId,
-      currentPageStateId: resolvedContext.currentPageStateId,
+      currentTestInteractionId: contextForFullPass.currentTestInteractionId,
+      currentPageStateId: contextForFullPass.currentPageStateId,
     });
-    await generateRenderTestInteractions(this, resolvedContext);
-    await generateFormTestInteractions(this, resolvedContext);
-    await generateSemanticJourneyTestInteractions(this, resolvedContext);
-    await generateE2ETestInteractions(this, resolvedContext);
-    await generateDialogLifecycleTestInteractions(this, resolvedContext);
-    await generateScaffoldTestInteractions(this, resolvedContext);
-    await generateContentTestInteractions(this, resolvedContext);
-    await generateKeyboardAndDisclosureTestInteractions(this, resolvedContext);
-    await generateVariantTestInteractions(this, resolvedContext);
-    await generateNavigationTestInteractions(this, resolvedContext);
+    await generateRenderTestInteractions(this, contextForFullPass);
+    await generateFormTestInteractions(this, contextForFullPass);
+    await generateSemanticJourneyTestInteractions(this, contextForFullPass);
+    await generateE2ETestInteractions(this, contextForFullPass);
+    await generateDialogLifecycleTestInteractions(this, contextForFullPass);
+    await generateScaffoldTestInteractions(this, contextForFullPass);
+    await generateContentTestInteractions(this, contextForFullPass);
+    await generateKeyboardAndDisclosureTestInteractions(
+      this,
+      contextForFullPass
+    );
+    await generateVariantTestInteractions(this, contextForFullPass);
+    await generateNavigationTestInteractions(this, contextForFullPass);
   }
 
   async reconcileGeneratedSurfaceElements(
@@ -559,6 +661,16 @@ export class PageAnalyzer {
     );
   }
 
+  private isHoverBased(testInteraction: TestInteraction): boolean {
+    const steps = Array.isArray(testInteraction.steps)
+      ? testInteraction.steps
+      : [];
+    return (
+      steps.length > 0 &&
+      steps[0]?.action?.actionType === PlaywrightAction.Hover
+    );
+  }
+
   private getPrimarySelector(testInteraction: TestInteraction): string | null {
     const steps = Array.isArray(testInteraction.steps)
       ? testInteraction.steps
@@ -693,6 +805,34 @@ export class PageAnalyzer {
       return existing.id;
     }
 
+    // Fallback: match by content minus scaffolds (e.g., cookie banner
+    // presence/absence should not create a different page state)
+    if (context.scaffolds.length > 0) {
+      const body = getBody(context.html);
+      const { contentBody } = getContentBody(body, context.scaffolds);
+      const contentBodyHash = await sha256(normalizeHtml(contentBody));
+      const existingByContent =
+        await context.api.findMatchingPageStateByContentBody(
+          context.pageId,
+          contentBodyHash,
+          context.sizeClass
+        );
+      if (existingByContent) {
+        if (scaffoldIdsBySelector.size > 0) {
+          await context.api.linkPageStateScaffolds(
+            existingByContent.id,
+            Array.from(new Set(scaffoldIdsBySelector.values()))
+          );
+        }
+        context.events.onPageStateCreated({
+          pageStateId: existingByContent.id,
+          pageId: context.pageId,
+        });
+        await this.ensureStoredForms(existingByContent.id, context);
+        return existingByContent.id;
+      }
+    }
+
     const contentHash = createHash("sha256").update(context.html).digest("hex");
     const contentElement = await context.api.findOrCreateHtmlElement(
       context.html,
@@ -710,6 +850,23 @@ export class PageAnalyzer {
       contentText: context.html.slice(0, 5000),
       contentHtmlElementId: contentElement.id,
     });
+
+    // Store content-body hash (HTML minus scaffolds) for fallback matching
+    if (context.scaffolds.length > 0) {
+      const body = getBody(context.html);
+      const { contentBody } = getContentBody(body, context.scaffolds);
+      const contentBodyHash = await sha256(normalizeHtml(contentBody));
+      try {
+        await context.api.updatePageStateDecomposedHashes(pageState.id, {
+          fixedBodyHash: contentBodyHash,
+          scaffoldsHash: "",
+          patternsHash: "",
+        });
+      } catch {
+        // Best effort — decomposed hashes are optional
+      }
+    }
+
     context.events.onPageStateCreated({
       pageStateId: pageState.id,
       pageId: context.pageId,

@@ -23,6 +23,12 @@ import { captureUiSnapshot, type UiSnapshot } from "../browser/ui-snapshot";
 import { detectScaffoldRegions } from "../scanner/component-detector";
 import { detectPatternsWithInstances } from "../scanner/pattern-detector";
 
+let _clickWaitMs = 500;
+
+export function setClickWaitMs(ms: number): void {
+  _clickWaitMs = ms;
+}
+
 type StoredExpectation = {
   expectationType: string;
   elementIdentityId?: number;
@@ -266,7 +272,19 @@ export async function executeTestInteraction(
             action: replayAction,
           }),
         });
-        await executeAction(adapter, replayAction, testRun);
+        try {
+          await executeAction(adapter, replayAction, testRun);
+        } catch (replayError) {
+          logExecutor("interaction:replay-setup-step-skipped", {
+            testInteractionRunId: testInteractionRun.id,
+            setupTestInteractionId: setupCase.id,
+            actionType: replayAction.actionType,
+            error:
+              replayError instanceof Error
+                ? replayError.message
+                : String(replayError),
+          });
+        }
       }
     }
 
@@ -367,6 +385,26 @@ export async function executeTestInteraction(
         });
         if (!step.continueOnFailure) {
           throw error;
+        }
+        // Still attempt to refresh (e.g. append click to failed hover)
+        const refreshed = await maybeRefreshInteractionActions({
+          adapter,
+          analyzer,
+          api,
+          testRun,
+          testInteraction,
+          testInteractionRun,
+          steps,
+        });
+        if (refreshed) {
+          testInteraction = refreshed.testInteraction;
+          steps = refreshed.steps;
+          logExecutor("interaction:steps-reloaded", {
+            testInteractionRunId: testInteractionRun.id,
+            testInteractionId: testInteraction.id,
+            completedStepIndex: stepIndex,
+            stepsCount: steps.length,
+          });
         }
       }
     }
@@ -942,12 +980,16 @@ async function maybeRefreshInteractionActions(params: {
       sizeClass: params.testInteraction.sizeClass as "desktop" | "mobile",
       surface_tags: params.testInteraction.surfaceTags ?? [],
       priority: params.testInteraction.priority ?? 0,
+      dependencyTestInteractionId:
+        params.testInteraction.dependencyTestInteractionId ?? undefined,
       startingPageStateId: params.testInteraction.startingPageStateId ?? 0,
       startingPath: params.testInteraction.startingPath ?? "",
       steps: params.steps as any,
       globalExpectations: parseStoredExpectations(
         params.testInteraction.globalExpectationsJson
       ) as any,
+      generatedKey: params.testInteraction.generatedKey ?? undefined,
+      uid: params.testInteraction.uid ?? undefined,
     },
     {
       runnerId: params.testRun.runnerId,
@@ -1027,10 +1069,20 @@ async function executeAction(
       }
       break;
     case "click":
-      if (action.path) await adapter.click(action.path);
+      if (action.path) {
+        await adapter.click(action.path);
+        if (_clickWaitMs > 0)
+          await new Promise(r => setTimeout(r, _clickWaitMs));
+        await adapter.waitForNavigation({ timeout: 5000 });
+      }
       break;
     case "dblclick":
-      if (action.path) await adapter.click(action.path); // adapter may not support dblclick
+      if (action.path) {
+        await adapter.click(action.path);
+        if (_clickWaitMs > 0)
+          await new Promise(r => setTimeout(r, _clickWaitMs));
+        await adapter.waitForNavigation({ timeout: 5000 });
+      }
       break;
     case "fill":
       if (action.path && action.value != null)

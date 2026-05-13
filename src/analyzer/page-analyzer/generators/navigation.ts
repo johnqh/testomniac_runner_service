@@ -1,12 +1,11 @@
 import type { AnalyzerContext } from "../types";
 
 export async function generateNavigationTestInteractions(
-  analyzer: any,
-  context: AnalyzerContext
+  _analyzer: any,
+  _context: AnalyzerContext
 ): Promise<void> {
-  await analyzer.reconcileGeneratedSurfaceElements(context, {
-    surfaceId: context.navigationSurface.id,
-    surfaceTitle: context.navigationSurface.title,
-    desiredKeys: [],
-  });
+  // Navigation surface is managed externally (scan bootstrap + auto-created
+  // navigations from hover-click discovery). Do not reconcile — reconciling
+  // with desiredKeys: [] would retire auto-created navigation interactions
+  // before the runner can execute them.
 }

@@ -91,6 +91,26 @@ export async function generateHoverFollowUpCases(
     return;
   }
 
+  // Skip follow-up generation if this page path was already generated for in
+  // this run (the analyzer instance tracks covered paths per run)
+  const currentPath = context.currentPath.trim();
+  const pageAlreadyCovered = analyzer.hasGeneratedForPath(currentPath);
+  if (pageAlreadyCovered) {
+    console.info("[PageAnalyzer][hover-follow-up] page-already-covered", {
+      testInteractionId: context.currentTestInteractionId,
+      sourceTitle: testInteraction.title,
+      currentPath,
+      currentPageStateId: context.currentPageStateId,
+    });
+    await analyzer.reconcileGeneratedSurfaceElements(context, {
+      surfaceId: context.currentTestSurfaceId,
+      surfaceTitle: "",
+      desiredKeys: [],
+      dependencyTestInteractionId: context.currentTestInteractionId,
+    });
+    return;
+  }
+
   console.info("[PageAnalyzer][hover-follow-up] generating-hover-follow-ups", {
     testInteractionId: context.currentTestInteractionId,
     sourceTitle: testInteraction.title,
