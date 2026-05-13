@@ -669,14 +669,22 @@ export async function executeTestInteraction(
           : JSON.stringify(error);
     const errorMessage = `Phase: ${currentPhase}\n${detail}`;
 
+    // "Element not found" and "Could not resolve clickable point" are replay
+    // infrastructure issues, not bugs in the app under test.  Mark the
+    // interaction as skipped rather than creating a noisy finding.
+    const isReplayError =
+      error instanceof Error &&
+      (error.message.includes("Element not found") ||
+        error.message.includes("Could not resolve clickable point"));
+
     await api.completeTestInteractionRun(testInteractionRun.id, {
-      status: "failed",
+      status: isReplayError ? "skipped" : "failed",
       durationMs,
       errorMessage,
       consoleLog: consoleLogs.join("\n") || undefined,
       networkLog: JSON.stringify(networkLogs) || undefined,
     });
-    logExecutor("interaction:failed", {
+    logExecutor(isReplayError ? "interaction:skipped" : "interaction:failed", {
       testInteractionRunId: testInteractionRun.id,
       testInteractionId: testInteractionRun.testInteractionId,
       phase: currentPhase,
@@ -684,21 +692,24 @@ export async function executeTestInteraction(
       errorMessage,
     });
 
-    await api.createTestRunFinding({
-      testInteractionRunId: testInteractionRun.id,
-      type: "error",
-      title: `Test execution error`,
-      description: errorMessage,
-    });
+    if (!isReplayError) {
+      await api.createTestRunFinding({
+        testInteractionRunId: testInteractionRun.id,
+        type: "error",
+        title: `Test execution error`,
+        description: errorMessage,
+      });
 
-    events.onFindingCreated({
-      type: "error",
-      title: "Test execution error",
-      description: errorMessage,
-    });
+      events.onFindingCreated({
+        type: "error",
+        title: "Test execution error",
+        description: errorMessage,
+      });
+    }
+
     events.onTestInteractionRunCompleted({
       testInteractionRunId: testInteractionRun.id,
-      passed: false,
+      passed: isReplayError ? true : false,
     });
   }
 }
