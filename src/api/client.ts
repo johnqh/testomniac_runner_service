@@ -32,6 +32,9 @@ import type {
   CreateTestSurfaceBundleRequest,
   TestSurfaceBundleResponse,
   TestSurfaceBundleSurfaceLinkResponse,
+  TestSurfaceBundleInteractionLinkResponse,
+  TestSurfaceBundleScenarioLinkResponse,
+  TestScenarioResponse,
   CreateReportEmailRequest,
   HtmlElementResponse,
   ScaffoldResponse,
@@ -692,6 +695,26 @@ export class ApiClient {
     });
   }
 
+  ensureBundleInteractionLink(
+    testSurfaceBundleId: number,
+    testInteractionId: number
+  ): Promise<TestSurfaceBundleInteractionLinkResponse> {
+    return this.post("/test-surface-bundle-interactions", {
+      testSurfaceBundleId,
+      testInteractionId,
+    });
+  }
+
+  ensureBundleScenarioLink(
+    testSurfaceBundleId: number,
+    testScenarioId: number
+  ): Promise<TestSurfaceBundleScenarioLinkResponse> {
+    return this.post("/test-surface-bundle-scenarios", {
+      testSurfaceBundleId,
+      testScenarioId,
+    });
+  }
+
   // ===========================================================================
   // Test Run Claiming
   // ===========================================================================
@@ -764,6 +787,16 @@ export class ApiClient {
 
   getTestSurfacesByBundle(bundleId: number): Promise<TestSurfaceResponse[]> {
     return this.get(`/test-surface-bundle-surfaces?bundleId=${bundleId}`);
+  }
+
+  getTestInteractionsByBundle(
+    bundleId: number
+  ): Promise<TestInteractionResponse[]> {
+    return this.get(`/test-surface-bundle-interactions?bundleId=${bundleId}`);
+  }
+
+  getTestScenariosByBundle(bundleId: number): Promise<TestScenarioResponse[]> {
+    return this.get(`/test-surface-bundle-scenarios?bundleId=${bundleId}`);
   }
 
   getOpenTestInteractionRuns(
