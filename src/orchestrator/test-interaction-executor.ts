@@ -14,6 +14,7 @@ import type { Expertise, ExpertiseContext, Outcome } from "../expertise/types";
 import type { PageAnalyzer, AnalyzerContext } from "../analyzer";
 import { isWithinScopePath } from "../crawler/scope-checker";
 import { detectLoginPage } from "../scanner/login-detector";
+import { evaluatePageHealth } from "../scanner/page-health-evaluator";
 import { extractActionableItems } from "../extractors";
 import { extractForms } from "../extractors/form-extractor";
 import { captureControlStates } from "../browser/control-snapshot";
@@ -586,6 +587,33 @@ export async function executeTestInteraction(
           }
         }
       }
+    }
+
+    // Page health evaluation — browser-side checks for broken images, overlaps, etc.
+    currentPhase = "evaluating-page-health";
+    try {
+      const healthIssues = await evaluatePageHealth(adapter);
+      for (const issue of healthIssues) {
+        const findingType = issue.severity === "error" ? "error" : "warning";
+        await api.createTestRunFinding({
+          testInteractionRunId: testInteractionRun.id,
+          type: findingType,
+          title: `[page-health] ${issue.title}`,
+          description: issue.description,
+        });
+        events.onFindingCreated({
+          type: findingType,
+          title: `[page-health] ${issue.title}`,
+          description: issue.description,
+        });
+      }
+    } catch (healthError) {
+      logExecutor("page-health:error", {
+        error:
+          healthError instanceof Error
+            ? healthError.message
+            : String(healthError),
+      });
     }
 
     // Aggregate outcomes

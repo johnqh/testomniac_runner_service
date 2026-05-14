@@ -115,6 +115,10 @@ export type {
   ScanResult,
 } from "./orchestrator/types";
 export { LoginManager, type LoginConfig } from "./orchestrator/login-manager";
+export {
+  evaluatePageHealth,
+  type PageHealthIssue,
+} from "./scanner/page-health-evaluator";
 export { detectLoginPage, isLoginUrl } from "./scanner/login-detector";
 export type {
   LoginDetectionResult,

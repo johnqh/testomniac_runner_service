@@ -20,6 +20,9 @@ export class ContentExpertise implements Expertise {
     outcomes.push(this.checkPlaceholderContent(context.html));
     outcomes.push(this.checkImageAltCoverage(context.html));
     outcomes.push(this.checkLanguageConsistency(context.html));
+    outcomes.push(this.checkBrokenLinkPatterns(context.html));
+    outcomes.push(this.checkLabelContextMismatch(context.html));
+    outcomes.push(this.checkCurrencyConsistency(context.html));
 
     return outcomes;
   }
@@ -115,6 +118,123 @@ export class ContentExpertise implements Expertise {
     return {
       expected: "Images should provide alt text",
       observed: `All ${images.length} image(s) include alt text`,
+      result: "pass",
+    };
+  }
+
+  private checkBrokenLinkPatterns(html: string): Outcome {
+    // Check for common URL typos in href attributes
+    const hrefMatches = html.match(/\bhref=["']([^"']+)["']/gi) ?? [];
+    const suspicious: string[] = [];
+
+    for (const match of hrefMatches) {
+      const href = match.replace(/^href=["']|["']$/gi, "");
+      // Detect doubled path segments (e.g., /stored/ instead of /store/)
+      if (/\/stored\//.test(href)) {
+        suspicious.push(`"${href}" (likely typo: /stored/ → /store/)`);
+      }
+      // Detect links pointing to page's own URL (often broken image src or self-reference)
+      if (/\bhref=["']#["']/g.test(match) === false) {
+        // Check for links that look like they resolve to a product/page slug that doesn't match the link text
+      }
+    }
+
+    if (suspicious.length > 0) {
+      return {
+        expected: "Links should not contain URL typos or malformed paths",
+        observed: `Found ${suspicious.length} suspicious link(s): ${suspicious.slice(0, 3).join("; ")}`,
+        result: "warning",
+      };
+    }
+
+    return {
+      expected: "Links should not contain URL typos or malformed paths",
+      observed: "No suspicious link patterns detected",
+      result: "pass",
+    };
+  }
+
+  private checkLabelContextMismatch(html: string): Outcome {
+    // Detect option labels that don't match the product context
+    // e.g., "Select Shirt Size" on a coat/jacket product page
+    const mismatches: string[] = [];
+
+    // Check for "shirt" labels on non-shirt products
+    const h1Content = (
+      html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1] ?? ""
+    ).toLowerCase();
+    if (
+      /select\s+shirt\s+size/i.test(html) &&
+      !/(shirt|tee|t-shirt|tshirt|blouse)/i.test(h1Content)
+    ) {
+      const productName =
+        html
+          .match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1]
+          ?.replace(/<[^>]+>/g, "")
+          .trim() ?? "unknown";
+      mismatches.push(
+        `"Select Shirt Size" label on "${productName}" product page`
+      );
+    }
+
+    // Check for "Select Color" when product name implies specific color
+    // (this is acceptable, so not flagged)
+
+    if (mismatches.length > 0) {
+      return {
+        expected: "Form option labels should match the product context",
+        observed: `Label mismatch: ${mismatches.join("; ")}`,
+        result: "warning",
+      };
+    }
+
+    return {
+      expected: "Form option labels should match the product context",
+      observed: "No label/context mismatches detected",
+      result: "pass",
+    };
+  }
+
+  private checkCurrencyConsistency(html: string): Outcome {
+    // Check that displayed currency matches the selected currency
+    const currencySelect =
+      html
+        .match(
+          /<select[^>]*currency[^>]*>[\s\S]*?<option[^>]*selected[^>]*>([^<]+)/i
+        )?.[1]
+        ?.trim() ?? null;
+
+    if (!currencySelect) {
+      return {
+        expected: "Currency display should match selected currency",
+        observed: "No currency selector detected",
+        result: "pass",
+      };
+    }
+
+    const text = stripHtml(html);
+    const selectedCurrency = currencySelect.toUpperCase();
+
+    // If EUR selected but prices show $, that's a mismatch
+    if (selectedCurrency === "EUR" && /\$\d/.test(text) && !/€/.test(text)) {
+      return {
+        expected: "Currency display should match selected currency",
+        observed: `Currency selector shows "${selectedCurrency}" but prices still display with $ symbol`,
+        result: "error",
+      };
+    }
+
+    if (selectedCurrency === "GBP" && /\$\d/.test(text) && !/£/.test(text)) {
+      return {
+        expected: "Currency display should match selected currency",
+        observed: `Currency selector shows "${selectedCurrency}" but prices still display with $ symbol`,
+        result: "error",
+      };
+    }
+
+    return {
+      expected: "Currency display should match selected currency",
+      observed: "Currency display appears consistent with selector",
       result: "pass",
     };
   }

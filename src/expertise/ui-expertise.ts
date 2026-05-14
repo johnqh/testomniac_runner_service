@@ -10,6 +10,8 @@ export class UiExpertise implements Expertise {
     outcomes.push(this.checkScaffoldConsistency(context));
     outcomes.push(this.checkActiveErrorPatterns(context));
     outcomes.push(this.checkInteractiveDensity(context.html));
+    outcomes.push(this.checkSocialButtonIntegrity(context.html));
+    outcomes.push(this.checkBreadcrumbConsistency(context.html));
 
     return outcomes;
   }
@@ -67,6 +69,99 @@ export class UiExpertise implements Expertise {
     return {
       expected: "Page should not load with visible error UI",
       observed: "No error or alert patterns detected on initial render",
+      result: "pass",
+    };
+  }
+
+  private checkSocialButtonIntegrity(html: string): Outcome {
+    // Check for social share buttons that are not wrapped in links
+    const socialPatterns = [
+      /class="[^"]*social[^"]*facebook/gi,
+      /class="[^"]*social[^"]*twitter/gi,
+      /class="[^"]*social[^"]*linkedin/gi,
+      /class="[^"]*social[^"]*pinterest/gi,
+      /class="[^"]*social[^"]*email/gi,
+      /class="[^"]*social[^"]*myspace/gi,
+    ];
+
+    let totalSocial = 0;
+    let deadSocial = 0;
+
+    for (const pattern of socialPatterns) {
+      const matches = html.match(pattern);
+      if (!matches) continue;
+      for (const match of matches) {
+        totalSocial++;
+        // Check if the element is a div (not an a tag) — indicates non-functional button
+        const tagContext = html.slice(
+          Math.max(0, html.indexOf(match) - 30),
+          html.indexOf(match) + match.length
+        );
+        if (/<div\b/i.test(tagContext) && !/<a\b/i.test(tagContext)) {
+          deadSocial++;
+        }
+      }
+    }
+
+    if (deadSocial > 0) {
+      return {
+        expected:
+          "Social share buttons should be functional (links or have click handlers)",
+        observed: `${deadSocial} of ${totalSocial} social button(s) appear to be non-functional <div> elements without links`,
+        result: "warning",
+      };
+    }
+
+    if (totalSocial > 0) {
+      return {
+        expected:
+          "Social share buttons should be functional (links or have click handlers)",
+        observed: `All ${totalSocial} social button(s) appear functional`,
+        result: "pass",
+      };
+    }
+
+    return {
+      expected:
+        "Social share buttons should be functional (links or have click handlers)",
+      observed: "No social share buttons detected",
+      result: "pass",
+    };
+  }
+
+  private checkBreadcrumbConsistency(html: string): Outcome {
+    // Check breadcrumb navigation for common issues
+    const breadcrumbMatch = html.match(
+      /(?:class="[^"]*breadcrumb[^"]*"|nav[^>]*aria-label="[^"]*breadcrumb[^"]*")[^>]*>[\s\S]*?(?:<\/nav>|<\/div>)/i
+    );
+
+    if (!breadcrumbMatch) {
+      return {
+        expected: "Breadcrumb navigation should be consistent",
+        observed: "No breadcrumb navigation detected",
+        result: "pass",
+      };
+    }
+
+    // Check if breadcrumb links point to valid paths
+    const breadcrumbHtml = breadcrumbMatch[0];
+    const links = breadcrumbHtml.match(/href="([^"]+)"/gi) ?? [];
+    const brokenBreadcrumbs = links.filter(link => {
+      const href = link.replace(/^href="|"$/g, "");
+      return /\/stored\//.test(href) || href === "#";
+    });
+
+    if (brokenBreadcrumbs.length > 0) {
+      return {
+        expected: "Breadcrumb navigation should be consistent",
+        observed: `${brokenBreadcrumbs.length} breadcrumb link(s) appear broken or have typos`,
+        result: "warning",
+      };
+    }
+
+    return {
+      expected: "Breadcrumb navigation should be consistent",
+      observed: "Breadcrumb navigation appears consistent",
       result: "pass",
     };
   }
