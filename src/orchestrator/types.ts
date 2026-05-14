@@ -1,3 +1,4 @@
+import type { Credentials } from "@sudobility/testomniac_types";
 import type { SizeClass } from "../domain/types";
 
 export interface RunConfig {
@@ -12,6 +13,10 @@ export interface RunConfig {
   clickWaitMs?: number;
   waitForCheckpoint?: (checkpoint: RunCheckpoint) => Promise<void>;
   signal?: AbortSignal;
+  scanScopePath?: string;
+  loginUrl?: string;
+  entityCredentialId?: number;
+  credentials?: Credentials;
 }
 
 export type RunCheckpoint =

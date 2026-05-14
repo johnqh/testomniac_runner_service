@@ -37,6 +37,7 @@ import { generateDialogLifecycleTestInteractions } from "./generators/dialogs";
 import { generateKeyboardAndDisclosureTestInteractions } from "./generators/keyboard-disclosure";
 import { generateVariantTestInteractions } from "./generators/variants";
 import { generateContentTestInteractions } from "./generators/content";
+import { generateLoginTestInteractions } from "./generators/login";
 
 export type { AnalyzerContext } from "./types";
 
@@ -266,6 +267,20 @@ export class PageAnalyzer {
       formsCount: context.forms.length,
       scaffoldsCount: context.scaffolds.length,
     });
+
+    // Skip generation if the current path is outside the scan scope boundary
+    if (
+      context.scanScopePath &&
+      !context.currentPath.startsWith(context.scanScopePath)
+    ) {
+      logAnalyzer("generate:out-of-scope", {
+        sourceTitle: testInteraction.title,
+        currentPath: context.currentPath,
+        scanScopePath: context.scanScopePath,
+      });
+      return;
+    }
+
     const normalizedContext = this.normalizeContext(context);
     const currentPageStateId =
       await this.ensureTargetPageState(normalizedContext);
@@ -368,6 +383,18 @@ export class PageAnalyzer {
     });
     await generateRenderTestInteractions(this, contextForFullPass);
     await generateFormTestInteractions(this, contextForFullPass);
+
+    // Login test generation: detect login forms in context and generate
+    // login-specific tests if the page appears to be a login page
+    if (contextForFullPass.loginDetection?.isLoginPage) {
+      await generateLoginTestInteractions(
+        this,
+        contextForFullPass,
+        contextForFullPass.loginDetection,
+        contextForFullPass.loginConfig
+      );
+    }
+
     await generateSemanticJourneyTestInteractions(this, contextForFullPass);
     await generateE2ETestInteractions(this, contextForFullPass);
     await generateDialogLifecycleTestInteractions(this, contextForFullPass);

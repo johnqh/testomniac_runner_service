@@ -205,6 +205,23 @@ export class ApiClient {
     return this.put(`/pages/${pageId}/requires-login`);
   }
 
+  markIsLoginPage(pageId: number): Promise<void> {
+    return this.put(`/pages/${pageId}/is-login-page`);
+  }
+
+  getEntityCredential(credentialId: number): Promise<{
+    id: number;
+    entityId: string;
+    authProvider: string;
+    loginUrl: string | null;
+    email: string | null;
+    username: string | null;
+    password: string | null;
+    twoFactorCode: string | null;
+  }> {
+    return this.get(`/entity-credentials/${credentialId}`);
+  }
+
   getPagesByRunner(runnerId: number): Promise<PageResponse[]> {
     return this.get(`/pages?runnerId=${runnerId}`);
   }

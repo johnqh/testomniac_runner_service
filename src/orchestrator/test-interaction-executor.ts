@@ -12,6 +12,8 @@ import type {
 import type { ScanEventHandler } from "./types";
 import type { Expertise, ExpertiseContext, Outcome } from "../expertise/types";
 import type { PageAnalyzer, AnalyzerContext } from "../analyzer";
+import { isWithinScopePath } from "../crawler/scope-checker";
+import { detectLoginPage } from "../scanner/login-detector";
 import { extractActionableItems } from "../extractors";
 import { extractForms } from "../extractors/form-extractor";
 import { captureControlStates } from "../browser/control-snapshot";
@@ -136,7 +138,9 @@ export async function executeTestInteraction(
   discoveryContext?: {
     navigationSurface: TestSurfaceResponse;
     bundleRun: TestSurfaceBundleRunResponse;
-  }
+  },
+  scanScopePath?: string,
+  loginManager?: import("./login-manager").LoginManager
 ): Promise<void> {
   const startTime = Date.now();
   const consoleLogs: string[] = [];
@@ -249,6 +253,30 @@ export async function executeTestInteraction(
         baseUrl,
       });
       await adapter.goto(absoluteUrl, { waitUntil: "networkidle0" });
+    }
+
+    // Check if the current URL is within the scan scope boundary
+    if (scanScopePath) {
+      const currentUrl = await adapter.getUrl();
+      const baseUrl = testRun.scanUrl
+        ? new URL(testRun.scanUrl).origin
+        : "http://localhost";
+      if (!isWithinScopePath(currentUrl, baseUrl, scanScopePath)) {
+        logExecutor("interaction:out-of-scope", {
+          testInteractionRunId: testInteractionRun.id,
+          currentUrl,
+          scanScopePath,
+        });
+        await api.completeTestInteractionRun(testInteractionRun.id, {
+          status: "skipped",
+          errorMessage: `URL ${currentUrl} is outside scan scope path: ${scanScopePath}`,
+        });
+        events.onTestInteractionRunCompleted({
+          testInteractionRunId: testInteractionRun.id,
+          passed: true,
+        });
+        return;
+      }
     }
 
     currentPhase = "replaying-setup-interactions";
@@ -617,6 +645,18 @@ export async function executeTestInteraction(
         pageId: page.id,
       });
 
+      // Detect if this is a login page
+      const loginDetection = await detectLoginPage(
+        adapter,
+        currentPath,
+        ensureArray(forms)
+      );
+
+      // If login page detected, mark it in the DB
+      if (loginDetection.isLoginPage) {
+        await api.markIsLoginPage(page.id).catch(() => {});
+      }
+
       const analyzerCtx: AnalyzerContext = {
         runnerId: testRun.runnerId,
         testEnvironmentId: testRun.testEnvironmentId ?? undefined,
@@ -640,6 +680,9 @@ export async function executeTestInteraction(
         bundleRun: discoveryContext.bundleRun,
         api,
         events,
+        scanScopePath,
+        loginDetection,
+        loginConfig: loginManager ? loginManager.getConfig() : undefined,
       };
 
       const parsedTestInteraction = {

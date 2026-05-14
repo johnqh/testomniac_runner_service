@@ -15,6 +15,7 @@ import type {
 import type { Expertise } from "../expertise/types";
 import { PageAnalyzer } from "../analyzer";
 import { executeTestInteraction } from "./test-interaction-executor";
+import { LoginManager, type LoginConfig } from "./login-manager";
 
 function logRunner(step: string, details?: Record<string, unknown>): void {
   console.info("[Runner]", step, details ?? {});
@@ -175,6 +176,45 @@ export async function runTestRun(
       scanUrl: testRun.scanUrl ?? null,
     });
 
+    // Set up login manager if credentials are configured
+    let loginManager: LoginManager | null = null;
+    if (config.credentials || config.entityCredentialId) {
+      let loginConfig: LoginConfig;
+      if (config.credentials) {
+        loginConfig = {
+          loginUrl: config.loginUrl,
+          email: config.credentials.email,
+          username: config.credentials.username,
+          password: config.credentials.password,
+          twoFactorCode: config.credentials.twoFactorCode,
+          authProvider: config.credentials.authProvider,
+        };
+      } else if (config.entityCredentialId) {
+        const cred = await api.getEntityCredential(config.entityCredentialId);
+        loginConfig = {
+          loginUrl: config.loginUrl ?? cred.loginUrl ?? undefined,
+          email: cred.email ?? undefined,
+          username: cred.username ?? undefined,
+          password: cred.password ?? undefined,
+          twoFactorCode: cred.twoFactorCode ?? undefined,
+          authProvider: cred.authProvider,
+        };
+      } else {
+        loginConfig = {};
+      }
+      loginManager = new LoginManager(adapter, loginConfig, config.baseUrl);
+      logRunner("login-manager:created", {
+        hasLoginUrl: !!loginConfig.loginUrl,
+        authProvider: loginConfig.authProvider,
+      });
+    }
+
+    // Perform initial login if configured
+    if (loginManager && (config.loginUrl || config.credentials?.authProvider)) {
+      const loginSuccess = await loginManager.performInitialLogin();
+      logRunner("initial-login:result", { success: loginSuccess });
+    }
+
     // Set up analyzer for discovery mode
     const analyzer = testRun.discovery ? new PageAnalyzer() : null;
 
@@ -281,6 +321,15 @@ export async function runTestRun(
 
       await waitForCheckpoint("before_test_interaction");
 
+      // Check for session expiry and re-login if needed
+      if (loginManager?.isLoggedIn()) {
+        const expired = await loginManager.detectSessionExpiry();
+        if (expired) {
+          logRunner("session:expired, re-logging in");
+          await loginManager.reLogin();
+        }
+      }
+
       const selected = selectNextInteractionAcrossBundle(
         runnableSurfaceEntries,
         testSurfaces,
@@ -324,7 +373,9 @@ export async function runTestRun(
               navigationSurface,
               bundleRun,
             }
-          : undefined
+          : undefined,
+        config.scanScopePath,
+        loginManager ?? undefined
       );
       activeDependencyBranch = buildDependencyChainIds(
         selected.testInteractionRun.testInteractionId,

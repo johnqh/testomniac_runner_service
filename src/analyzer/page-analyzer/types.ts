@@ -9,6 +9,8 @@ import type {
 import type { ApiClient } from "../../api/client";
 import type { ScanEventHandler } from "../../orchestrator/types";
 import type { DetectedScaffoldRegion } from "../../scanner/component-detector";
+import type { LoginDetectionResult } from "../../scanner/login-detector";
+import type { LoginConfig } from "../../orchestrator/login-manager";
 
 export interface AnalyzerContext {
   runnerId: number;
@@ -33,4 +35,7 @@ export interface AnalyzerContext {
   bundleRun: TestSurfaceBundleRunResponse;
   api: ApiClient;
   events: ScanEventHandler;
+  scanScopePath?: string;
+  loginDetection?: LoginDetectionResult;
+  loginConfig?: LoginConfig;
 }

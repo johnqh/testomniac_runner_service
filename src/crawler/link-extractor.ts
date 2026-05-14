@@ -13,7 +13,8 @@ export interface ExtractedLink {
 
 export async function extractSameOriginLinks(
   adapter: BrowserAdapter,
-  baseUrl: string
+  baseUrl: string,
+  scanScopePath?: string
 ): Promise<ExtractedLink[]> {
   const rawLinks = await adapter.evaluate(() => {
     return Array.from(document.querySelectorAll("a[href]"))
@@ -39,6 +40,9 @@ export async function extractSameOriginLinks(
       continue;
     }
     const relativePath = toRelativePath(absoluteUrl);
+    if (scanScopePath && !relativePath.startsWith(scanScopePath)) {
+      continue;
+    }
     if (!deduped.has(relativePath)) {
       deduped.set(relativePath, {
         url: absoluteUrl,

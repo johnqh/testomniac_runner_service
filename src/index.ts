@@ -114,6 +114,12 @@ export type {
   ScanEventHandler,
   ScanResult,
 } from "./orchestrator/types";
+export { LoginManager, type LoginConfig } from "./orchestrator/login-manager";
+export { detectLoginPage, isLoginUrl } from "./scanner/login-detector";
+export type {
+  LoginDetectionResult,
+  SSOButtonInfo,
+} from "./scanner/login-detector";
 
 // Analyzer
 export { PageAnalyzer, type AnalyzerContext } from "./analyzer";
