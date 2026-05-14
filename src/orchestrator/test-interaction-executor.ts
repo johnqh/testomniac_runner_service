@@ -274,6 +274,9 @@ export async function executeTestInteraction(
         });
         try {
           await executeAction(adapter, replayAction, testRun);
+          if (adapter.closeOtherTabs) {
+            await adapter.closeOtherTabs();
+          }
         } catch (replayError) {
           logExecutor("interaction:replay-setup-step-skipped", {
             testInteractionRunId: testInteractionRun.id,
@@ -312,6 +315,10 @@ export async function executeTestInteraction(
       });
       try {
         await executeAction(adapter, replayAction, testRun);
+        // Close any new tabs/windows opened by the action (e.g. target="_blank")
+        if (adapter.closeOtherTabs) {
+          await adapter.closeOtherTabs();
+        }
         const afterSnapshot = await captureExecutionSnapshot(adapter);
         previousSnapshot = afterSnapshot;
         stepExecutions.push({
