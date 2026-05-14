@@ -48,6 +48,23 @@ export function checkNoConsoleErrors(
     };
   }
 
+  // Also flag significant warnings (deprecated APIs, missing config, failed resources)
+  const significantWarningPatterns =
+    /\b(deprecated|does not exist|not found|failed to load|ERR_NAME_NOT_RESOLVED)\b/i;
+  const significantWarnings = context.consoleLogs.filter(
+    log =>
+      (log.toLowerCase().startsWith("warn") || log.includes("[WARNING]")) &&
+      significantWarningPatterns.test(log)
+  );
+
+  if (significantWarnings.length > 0) {
+    return {
+      expected: description,
+      observed: `${significantWarnings.length} significant console warning(s): ${significantWarnings[0]}`,
+      result: "warning",
+    };
+  }
+
   return {
     expected: description,
     observed: "No console errors detected",
@@ -59,7 +76,10 @@ export function checkNoNetworkErrors(
   context: ExpertiseContext,
   description: string
 ): Outcome {
-  const errors = context.networkLogs.filter(log => log.status >= 400);
+  // Status 0 typically indicates DNS failure, CORS block, or aborted request
+  const errors = context.networkLogs.filter(
+    log => log.status >= 400 || log.status === 0
+  );
 
   if (errors.length === 0) {
     return {

@@ -277,6 +277,55 @@ export async function evaluatePageHealth(
       }
     }
 
+    // =========================================================================
+    // 9. Result count mismatch — "Showing N results" vs actual visible items
+    // =========================================================================
+    const showingMatch = pageText.match(
+      /showing\s+(?:all\s+)?(\d+)\s+results?/i
+    );
+    if (showingMatch && gridItems.length > 0) {
+      const claimed = parseInt(showingMatch[1], 10);
+      const actual = gridItems.length;
+      if (claimed !== actual) {
+        found.push({
+          type: "grammar_error",
+          severity: "warning",
+          title: `Result count mismatch: claims ${claimed} but shows ${actual}`,
+          description: `Page text says "Showing ${claimed} results" but ${actual} product items are visible on the page`,
+        });
+      }
+    }
+
+    // =========================================================================
+    // 10. Filter count validation — sidebar filter counts should sum correctly
+    // =========================================================================
+    const filterLinks = Array.from(
+      document.querySelectorAll(
+        '[class*="price_filter"] a, [class*="filter_list"] a'
+      )
+    );
+    if (filterLinks.length >= 2) {
+      let filterSum = 0;
+      for (const link of filterLinks) {
+        const countMatch = link.textContent?.match(/\((\d+)\)/);
+        if (countMatch) {
+          filterSum += parseInt(countMatch[1], 10);
+        }
+      }
+      if (
+        filterSum > 0 &&
+        gridItems.length > 0 &&
+        filterSum !== gridItems.length
+      ) {
+        found.push({
+          type: "grammar_error",
+          severity: "warning",
+          title: `Filter counts sum (${filterSum}) doesn't match total products (${gridItems.length})`,
+          description: `Price filter counts add up to ${filterSum} but ${gridItems.length} products are displayed`,
+        });
+      }
+    }
+
     return found;
   });
 
