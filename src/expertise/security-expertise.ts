@@ -17,6 +17,8 @@ export class SecurityExpertise implements Expertise {
 
     outcomes.push(...this.checkApiKeysInUrls(context));
     outcomes.push(...this.checkInsecureRequests(context));
+    outcomes.push(this.checkInsecureFormActions(context));
+    outcomes.push(this.checkWrongInputTypes(context.html));
 
     return outcomes;
   }
@@ -72,5 +74,79 @@ export class SecurityExpertise implements Expertise {
         result: "pass",
       },
     ];
+  }
+
+  private checkInsecureFormActions(context: ExpertiseContext): Outcome {
+    const pageUrl = context.currentUrl || context.initialUrl || "";
+    const isHttps = pageUrl.startsWith("https://");
+    if (!isHttps) {
+      return {
+        expected: "Forms should not submit over insecure HTTP",
+        observed: "Page is not HTTPS, skipping check",
+        result: "pass",
+      };
+    }
+
+    const httpForms = context.html.match(
+      /<form\b[^>]*action=["']http:\/\/[^"']+["'][^>]*>/gi
+    );
+    if (httpForms && httpForms.length > 0) {
+      return {
+        expected: "Forms should not submit over insecure HTTP on HTTPS pages",
+        observed: `${httpForms.length} form(s) submit to HTTP URLs instead of HTTPS`,
+        result: "error",
+      };
+    }
+
+    return {
+      expected: "Forms should not submit over insecure HTTP on HTTPS pages",
+      observed: "All form actions use HTTPS or relative URLs",
+      result: "pass",
+    };
+  }
+
+  private checkWrongInputTypes(html: string): Outcome {
+    const textInputs =
+      html.match(/<input\b[^>]*type=["']text["'][^>]*>/gi) ?? [];
+    const mistyped: string[] = [];
+
+    for (const input of textInputs) {
+      const lower = input.toLowerCase();
+      if (
+        /\b(name|placeholder|id|autocomplete)=["'][^"']*(email)[^"']*["']/i.test(
+          lower
+        )
+      ) {
+        mistyped.push('email field using type="text"');
+      } else if (
+        /\b(name|placeholder|id|autocomplete)=["'][^"']*(phone|tel)[^"']*["']/i.test(
+          lower
+        )
+      ) {
+        mistyped.push('phone field using type="text"');
+      } else if (
+        /\b(name|placeholder|id|autocomplete)=["'][^"']*(url|website)[^"']*["']/i.test(
+          lower
+        )
+      ) {
+        mistyped.push('URL field using type="text"');
+      }
+    }
+
+    if (mistyped.length > 0) {
+      return {
+        expected:
+          "Input fields should use semantic types (email, tel, url) for better validation",
+        observed: `${mistyped.length} input(s) use type="text" instead: ${mistyped.slice(0, 3).join(", ")}`,
+        result: "warning",
+      };
+    }
+
+    return {
+      expected:
+        "Input fields should use semantic types (email, tel, url) for better validation",
+      observed: "Input types appear appropriate",
+      result: "pass",
+    };
   }
 }

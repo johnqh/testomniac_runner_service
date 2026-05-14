@@ -15,6 +15,8 @@ export class AccessibilityExpertise implements Expertise {
     outcomes.push(this.checkFormLabels(context.html));
     outcomes.push(this.checkImageAltCoverage(context.html));
     outcomes.push(this.checkDialogLabelling(context.html));
+    outcomes.push(this.checkPositiveTabindex(context.html));
+    outcomes.push(this.checkAutoplayMedia(context.html));
 
     return outcomes;
   }
@@ -160,6 +162,52 @@ export class AccessibilityExpertise implements Expertise {
     return {
       expected: "Dialogs should be labelled for assistive technologies",
       observed: `All ${dialogs.length} dialog(s) have accessible labelling`,
+      result: "pass",
+    };
+  }
+
+  private checkPositiveTabindex(html: string): Outcome {
+    const tabindexMatches = html.match(/\btabindex=["'](\d+)["']/gi) ?? [];
+    const positiveTabindexes = tabindexMatches.filter(m => {
+      const val = parseInt(m.replace(/\btabindex=["']|["']/gi, ""), 10);
+      return val > 0;
+    });
+
+    if (positiveTabindexes.length > 0) {
+      return {
+        expected:
+          "Elements should not use positive tabindex values (disrupts natural tab order)",
+        observed: `${positiveTabindexes.length} element(s) have positive tabindex values`,
+        result: "warning",
+      };
+    }
+
+    return {
+      expected:
+        "Elements should not use positive tabindex values (disrupts natural tab order)",
+      observed: "No positive tabindex values detected",
+      result: "pass",
+    };
+  }
+
+  private checkAutoplayMedia(html: string): Outcome {
+    const autoplayVideo =
+      /<video\b[^>]*\bautoplay\b/gi.test(html) &&
+      !/<video\b[^>]*\bmuted\b/gi.test(html);
+    const autoplayAudio = /<audio\b[^>]*\bautoplay\b/gi.test(html);
+
+    if (autoplayVideo || autoplayAudio) {
+      const type = autoplayVideo ? "video" : "audio";
+      return {
+        expected: "Media should not autoplay with sound",
+        observed: `Detected ${type} element with autoplay attribute (without muted)`,
+        result: "warning",
+      };
+    }
+
+    return {
+      expected: "Media should not autoplay with sound",
+      observed: "No autoplaying unmuted media detected",
       result: "pass",
     };
   }

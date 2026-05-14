@@ -16,7 +16,14 @@ export interface PageHealthIssue {
     | "inconsistent_grid"
     | "empty_link"
     | "broken_anchor"
-    | "missing_noopener";
+    | "missing_noopener"
+    | "horizontal_overflow"
+    | "truncated_text"
+    | "invalid_price"
+    | "invalid_discount"
+    | "invalid_rating"
+    | "unlabeled_button"
+    | "small_touch_target";
   severity: "error" | "warning";
   title: string;
   description: string;
@@ -400,6 +407,206 @@ export async function evaluatePageHealth(
         severity: "warning",
         title: `${unsafeExternalCount} external link(s) missing rel="noopener"`,
         description: `Links opening in new tab without rel="noopener" are a security risk (reverse tabnabbing)`,
+      });
+    }
+
+    // =========================================================================
+    // 14. Horizontal overflow — unintended horizontal scrollbar
+    // =========================================================================
+    if (
+      document.documentElement.scrollWidth >
+      document.documentElement.clientWidth + 5
+    ) {
+      found.push({
+        type: "horizontal_overflow",
+        severity: "warning",
+        title: "Page has horizontal overflow",
+        description: `Page width (${document.documentElement.scrollWidth}px) exceeds viewport (${document.documentElement.clientWidth}px), causing horizontal scrollbar`,
+      });
+    }
+
+    // =========================================================================
+    // 15. Truncated text — important content hidden by overflow
+    // =========================================================================
+    const truncatedEls = Array.from(
+      document.querySelectorAll(
+        "h1, h2, h3, a, button, [class*='title'], [class*='name'], [class*='price']"
+      )
+    );
+    let truncatedCount = 0;
+    for (const el of truncatedEls.slice(0, 40)) {
+      const style = window.getComputedStyle(el);
+      if (
+        style.overflow === "hidden" &&
+        style.textOverflow === "ellipsis" &&
+        el.scrollWidth > el.clientWidth + 2
+      ) {
+        truncatedCount++;
+      }
+    }
+    if (truncatedCount > 0) {
+      found.push({
+        type: "truncated_text",
+        severity: "warning",
+        title: `${truncatedCount} element(s) have truncated text`,
+        description:
+          "Important text (headings, links, titles, prices) is being cut off by CSS overflow",
+      });
+    }
+
+    // =========================================================================
+    // 16. Invalid prices — $0.00, negative, or NaN prices
+    // =========================================================================
+    const priceEls = Array.from(
+      document.querySelectorAll(
+        '[class*="price"], [class*="amount"], [class*="cost"]'
+      )
+    );
+    const invalidPrices: string[] = [];
+    for (const el of priceEls) {
+      const text = el.textContent?.trim() || "";
+      const priceMatch = text.match(/[$€£]\s*(-?[\d,.]+)/);
+      if (priceMatch) {
+        const val = parseFloat(priceMatch[1].replace(/,/g, ""));
+        if (val <= 0 || isNaN(val)) {
+          invalidPrices.push(`"${text.slice(0, 30)}" (${val})`);
+        }
+      }
+    }
+    if (invalidPrices.length > 0) {
+      found.push({
+        type: "invalid_price",
+        severity: "error",
+        title: `${invalidPrices.length} invalid price(s): zero, negative, or NaN`,
+        description: `Invalid prices found: ${invalidPrices.slice(0, 3).join(", ")}`,
+      });
+    }
+
+    // =========================================================================
+    // 17. Sale price higher than original — discount makes no sense
+    // =========================================================================
+    const saleContainers = Array.from(
+      document.querySelectorAll('[class*="price"], [class*="sale"]')
+    );
+    for (const container of saleContainers) {
+      const strikes = container.querySelectorAll(
+        "del, s, strike, .ec_product_price_old, [class*='original'], [class*='was'], [class*='old_price']"
+      );
+      if (strikes.length === 0) continue;
+      for (const strike of Array.from(strikes)) {
+        const origMatch = strike.textContent?.match(/[$€£]\s*([\d,.]+)/);
+        const containerText = container.textContent || "";
+        const allPrices = Array.from(
+          containerText.matchAll(/[$€£]\s*([\d,.]+)/g)
+        );
+        if (origMatch && allPrices.length >= 2) {
+          const original = parseFloat(origMatch[1].replace(/,/g, ""));
+          const prices = allPrices.map(m => parseFloat(m[1].replace(/,/g, "")));
+          const salePrice = prices.find(
+            p => p !== original && p < original * 2
+          );
+          if (salePrice != null && salePrice > original) {
+            found.push({
+              type: "invalid_discount",
+              severity: "error",
+              title: "Sale price is higher than original price",
+              description: `Original: $${original.toFixed(2)}, Sale: $${salePrice.toFixed(2)}`,
+            });
+            break;
+          }
+        }
+      }
+    }
+
+    // =========================================================================
+    // 18. Invalid star ratings — values > 5 or < 0
+    // =========================================================================
+    const ratingEls = Array.from(
+      document.querySelectorAll(
+        '[class*="rating"], [class*="stars"], [aria-label*="rating"]'
+      )
+    );
+    for (const el of ratingEls) {
+      const text = el.textContent?.trim() || "";
+      const ariaLabel = el.getAttribute("aria-label") || "";
+      const combined = text + " " + ariaLabel;
+      const ratingMatch = combined.match(
+        /([\d.]+)\s*(?:\/\s*5|out\s*of\s*5|stars?)/i
+      );
+      if (ratingMatch) {
+        const val = parseFloat(ratingMatch[1]);
+        if (val > 5 || val < 0) {
+          found.push({
+            type: "invalid_rating",
+            severity: "error",
+            title: `Invalid rating value: ${val}`,
+            description: `Star rating of ${val} is outside the valid 0-5 range`,
+          });
+          break;
+        }
+      }
+    }
+
+    // =========================================================================
+    // 19. Icon-only buttons without accessible labels
+    // =========================================================================
+    const buttons = Array.from(
+      document.querySelectorAll(
+        'button, [role="button"], a[class*="btn"], a[class*="button"]'
+      )
+    );
+    let unlabeledCount = 0;
+    for (const btn of buttons.slice(0, 30)) {
+      const text = btn.textContent?.trim() || "";
+      const ariaLabel = btn.getAttribute("aria-label") || "";
+      const title = btn.getAttribute("title") || "";
+      const hasImg = !!btn.querySelector("img, svg, [class*='icon']");
+      const isVisible = (btn as HTMLElement).offsetParent !== null;
+      if (
+        isVisible &&
+        hasImg &&
+        text.length === 0 &&
+        ariaLabel.length === 0 &&
+        title.length === 0
+      ) {
+        unlabeledCount++;
+      }
+    }
+    if (unlabeledCount > 0) {
+      found.push({
+        type: "unlabeled_button",
+        severity: "warning",
+        title: `${unlabeledCount} icon-only button(s) without accessible label`,
+        description:
+          "Buttons with only icons and no text, aria-label, or title attribute are inaccessible to screen readers",
+      });
+    }
+
+    // =========================================================================
+    // 20. Small touch targets — interactive elements < 44x44px
+    // =========================================================================
+    const touchTargets = Array.from(
+      document.querySelectorAll("a, button, input, select, [role='button']")
+    );
+    let smallTargetCount = 0;
+    for (const el of touchTargets.slice(0, 50)) {
+      const rect = el.getBoundingClientRect();
+      if (
+        rect.width > 0 &&
+        rect.height > 0 &&
+        rect.width < 24 &&
+        rect.height < 24
+      ) {
+        smallTargetCount++;
+      }
+    }
+    if (smallTargetCount > 0) {
+      found.push({
+        type: "small_touch_target",
+        severity: "warning",
+        title: `${smallTargetCount} interactive element(s) smaller than 24x24px`,
+        description:
+          "Small touch targets are difficult to tap on mobile devices (WCAG recommends minimum 44x44px)",
       });
     }
 
