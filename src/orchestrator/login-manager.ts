@@ -41,6 +41,8 @@ function logLogin(step: string, details?: Record<string, unknown>): void {
   console.info("[LoginManager]", step, details ?? {});
 }
 
+const MAX_LOGIN_ATTEMPTS = 3;
+
 export class LoginManager {
   private state: LoginState;
   private adapter: BrowserAdapter;
@@ -300,6 +302,13 @@ export class LoginManager {
    * Re-login after session expiry.
    */
   async reLogin(): Promise<boolean> {
+    if (this.state.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
+      logLogin("re-login:max-attempts-reached", {
+        attempts: this.state.loginAttempts,
+      });
+      return false;
+    }
+
     logLogin("re-login:start", { attempts: this.state.loginAttempts });
 
     this.state.isLoggedIn = false;

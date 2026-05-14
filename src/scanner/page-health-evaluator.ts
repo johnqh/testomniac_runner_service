@@ -143,18 +143,24 @@ export async function evaluatePageHealth(
     // 4. Cart math validation — check subtotal + shipping = grand total
     // =========================================================================
     const pageText = document.body?.innerText || "";
+    const priceRe = /[$€£]\s?([\d,.]+)/;
     const subtotalMatch = pageText.match(
-      /(?:sub\s*total|cart\s*sub)[^\n$]*?\$\s?([\d,.]+)/i
+      new RegExp("(?:sub\\s*total|cart\\s*sub)[^\\n]*?" + priceRe.source, "i")
     );
-    const shippingMatch = pageText.match(/shipping[^\n$]*?\$\s?([\d,.]+)/i);
+    const shippingMatch = pageText.match(
+      new RegExp("shipping[^\\n]*?" + priceRe.source, "i")
+    );
     const grandTotalMatch = pageText.match(
-      /(?:grand\s*total|order\s*total)[^\n$]*?\$\s?([\d,.]+)/i
+      new RegExp(
+        "(?:grand\\s*total|order\\s*total)[^\\n]*?" + priceRe.source,
+        "i"
+      )
     );
 
     if (subtotalMatch && shippingMatch && grandTotalMatch) {
-      const subtotal = parseFloat(subtotalMatch[1].replace(",", ""));
-      const shipping = parseFloat(shippingMatch[1].replace(",", ""));
-      const grandTotal = parseFloat(grandTotalMatch[1].replace(",", ""));
+      const subtotal = parseFloat(subtotalMatch[1].replace(/,/g, ""));
+      const shipping = parseFloat(shippingMatch[1].replace(/,/g, ""));
+      const grandTotal = parseFloat(grandTotalMatch[1].replace(/,/g, ""));
       const expected = Math.round((subtotal + shipping) * 100) / 100;
       if (Math.abs(grandTotal - expected) > 0.01) {
         found.push({
