@@ -23,6 +23,11 @@ export class ContentExpertise implements Expertise {
     outcomes.push(this.checkBrokenLinkPatterns(context.html));
     outcomes.push(this.checkLabelContextMismatch(context.html));
     outcomes.push(this.checkCurrencyConsistency(context.html));
+    outcomes.push(this.checkDuplicateIds(context.html));
+    outcomes.push(this.checkHeadingHierarchy(context.html));
+    outcomes.push(this.checkHardcodedDevUrls(context.html));
+    outcomes.push(this.checkOutdatedCopyright(context.html));
+    outcomes.push(this.checkOrphanedFormLabels(context.html));
 
     return outcomes;
   }
@@ -278,6 +283,155 @@ export class ContentExpertise implements Expertise {
     return {
       expected: "Primary UI text should stay in a consistent language",
       observed: "No obvious mixed-language UI tokens were detected",
+      result: "pass",
+    };
+  }
+
+  private checkDuplicateIds(html: string): Outcome {
+    const idMatches = html.match(/\bid=["']([^"']+)["']/gi) ?? [];
+    const ids = idMatches.map(m =>
+      m.replace(/^id=["']|["']$/gi, "").toLowerCase()
+    );
+    const seen = new Set<string>();
+    const duplicates = new Set<string>();
+    for (const id of ids) {
+      if (seen.has(id)) duplicates.add(id);
+      seen.add(id);
+    }
+
+    if (duplicates.size > 0) {
+      const list = Array.from(duplicates).slice(0, 5).join(", ");
+      return {
+        expected: "Element IDs should be unique within the page",
+        observed: `${duplicates.size} duplicate ID(s) found: ${list}`,
+        result: "warning",
+      };
+    }
+
+    return {
+      expected: "Element IDs should be unique within the page",
+      observed: "All element IDs are unique",
+      result: "pass",
+    };
+  }
+
+  private checkHeadingHierarchy(html: string): Outcome {
+    const headingMatches = html.match(/<h([1-6])\b/gi) ?? [];
+    const levels = headingMatches.map(m => parseInt(m.replace(/<h/i, ""), 10));
+
+    if (levels.length < 2) {
+      return {
+        expected: "Heading levels should not skip hierarchy levels",
+        observed: `Only ${levels.length} heading(s) found`,
+        result: "pass",
+      };
+    }
+
+    const gaps: string[] = [];
+    for (let i = 1; i < levels.length; i++) {
+      if (levels[i] > levels[i - 1] + 1) {
+        gaps.push(`h${levels[i - 1]} → h${levels[i]}`);
+      }
+    }
+
+    if (gaps.length > 0) {
+      return {
+        expected: "Heading levels should not skip hierarchy levels",
+        observed: `Heading hierarchy gap(s): ${gaps.slice(0, 3).join(", ")}`,
+        result: "warning",
+      };
+    }
+
+    return {
+      expected: "Heading levels should not skip hierarchy levels",
+      observed: "Heading hierarchy is sequential",
+      result: "pass",
+    };
+  }
+
+  private checkHardcodedDevUrls(html: string): Outcome {
+    const devPatterns = [
+      /https?:\/\/localhost[:/]/gi,
+      /https?:\/\/127\.0\.0\.1[:/]/gi,
+      /https?:\/\/0\.0\.0\.0[:/]/gi,
+      /https?:\/\/[^"'\s]*\.local[/"'\s]/gi,
+      /https?:\/\/[^"'\s]*staging[^"'\s]*\.(com|net|org|io)/gi,
+    ];
+
+    for (const pattern of devPatterns) {
+      const match = html.match(pattern);
+      if (match) {
+        return {
+          expected:
+            "Page should not contain hardcoded development or staging URLs",
+          observed: `Found dev/staging URL: ${match[0].slice(0, 60)}`,
+          result: "warning",
+        };
+      }
+    }
+
+    return {
+      expected: "Page should not contain hardcoded development or staging URLs",
+      observed: "No hardcoded dev URLs detected",
+      result: "pass",
+    };
+  }
+
+  private checkOutdatedCopyright(html: string): Outcome {
+    const text = stripHtml(html);
+    const currentYear = new Date().getFullYear();
+    const copyrightMatch = text.match(
+      /(?:©|copyright)\s*(\d{4})(?:\s*[-–]\s*(\d{4}))?/i
+    );
+
+    if (!copyrightMatch) {
+      return {
+        expected: "Copyright year should be current",
+        observed: "No copyright notice detected",
+        result: "pass",
+      };
+    }
+
+    const endYear = parseInt(copyrightMatch[2] || copyrightMatch[1], 10);
+    if (endYear < currentYear - 1) {
+      return {
+        expected: "Copyright year should be current",
+        observed: `Copyright year is ${endYear}, current year is ${currentYear}`,
+        result: "warning",
+      };
+    }
+
+    return {
+      expected: "Copyright year should be current",
+      observed: `Copyright year (${endYear}) is current`,
+      result: "pass",
+    };
+  }
+
+  private checkOrphanedFormLabels(html: string): Outcome {
+    const labelForMatches = html.match(/\bfor=["']([^"']+)["']/gi) ?? [];
+    const labelForIds = labelForMatches.map(m =>
+      m.replace(/^for=["']|["']$/gi, "")
+    );
+
+    const idMatches = html.match(/\bid=["']([^"']+)["']/gi) ?? [];
+    const allIds = new Set(
+      idMatches.map(m => m.replace(/^id=["']|["']$/gi, ""))
+    );
+
+    const orphaned = labelForIds.filter(id => !allIds.has(id));
+
+    if (orphaned.length > 0) {
+      return {
+        expected: "Form labels should reference existing element IDs",
+        observed: `${orphaned.length} label(s) reference non-existent IDs: ${orphaned.slice(0, 3).join(", ")}`,
+        result: "warning",
+      };
+    }
+
+    return {
+      expected: "Form labels should reference existing element IDs",
+      observed: "All form labels reference valid element IDs",
       result: "pass",
     };
   }

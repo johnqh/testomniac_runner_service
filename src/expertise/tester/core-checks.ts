@@ -128,6 +128,100 @@ export function checkNoNetworkErrors(
   };
 }
 
+export function checkDuplicateRequests(
+  context: ExpertiseContext,
+  description: string
+): Outcome {
+  const urlCounts = new Map<string, number>();
+  for (const log of context.networkLogs) {
+    if (log.method === "GET") continue; // GET duplicates are common (polling)
+    const key = `${log.method}:${log.url}`;
+    urlCounts.set(key, (urlCounts.get(key) ?? 0) + 1);
+  }
+
+  const duplicates = Array.from(urlCounts.entries()).filter(
+    ([, count]) => count > 1
+  );
+
+  if (duplicates.length > 0) {
+    const first = duplicates[0]!;
+    return {
+      expected: description,
+      observed: `${duplicates.length} duplicate mutation request(s): ${first[0].split(":").slice(0, 2).join(":")} called ${first[1]} times`,
+      result: "warning",
+    };
+  }
+
+  return {
+    expected: description,
+    observed: "No duplicate mutation requests detected",
+    result: "pass",
+  };
+}
+
+export function checkSlowResponses(
+  context: ExpertiseContext,
+  description: string
+): Outcome {
+  const slow = context.networkLogs.filter(
+    log => log.timestampMs != null && log.timestampMs > 3000
+  );
+
+  if (slow.length > 0) {
+    const slowest = slow.reduce((a, b) =>
+      (a.timestampMs ?? 0) > (b.timestampMs ?? 0) ? a : b
+    );
+    return {
+      expected: description,
+      observed: `${slow.length} slow response(s): ${slowest.url.slice(0, 80)} took ${slowest.timestampMs}ms`,
+      result: "warning",
+    };
+  }
+
+  return {
+    expected: description,
+    observed: "No slow responses detected (all < 3s)",
+    result: "pass",
+  };
+}
+
+export function checkMixedContent(
+  context: ExpertiseContext,
+  description: string
+): Outcome {
+  const pageUrl = context.currentUrl || context.initialUrl || "";
+  const isHttps = pageUrl.startsWith("https://");
+
+  if (!isHttps) {
+    return {
+      expected: description,
+      observed: "Page is not served over HTTPS",
+      result: "pass",
+    };
+  }
+
+  const httpResources = context.networkLogs.filter(
+    log =>
+      log.url.startsWith("http://") &&
+      !log.url.startsWith("http://localhost") &&
+      !log.url.startsWith("http://127.0.0.1")
+  );
+
+  if (httpResources.length > 0) {
+    return {
+      expected: description,
+      observed: `${httpResources.length} HTTP resource(s) loaded on HTTPS page: ${httpResources[0]!.url.slice(0, 80)}`,
+      result: "warning",
+    };
+  }
+
+  return {
+    expected: description,
+    observed: "No mixed content detected",
+    result: "pass",
+  };
+}
+
 function getPageOrigin(context: ExpertiseContext): string | null {
   const candidateUrl = context.currentUrl || context.initialUrl || "";
   try {

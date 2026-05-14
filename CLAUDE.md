@@ -105,6 +105,11 @@ Evaluates 37+ expectation types via specialized checker modules:
 - Broken link pattern detection (URL typos like `/stored/` instead of `/store/`)
 - Label/context mismatch (e.g., "Select Shirt Size" on a coat product)
 - Currency display consistency (selected currency matches price symbols)
+- Duplicate element IDs
+- Heading hierarchy gaps (h1 → h3 skipping h2)
+- Hardcoded localhost/dev/staging URLs in production
+- Outdated copyright year in footer
+- Orphaned form labels (for="id" where ID doesn't exist)
 
 ### UiExpertise (`src/expertise/ui-expertise.ts`)
 - Main content landmark presence
@@ -120,6 +125,8 @@ Evaluates 37+ expectation types via specialized checker modules:
 
 ### PerformanceExpertise (`src/expertise/performance-expertise.ts`)
 - Render-blocking resource failures
+- Duplicate mutation requests (same POST/PUT called multiple times)
+- Slow network responses (> 3 seconds)
 
 ### SeoExpertise (`src/expertise/seo-expertise.ts`)
 - Title, meta description, keywords, canonical, Open Graph tags
@@ -143,6 +150,9 @@ Browser-side checks running via `adapter.evaluate()` during each test interactio
 | `inconsistent_grid` | Product grid items with >50% height deviation |
 | Result count validation | "Showing N results" vs actual visible items |
 | Filter count validation | Sidebar filter count sum vs total products |
+| `empty_link` | Visible links with `href="#"` or empty href |
+| `broken_anchor` | `href="#id"` where `#id` doesn't exist on page |
+| `missing_noopener` | External `target="_blank"` links without `rel="noopener"` |
 
 ## Test Interaction Generators
 

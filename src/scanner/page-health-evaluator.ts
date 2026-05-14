@@ -13,7 +13,10 @@ export interface PageHealthIssue {
     | "grammar_error"
     | "defunct_service"
     | "missing_price"
-    | "inconsistent_grid";
+    | "inconsistent_grid"
+    | "empty_link"
+    | "broken_anchor"
+    | "missing_noopener";
   severity: "error" | "warning";
   title: string;
   description: string;
@@ -324,6 +327,80 @@ export async function evaluatePageHealth(
           description: `Price filter counts add up to ${filterSum} but ${gridItems.length} products are displayed`,
         });
       }
+    }
+
+    // =========================================================================
+    // 11. Empty/dead links — visible links with no real destination
+    // =========================================================================
+    const allAnchors = Array.from(document.querySelectorAll("a"));
+    let emptyLinkCount = 0;
+    for (const a of allAnchors) {
+      const href = a.getAttribute("href");
+      const text = a.textContent?.trim();
+      const isVisible = a.offsetParent !== null && a.offsetWidth > 0;
+      if (
+        isVisible &&
+        text &&
+        text.length > 1 &&
+        (!href || href === "#" || href === "javascript:void(0)")
+      ) {
+        emptyLinkCount++;
+      }
+    }
+    if (emptyLinkCount > 0) {
+      found.push({
+        type: "empty_link",
+        severity: "warning",
+        title: `${emptyLinkCount} link(s) with no real destination`,
+        description: `Found ${emptyLinkCount} visible link(s) pointing to "#" or with empty href`,
+      });
+    }
+
+    // =========================================================================
+    // 12. Broken anchor links — href="#id" where #id doesn't exist on page
+    // =========================================================================
+    const brokenAnchors: string[] = [];
+    for (const a of allAnchors) {
+      const href = a.getAttribute("href");
+      if (href && href.startsWith("#") && href.length > 1) {
+        const targetId = href.slice(1);
+        if (!document.getElementById(targetId)) {
+          brokenAnchors.push(href);
+        }
+      }
+    }
+    if (brokenAnchors.length > 0) {
+      found.push({
+        type: "broken_anchor",
+        severity: "warning",
+        title: `${brokenAnchors.length} broken anchor link(s)`,
+        description: `Anchor targets not found: ${brokenAnchors.slice(0, 5).join(", ")}`,
+      });
+    }
+
+    // =========================================================================
+    // 13. External links missing rel="noopener" — security issue
+    // =========================================================================
+    let unsafeExternalCount = 0;
+    for (const a of allAnchors) {
+      const href = a.getAttribute("href") || "";
+      const target = a.getAttribute("target");
+      const rel = a.getAttribute("rel") || "";
+      if (
+        target === "_blank" &&
+        href.startsWith("http") &&
+        !rel.includes("noopener")
+      ) {
+        unsafeExternalCount++;
+      }
+    }
+    if (unsafeExternalCount > 0) {
+      found.push({
+        type: "missing_noopener",
+        severity: "warning",
+        title: `${unsafeExternalCount} external link(s) missing rel="noopener"`,
+        description: `Links opening in new tab without rel="noopener" are a security risk (reverse tabnabbing)`,
+      });
     }
 
     return found;

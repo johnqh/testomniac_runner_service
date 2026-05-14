@@ -48,6 +48,41 @@ export class PerformanceExpertise implements Expertise {
       });
     }
 
+    // Check for duplicate mutation requests (same POST/PUT/PATCH/DELETE URL)
+    const mutationCounts = new Map<string, number>();
+    for (const log of context.networkLogs) {
+      if (["POST", "PUT", "PATCH", "DELETE"].includes(log.method)) {
+        const key = `${log.method}:${log.url}`;
+        mutationCounts.set(key, (mutationCounts.get(key) ?? 0) + 1);
+      }
+    }
+    const duplicateMutations = Array.from(mutationCounts.entries()).filter(
+      ([, count]) => count > 1
+    );
+    if (duplicateMutations.length > 0) {
+      const first = duplicateMutations[0]!;
+      outcomes.push({
+        expected: "Mutation requests should not be duplicated",
+        observed: `${duplicateMutations.length} duplicate mutation(s): ${first[0]} called ${first[1]}x`,
+        result: "warning",
+      });
+    }
+
+    // Check for slow responses (> 3s)
+    const slowResponses = context.networkLogs.filter(
+      log => log.timestampMs != null && log.timestampMs > 3000
+    );
+    if (slowResponses.length > 0) {
+      const slowest = slowResponses.reduce((a, b) =>
+        (a.timestampMs ?? 0) > (b.timestampMs ?? 0) ? a : b
+      );
+      outcomes.push({
+        expected: "Network responses should complete within 3 seconds",
+        observed: `${slowResponses.length} slow response(s), slowest: ${slowest.url.slice(0, 80)} (${slowest.timestampMs}ms)`,
+        result: "warning",
+      });
+    }
+
     return outcomes;
   }
 }
