@@ -36,6 +36,7 @@ export interface AnalyzerContext {
   api: ApiClient;
   events: ScanEventHandler;
   scanScopePath?: string;
+  screenshotPath?: string;
   loginDetection?: LoginDetectionResult;
   loginConfig?: LoginConfig;
 }

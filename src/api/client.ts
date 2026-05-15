@@ -222,6 +222,32 @@ export class ApiClient {
     return this.get(`/entity-credentials/${credentialId}`);
   }
 
+  async uploadScreenshot(
+    imageBytes: Uint8Array,
+    filename: string
+  ): Promise<{ path: string; thumbnailPath: string }> {
+    // Artifacts endpoint is at /api/v1/artifacts, not /api/v1/scanner
+    const artifactsUrl = this.baseUrl.replace(
+      "/api/v1/scanner",
+      "/api/v1/artifacts"
+    );
+    const url = `${artifactsUrl}/upload?path=${encodeURIComponent(filename)}`;
+    const blob = new Blob([new Uint8Array(imageBytes)], { type: "image/png" });
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: blob,
+    });
+    const json = (await res.json()) as BaseResponse<{
+      path: string;
+      thumbnailPath: string;
+    }>;
+    if (!json.success) {
+      throw new Error(`Upload failed: ${json.error}`);
+    }
+    return json.data as { path: string; thumbnailPath: string };
+  }
+
   getPagesByRunner(runnerId: number): Promise<PageResponse[]> {
     return this.get(`/pages?runnerId=${runnerId}`);
   }

@@ -694,6 +694,18 @@ export async function executeTestInteraction(
         await api.markIsLoginPage(page.id).catch(() => {});
       }
 
+      // Capture and upload screenshot for page state
+      let screenshotPath: string | undefined;
+      try {
+        const screenshotBytes = await adapter.screenshot({ type: "png" });
+        const safePath = currentPath.replace(/[^a-zA-Z0-9_/-]/g, "_");
+        const filename = `screenshots/${testRun.runnerId}/${safePath.replace(/^\//, "") || "root"}-${Date.now()}.png`;
+        const uploaded = await api.uploadScreenshot(screenshotBytes, filename);
+        screenshotPath = uploaded.path;
+      } catch {
+        // Best effort — continue without screenshot
+      }
+
       const analyzerCtx: AnalyzerContext = {
         runnerId: testRun.runnerId,
         testEnvironmentId: testRun.testEnvironmentId ?? undefined,
@@ -718,6 +730,7 @@ export async function executeTestInteraction(
         api,
         events,
         scanScopePath,
+        screenshotPath,
         loginDetection,
         loginConfig: loginManager ? loginManager.getConfig() : undefined,
       };

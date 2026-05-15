@@ -876,6 +876,7 @@ export class PageAnalyzer {
       hashes,
       contentText: context.html.slice(0, 5000),
       contentHtmlElementId: contentElement.id,
+      screenshotPath: context.screenshotPath,
     });
 
     // Store content-body hash (HTML minus scaffolds) for fallback matching
