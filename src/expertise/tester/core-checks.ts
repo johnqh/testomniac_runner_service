@@ -14,6 +14,7 @@ export function checkPageLoaded(
       expected: description,
       observed: `Page returned HTTP ${documentFailure.status} for ${documentFailure.url}`,
       result: "error",
+      priority: 0,
     };
   }
 
@@ -22,6 +23,7 @@ export function checkPageLoaded(
       expected: description,
       observed: "Page returned empty or non-HTML response",
       result: "error",
+      priority: 0,
     };
   }
 
@@ -29,6 +31,7 @@ export function checkPageLoaded(
     expected: description,
     observed: "Page loaded successfully with HTML content",
     result: "pass",
+    priority: 3,
   };
 }
 
@@ -45,6 +48,7 @@ export function checkNoConsoleErrors(
       expected: description,
       observed: `${errors.length} console error(s): ${errors[0]}`,
       result: "error",
+      priority: 3,
     };
   }
 
@@ -62,6 +66,7 @@ export function checkNoConsoleErrors(
       expected: description,
       observed: `${significantWarnings.length} significant console warning(s): ${significantWarnings[0]}`,
       result: "warning",
+      priority: 3,
     };
   }
 
@@ -69,6 +74,7 @@ export function checkNoConsoleErrors(
     expected: description,
     observed: "No console errors detected",
     result: "pass",
+    priority: 3,
   };
 }
 
@@ -86,6 +92,7 @@ export function checkNoNetworkErrors(
       expected: description,
       observed: "No network errors detected",
       result: "pass",
+      priority: 3,
     };
   }
 
@@ -99,6 +106,7 @@ export function checkNoNetworkErrors(
       expected: description,
       observed: `${criticalErrors.length} critical network error(s): ${criticalErrors[0]!.url} (${criticalErrors[0]!.status})`,
       result: "error",
+      priority: 1,
     };
   }
 
@@ -110,6 +118,7 @@ export function checkNoNetworkErrors(
       expected: description,
       observed: `${sameOriginErrors.length} non-critical same-origin network error(s): ${sameOriginErrors[0]!.url} (${sameOriginErrors[0]!.status})`,
       result: "warning",
+      priority: 3,
     };
   }
 
@@ -118,6 +127,7 @@ export function checkNoNetworkErrors(
       expected: description,
       observed: `${errors.length} third-party or non-critical network error(s) ignored`,
       result: "pass",
+      priority: 3,
     };
   }
 
@@ -125,6 +135,7 @@ export function checkNoNetworkErrors(
     expected: description,
     observed: "No network errors detected",
     result: "pass",
+    priority: 3,
   };
 }
 
@@ -149,6 +160,7 @@ export function checkDuplicateRequests(
       expected: description,
       observed: `${duplicates.length} duplicate mutation request(s): ${first[0].split(":").slice(0, 2).join(":")} called ${first[1]} times`,
       result: "warning",
+      priority: 3,
     };
   }
 
@@ -156,6 +168,7 @@ export function checkDuplicateRequests(
     expected: description,
     observed: "No duplicate mutation requests detected",
     result: "pass",
+    priority: 3,
   };
 }
 
@@ -175,6 +188,7 @@ export function checkSlowResponses(
       expected: description,
       observed: `${slow.length} slow response(s): ${slowest.url.slice(0, 80)} took ${slowest.timestampMs}ms`,
       result: "warning",
+      priority: 3,
     };
   }
 
@@ -182,6 +196,7 @@ export function checkSlowResponses(
     expected: description,
     observed: "No slow responses detected (all < 3s)",
     result: "pass",
+    priority: 3,
   };
 }
 
@@ -197,6 +212,7 @@ export function checkMixedContent(
       expected: description,
       observed: "Page is not served over HTTPS",
       result: "pass",
+      priority: 3,
     };
   }
 
@@ -212,6 +228,7 @@ export function checkMixedContent(
       expected: description,
       observed: `${httpResources.length} HTTP resource(s) loaded on HTTPS page: ${httpResources[0]!.url.slice(0, 80)}`,
       result: "warning",
+      priority: 3,
     };
   }
 
@@ -219,6 +236,7 @@ export function checkMixedContent(
     expected: description,
     observed: "No mixed content detected",
     result: "pass",
+    priority: 3,
   };
 }
 

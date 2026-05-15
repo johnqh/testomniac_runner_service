@@ -36,6 +36,7 @@ export class PerformanceExpertise implements Expertise {
           expected: `Render-blocking resource should respond within ${THRESHOLD_MS}ms`,
           observed: `Resource failed or timed out: ${log.url.slice(0, 120)} (status: ${log.status})`,
           result: "warning",
+          priority: 1,
         });
       }
     }
@@ -45,6 +46,7 @@ export class PerformanceExpertise implements Expertise {
         expected: `All render-blocking resources should respond within ${THRESHOLD_MS}ms`,
         observed: `${renderBlockingLogs.length} render-blocking resource(s) loaded successfully`,
         result: "pass",
+        priority: 1,
       });
     }
 
@@ -65,6 +67,7 @@ export class PerformanceExpertise implements Expertise {
         expected: "Mutation requests should not be duplicated",
         observed: `${duplicateMutations.length} duplicate mutation(s): ${first[0]} called ${first[1]}x`,
         result: "warning",
+        priority: 3,
       });
     }
 
@@ -80,6 +83,7 @@ export class PerformanceExpertise implements Expertise {
         expected: "Network responses should complete within 3 seconds",
         observed: `${slowResponses.length} slow response(s), slowest: ${slowest.url.slice(0, 80)} (${slowest.timestampMs}ms)`,
         result: "warning",
+        priority: 3,
       });
     }
 

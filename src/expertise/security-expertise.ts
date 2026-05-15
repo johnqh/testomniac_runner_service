@@ -34,6 +34,7 @@ export class SecurityExpertise implements Expertise {
             expected: "API keys should not be exposed in URLs",
             observed: `Found "${match[1]}" parameter in URL: ${log.url.slice(0, 120)}`,
             result: "error",
+            priority: 0,
           });
           break;
         }
@@ -45,6 +46,7 @@ export class SecurityExpertise implements Expertise {
         expected: "API keys should not be exposed in URLs",
         observed: "No API keys detected in request URLs",
         result: "pass",
+        priority: 0,
       });
     }
 
@@ -63,6 +65,7 @@ export class SecurityExpertise implements Expertise {
           expected: "All requests should use HTTPS",
           observed: `${insecure.length} insecure HTTP request(s): ${insecure[0].url.slice(0, 120)}`,
           result: "warning",
+          priority: 3,
         },
       ];
     }
@@ -72,6 +75,7 @@ export class SecurityExpertise implements Expertise {
         expected: "All requests should use HTTPS",
         observed: "All requests use HTTPS",
         result: "pass",
+        priority: 3,
       },
     ];
   }
@@ -84,6 +88,7 @@ export class SecurityExpertise implements Expertise {
         expected: "Forms should not submit over insecure HTTP",
         observed: "Page is not HTTPS, skipping check",
         result: "pass",
+        priority: 0,
       };
     }
 
@@ -95,6 +100,7 @@ export class SecurityExpertise implements Expertise {
         expected: "Forms should not submit over insecure HTTP on HTTPS pages",
         observed: `${httpForms.length} form(s) submit to HTTP URLs instead of HTTPS`,
         result: "error",
+        priority: 0,
       };
     }
 
@@ -102,6 +108,7 @@ export class SecurityExpertise implements Expertise {
       expected: "Forms should not submit over insecure HTTP on HTTPS pages",
       observed: "All form actions use HTTPS or relative URLs",
       result: "pass",
+      priority: 0,
     };
   }
 
@@ -139,6 +146,7 @@ export class SecurityExpertise implements Expertise {
           "Input fields should use semantic types (email, tel, url) for better validation",
         observed: `${mistyped.length} input(s) use type="text" instead: ${mistyped.slice(0, 3).join(", ")}`,
         result: "warning",
+        priority: 4,
       };
     }
 
@@ -147,6 +155,7 @@ export class SecurityExpertise implements Expertise {
         "Input fields should use semantic types (email, tel, url) for better validation",
       observed: "Input types appear appropriate",
       result: "pass",
+      priority: 4,
     };
   }
 }

@@ -39,6 +39,7 @@ export class ContentExpertise implements Expertise {
         expected: "Page should contain meaningful body content",
         observed: `Only ${text.length} characters of visible text were detected`,
         result: "warning",
+        priority: 3,
       };
     }
 
@@ -46,6 +47,7 @@ export class ContentExpertise implements Expertise {
       expected: "Page should contain meaningful body content",
       observed: `${text.length} characters of visible text detected`,
       result: "pass",
+      priority: 3,
     };
   }
 
@@ -56,6 +58,7 @@ export class ContentExpertise implements Expertise {
         expected: "Page should have exactly one H1 heading",
         observed: "Found exactly one H1 heading",
         result: "pass",
+        priority: 4,
       };
     }
 
@@ -64,6 +67,7 @@ export class ContentExpertise implements Expertise {
         expected: "Page should have exactly one H1 heading",
         observed: "No H1 heading detected",
         result: "warning",
+        priority: 4,
       };
     }
 
@@ -71,6 +75,7 @@ export class ContentExpertise implements Expertise {
       expected: "Page should have exactly one H1 heading",
       observed: `Found ${matches.length} H1 headings`,
       result: "warning",
+      priority: 4,
     };
   }
 
@@ -89,6 +94,7 @@ export class ContentExpertise implements Expertise {
         expected: "Page content should not contain placeholder copy",
         observed: `Placeholder content matched pattern ${matched}`,
         result: "warning",
+        priority: 3,
       };
     }
 
@@ -96,6 +102,7 @@ export class ContentExpertise implements Expertise {
       expected: "Page content should not contain placeholder copy",
       observed: "No obvious placeholder copy detected",
       result: "pass",
+      priority: 3,
     };
   }
 
@@ -106,6 +113,7 @@ export class ContentExpertise implements Expertise {
         expected: "Images should provide alt text",
         observed: "No images detected on the page",
         result: "pass",
+        priority: 4,
       };
     }
 
@@ -117,6 +125,7 @@ export class ContentExpertise implements Expertise {
         expected: "Images should provide alt text",
         observed: `${missingAlt.length} of ${images.length} image(s) are missing alt text`,
         result: "warning",
+        priority: 4,
       };
     }
 
@@ -124,6 +133,7 @@ export class ContentExpertise implements Expertise {
       expected: "Images should provide alt text",
       observed: `All ${images.length} image(s) include alt text`,
       result: "pass",
+      priority: 4,
     };
   }
 
@@ -149,6 +159,7 @@ export class ContentExpertise implements Expertise {
         expected: "Links should not contain URL typos or malformed paths",
         observed: `Found ${suspicious.length} suspicious link(s): ${suspicious.slice(0, 3).join("; ")}`,
         result: "warning",
+        priority: 2,
       };
     }
 
@@ -156,6 +167,7 @@ export class ContentExpertise implements Expertise {
       expected: "Links should not contain URL typos or malformed paths",
       observed: "No suspicious link patterns detected",
       result: "pass",
+      priority: 2,
     };
   }
 
@@ -190,6 +202,7 @@ export class ContentExpertise implements Expertise {
         expected: "Form option labels should match the product context",
         observed: `Label mismatch: ${mismatches.join("; ")}`,
         result: "warning",
+        priority: 3,
       };
     }
 
@@ -197,6 +210,7 @@ export class ContentExpertise implements Expertise {
       expected: "Form option labels should match the product context",
       observed: "No label/context mismatches detected",
       result: "pass",
+      priority: 3,
     };
   }
 
@@ -214,6 +228,7 @@ export class ContentExpertise implements Expertise {
         expected: "Currency display should match selected currency",
         observed: "No currency selector detected",
         result: "pass",
+        priority: 1,
       };
     }
 
@@ -226,6 +241,7 @@ export class ContentExpertise implements Expertise {
         expected: "Currency display should match selected currency",
         observed: `Currency selector shows "${selectedCurrency}" but prices still display with $ symbol`,
         result: "error",
+        priority: 1,
       };
     }
 
@@ -234,6 +250,7 @@ export class ContentExpertise implements Expertise {
         expected: "Currency display should match selected currency",
         observed: `Currency selector shows "${selectedCurrency}" but prices still display with $ symbol`,
         result: "error",
+        priority: 1,
       };
     }
 
@@ -241,6 +258,7 @@ export class ContentExpertise implements Expertise {
       expected: "Currency display should match selected currency",
       observed: "Currency display appears consistent with selector",
       result: "pass",
+      priority: 1,
     };
   }
 
@@ -277,6 +295,7 @@ export class ContentExpertise implements Expertise {
         expected: "Primary UI text should stay in a consistent language",
         observed: `Detected unexpected non-English UI tokens: ${foreignSignals.join(", ")}`,
         result: "warning",
+        priority: 3,
       };
     }
 
@@ -284,6 +303,7 @@ export class ContentExpertise implements Expertise {
       expected: "Primary UI text should stay in a consistent language",
       observed: "No obvious mixed-language UI tokens were detected",
       result: "pass",
+      priority: 3,
     };
   }
 
@@ -305,6 +325,7 @@ export class ContentExpertise implements Expertise {
         expected: "Element IDs should be unique within the page",
         observed: `${duplicates.size} duplicate ID(s) found: ${list}`,
         result: "warning",
+        priority: 3,
       };
     }
 
@@ -312,6 +333,7 @@ export class ContentExpertise implements Expertise {
       expected: "Element IDs should be unique within the page",
       observed: "All element IDs are unique",
       result: "pass",
+      priority: 3,
     };
   }
 
@@ -324,6 +346,7 @@ export class ContentExpertise implements Expertise {
         expected: "Heading levels should not skip hierarchy levels",
         observed: `Only ${levels.length} heading(s) found`,
         result: "pass",
+        priority: 4,
       };
     }
 
@@ -339,6 +362,7 @@ export class ContentExpertise implements Expertise {
         expected: "Heading levels should not skip hierarchy levels",
         observed: `Heading hierarchy gap(s): ${gaps.slice(0, 3).join(", ")}`,
         result: "warning",
+        priority: 4,
       };
     }
 
@@ -346,6 +370,7 @@ export class ContentExpertise implements Expertise {
       expected: "Heading levels should not skip hierarchy levels",
       observed: "Heading hierarchy is sequential",
       result: "pass",
+      priority: 4,
     };
   }
 
@@ -366,6 +391,7 @@ export class ContentExpertise implements Expertise {
             "Page should not contain hardcoded development or staging URLs",
           observed: `Found dev/staging URL: ${match[0].slice(0, 60)}`,
           result: "warning",
+          priority: 3,
         };
       }
     }
@@ -374,6 +400,7 @@ export class ContentExpertise implements Expertise {
       expected: "Page should not contain hardcoded development or staging URLs",
       observed: "No hardcoded dev URLs detected",
       result: "pass",
+      priority: 3,
     };
   }
 
@@ -389,6 +416,7 @@ export class ContentExpertise implements Expertise {
         expected: "Copyright year should be current",
         observed: "No copyright notice detected",
         result: "pass",
+        priority: 4,
       };
     }
 
@@ -398,6 +426,7 @@ export class ContentExpertise implements Expertise {
         expected: "Copyright year should be current",
         observed: `Copyright year is ${endYear}, current year is ${currentYear}`,
         result: "warning",
+        priority: 4,
       };
     }
 
@@ -405,6 +434,7 @@ export class ContentExpertise implements Expertise {
       expected: "Copyright year should be current",
       observed: `Copyright year (${endYear}) is current`,
       result: "pass",
+      priority: 4,
     };
   }
 
@@ -426,6 +456,7 @@ export class ContentExpertise implements Expertise {
         expected: "Form labels should reference existing element IDs",
         observed: `${orphaned.length} label(s) reference non-existent IDs: ${orphaned.slice(0, 3).join(", ")}`,
         result: "warning",
+        priority: 4,
       };
     }
 
@@ -433,6 +464,7 @@ export class ContentExpertise implements Expertise {
       expected: "Form labels should reference existing element IDs",
       observed: "All form labels reference valid element IDs",
       result: "pass",
+      priority: 4,
     };
   }
 }

@@ -28,6 +28,7 @@ export class AccessibilityExpertise implements Expertise {
         expected: "Document should declare a language",
         observed: "No lang attribute detected on the <html> element",
         result: "warning",
+        priority: 4,
       };
     }
 
@@ -35,6 +36,7 @@ export class AccessibilityExpertise implements Expertise {
       expected: "Document should declare a language",
       observed: "lang attribute detected on the <html> element",
       result: "pass",
+      priority: 4,
     };
   }
 
@@ -48,6 +50,7 @@ export class AccessibilityExpertise implements Expertise {
         expected: "Page should expose a main landmark for screen readers",
         observed: 'No <main> or role="main" landmark detected',
         result: "warning",
+        priority: 4,
       };
     }
 
@@ -56,6 +59,7 @@ export class AccessibilityExpertise implements Expertise {
         expected: "Page should expose only one main landmark",
         observed: `Detected ${mainCount} main landmarks`,
         result: "warning",
+        priority: 4,
       };
     }
 
@@ -63,6 +67,7 @@ export class AccessibilityExpertise implements Expertise {
       expected: "Page should expose only one main landmark",
       observed: "Exactly one main landmark detected",
       result: "pass",
+      priority: 4,
     };
   }
 
@@ -76,6 +81,7 @@ export class AccessibilityExpertise implements Expertise {
         expected: "Form controls should have accessible labels",
         observed: "No form controls detected on the page",
         result: "pass",
+        priority: 4,
       };
     }
 
@@ -92,6 +98,7 @@ export class AccessibilityExpertise implements Expertise {
         expected: "Form controls should have accessible labels",
         observed: `${missingLabels.length} of ${inputs.length} control(s) are missing obvious label hooks`,
         result: "warning",
+        priority: 4,
       };
     }
 
@@ -99,6 +106,7 @@ export class AccessibilityExpertise implements Expertise {
       expected: "Form controls should have accessible labels",
       observed: `All ${inputs.length} control(s) have ids or ARIA labelling hooks`,
       result: "pass",
+      priority: 4,
     };
   }
 
@@ -109,6 +117,7 @@ export class AccessibilityExpertise implements Expertise {
         expected: "Images should have alt text or be explicitly decorative",
         observed: "No images detected on the page",
         result: "pass",
+        priority: 4,
       };
     }
 
@@ -124,6 +133,7 @@ export class AccessibilityExpertise implements Expertise {
         expected: "Images should have alt text or be explicitly decorative",
         observed: `${missingAlt.length} of ${images.length} image(s) lack alt text or decorative markup`,
         result: "warning",
+        priority: 4,
       };
     }
 
@@ -131,6 +141,7 @@ export class AccessibilityExpertise implements Expertise {
       expected: "Images should have alt text or be explicitly decorative",
       observed: `All ${images.length} image(s) include alt text or decorative markup`,
       result: "pass",
+      priority: 4,
     };
   }
 
@@ -142,6 +153,7 @@ export class AccessibilityExpertise implements Expertise {
         expected: "Dialogs should be labelled for assistive technologies",
         observed: "No dialogs detected on the page",
         result: "pass",
+        priority: 4,
       };
     }
 
@@ -156,6 +168,7 @@ export class AccessibilityExpertise implements Expertise {
         expected: "Dialogs should be labelled for assistive technologies",
         observed: `${unlabeled.length} of ${dialogs.length} dialog(s) are missing aria-label or aria-labelledby`,
         result: "warning",
+        priority: 4,
       };
     }
 
@@ -163,6 +176,7 @@ export class AccessibilityExpertise implements Expertise {
       expected: "Dialogs should be labelled for assistive technologies",
       observed: `All ${dialogs.length} dialog(s) have accessible labelling`,
       result: "pass",
+      priority: 4,
     };
   }
 
@@ -179,6 +193,7 @@ export class AccessibilityExpertise implements Expertise {
           "Elements should not use positive tabindex values (disrupts natural tab order)",
         observed: `${positiveTabindexes.length} element(s) have positive tabindex values`,
         result: "warning",
+        priority: 4,
       };
     }
 
@@ -187,6 +202,7 @@ export class AccessibilityExpertise implements Expertise {
         "Elements should not use positive tabindex values (disrupts natural tab order)",
       observed: "No positive tabindex values detected",
       result: "pass",
+      priority: 4,
     };
   }
 
@@ -202,6 +218,7 @@ export class AccessibilityExpertise implements Expertise {
         expected: "Media should not autoplay with sound",
         observed: `Detected ${type} element with autoplay attribute (without muted)`,
         result: "warning",
+        priority: 3,
       };
     }
 
@@ -209,6 +226,7 @@ export class AccessibilityExpertise implements Expertise {
       expected: "Media should not autoplay with sound",
       observed: "No autoplaying unmuted media detected",
       result: "pass",
+      priority: 3,
     };
   }
 }

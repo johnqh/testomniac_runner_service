@@ -24,6 +24,7 @@ export class UiExpertise implements Expertise {
         expected: "Page should expose a main content landmark",
         observed: 'No <main> element or role="main" landmark detected',
         result: "warning",
+        priority: 4,
       };
     }
 
@@ -31,6 +32,7 @@ export class UiExpertise implements Expertise {
       expected: "Page should expose a main content landmark",
       observed: "Main content landmark detected",
       result: "pass",
+      priority: 4,
     };
   }
 
@@ -43,6 +45,7 @@ export class UiExpertise implements Expertise {
         expected: "Shared page scaffolds should not be duplicated",
         observed: `Detected ${topMenus.length} top menu(s) and ${footers.length} footer(s)`,
         result: "warning",
+        priority: 3,
       };
     }
 
@@ -50,6 +53,7 @@ export class UiExpertise implements Expertise {
       expected: "Shared page scaffolds should not be duplicated",
       observed: `Detected ${topMenus.length} top menu(s) and ${footers.length} footer(s)`,
       result: "pass",
+      priority: 3,
     };
   }
 
@@ -63,6 +67,7 @@ export class UiExpertise implements Expertise {
         expected: "Page should not load with visible error UI",
         observed: `Detected ${errorPattern.count} ${errorPattern.type} pattern(s)`,
         result: "warning",
+        priority: 2,
       };
     }
 
@@ -70,6 +75,7 @@ export class UiExpertise implements Expertise {
       expected: "Page should not load with visible error UI",
       observed: "No error or alert patterns detected on initial render",
       result: "pass",
+      priority: 2,
     };
   }
 
@@ -109,6 +115,7 @@ export class UiExpertise implements Expertise {
           "Social share buttons should be functional (links or have click handlers)",
         observed: `${deadSocial} of ${totalSocial} social button(s) appear to be non-functional <div> elements without links`,
         result: "warning",
+        priority: 3,
       };
     }
 
@@ -118,6 +125,7 @@ export class UiExpertise implements Expertise {
           "Social share buttons should be functional (links or have click handlers)",
         observed: `All ${totalSocial} social button(s) appear functional`,
         result: "pass",
+        priority: 3,
       };
     }
 
@@ -126,6 +134,7 @@ export class UiExpertise implements Expertise {
         "Social share buttons should be functional (links or have click handlers)",
       observed: "No social share buttons detected",
       result: "pass",
+      priority: 3,
     };
   }
 
@@ -140,6 +149,7 @@ export class UiExpertise implements Expertise {
         expected: "Breadcrumb navigation should be consistent",
         observed: "No breadcrumb navigation detected",
         result: "pass",
+        priority: 3,
       };
     }
 
@@ -156,6 +166,7 @@ export class UiExpertise implements Expertise {
         expected: "Breadcrumb navigation should be consistent",
         observed: `${brokenBreadcrumbs.length} breadcrumb link(s) appear broken or have typos`,
         result: "warning",
+        priority: 3,
       };
     }
 
@@ -163,6 +174,7 @@ export class UiExpertise implements Expertise {
       expected: "Breadcrumb navigation should be consistent",
       observed: "Breadcrumb navigation appears consistent",
       result: "pass",
+      priority: 3,
     };
   }
 
@@ -178,6 +190,7 @@ export class UiExpertise implements Expertise {
         expected: "Page should expose at least one interactive control",
         observed: "No links, buttons, inputs, or selects were detected",
         result: "warning",
+        priority: 3,
       };
     }
 
@@ -185,6 +198,7 @@ export class UiExpertise implements Expertise {
       expected: "Page should expose at least one interactive control",
       observed: `Detected ${controls} interactive control(s) in the HTML`,
       result: "pass",
+      priority: 3,
     };
   }
 }

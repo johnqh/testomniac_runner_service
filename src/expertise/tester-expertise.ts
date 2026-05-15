@@ -75,6 +75,7 @@ export class TesterExpertise implements Expertise {
       outcomes.push({
         ...result,
         severity: expectation.severity,
+        priority: expectation.priority,
       });
     }
 

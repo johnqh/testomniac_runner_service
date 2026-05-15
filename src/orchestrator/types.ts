@@ -41,6 +41,7 @@ export interface ScanEventHandler {
   onTestRunCompleted(run: { testRunId: number; passed: boolean }): void;
   onFindingCreated(finding: {
     type: string;
+    priority: number;
     title: string;
     description?: string;
   }): void;

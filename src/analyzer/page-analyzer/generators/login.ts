@@ -105,6 +105,7 @@ export async function generateLoginTestInteractions(
             description:
               "An error message should be displayed for invalid email format",
             severity: "warning",
+            priority: 2,
           },
         ],
       });
@@ -152,6 +153,7 @@ export async function generateLoginTestInteractions(
             description:
               "An authentication error message should be displayed for incorrect credentials",
             severity: "warning",
+            priority: 2,
           },
         ],
       });
@@ -199,6 +201,7 @@ export async function generateLoginTestInteractions(
             description:
               "Should navigate away from login page after successful authentication",
             severity: "error",
+            priority: 1,
           },
         ],
       });
@@ -241,6 +244,7 @@ export async function generateLoginTestInteractions(
           type: "navigation_away",
           description: `Should navigate to ${ssoButton.provider} SSO provider page`,
           severity: "warning",
+          priority: 2,
         },
       ],
     });

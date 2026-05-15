@@ -1,6 +1,9 @@
 import type { BrowserAdapter } from "../adapter";
 import type { ApiClient } from "../api/client";
-import { ExpectationSeverity } from "@sudobility/testomniac_types";
+import {
+  ExpectationSeverity,
+  FindingPriority,
+} from "@sudobility/testomniac_types";
 import type {
   NetworkLogEntry,
   TestInteractionResponse,
@@ -573,14 +576,17 @@ export async function executeTestInteraction(
         for (const outcome of outcomes) {
           const findingType = getFindingTypeForOutcome(outcome);
           if (findingType) {
+            const priority = derivePriority(outcome);
             await api.createTestRunFinding({
               testInteractionRunId: testInteractionRun.id,
               type: findingType,
+              priority,
               title: `[${expertise.name}] ${outcome.expected}`,
               description: outcome.observed,
             });
             events.onFindingCreated({
               type: findingType,
+              priority,
               title: `[${expertise.name}] ${outcome.expected}`,
               description: outcome.observed,
             });
@@ -595,14 +601,17 @@ export async function executeTestInteraction(
       const healthIssues = await evaluatePageHealth(adapter);
       for (const issue of healthIssues) {
         const findingType = issue.severity === "error" ? "error" : "warning";
+        const priority = derivePageHealthPriority(issue.severity);
         await api.createTestRunFinding({
           testInteractionRunId: testInteractionRun.id,
           type: findingType,
+          priority,
           title: `[page-health] ${issue.title}`,
           description: issue.description,
         });
         events.onFindingCreated({
           type: findingType,
+          priority,
           title: `[page-health] ${issue.title}`,
           description: issue.description,
         });
@@ -774,12 +783,14 @@ export async function executeTestInteraction(
       await api.createTestRunFinding({
         testInteractionRunId: testInteractionRun.id,
         type: "error",
+        priority: FindingPriority.Crash,
         title: `Test execution error`,
         description: errorMessage,
       });
 
       events.onFindingCreated({
         type: "error",
+        priority: FindingPriority.Crash,
         title: "Test execution error",
         description: errorMessage,
       });
@@ -1011,6 +1022,27 @@ export function buildExpectationEvaluationGroups(params: {
   }
 
   return groups;
+}
+
+function derivePriority(outcome: Outcome): number {
+  const severity = outcome.severity ?? ExpectationSeverity.MustPass;
+  if (severity === ExpectationSeverity.MustPass && outcome.result === "error") {
+    return FindingPriority.Critical;
+  }
+  if (
+    severity === ExpectationSeverity.ShouldPass &&
+    outcome.result === "error"
+  ) {
+    return FindingPriority.Major;
+  }
+  if (outcome.result === "warning") {
+    return FindingPriority.Minor;
+  }
+  return FindingPriority.Minor;
+}
+
+function derivePageHealthPriority(severity: "error" | "warning"): number {
+  return severity === "error" ? FindingPriority.Major : FindingPriority.Minor;
 }
 
 function getFindingTypeForOutcome(

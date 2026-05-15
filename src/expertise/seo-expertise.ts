@@ -30,12 +30,14 @@ export class SeoExpertise implements Expertise {
         expected: `Page should have a <${tagName}> tag`,
         observed: `Found <${tagName}>: "${match[1].trim().slice(0, 80)}"`,
         result: "pass",
+        priority: 4,
       };
     }
     return {
       expected: `Page should have a <${tagName}> tag`,
       observed: `Missing <${tagName}> tag`,
       result: "warning",
+      priority: 4,
     };
   }
 
@@ -54,12 +56,14 @@ export class SeoExpertise implements Expertise {
         expected: `Page should have meta ${name}`,
         observed: `Found meta ${name}: "${match[1].trim().slice(0, 80)}"`,
         result: "pass",
+        priority: 4,
       };
     }
     return {
       expected: `Page should have meta ${name}`,
       observed: `Missing meta ${name}`,
       result: "warning",
+      priority: 4,
     };
   }
 
@@ -74,12 +78,14 @@ export class SeoExpertise implements Expertise {
         expected: `Page should have <link rel="${rel}">`,
         observed: `Found ${rel}: "${match[1].trim()}"`,
         result: "pass",
+        priority: 4,
       };
     }
     return {
       expected: `Page should have <link rel="${rel}">`,
       observed: `Missing <link rel="${rel}">`,
       result: "warning",
+      priority: 4,
     };
   }
 
@@ -98,12 +104,14 @@ export class SeoExpertise implements Expertise {
         expected: `Page should have meta property ${property}`,
         observed: `Found ${property}: "${match[1].trim().slice(0, 80)}"`,
         result: "pass",
+        priority: 4,
       };
     }
     return {
       expected: `Page should have meta property ${property}`,
       observed: `Missing meta property ${property}`,
       result: "warning",
+      priority: 4,
     };
   }
 }

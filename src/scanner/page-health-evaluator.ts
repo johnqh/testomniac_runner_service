@@ -25,6 +25,7 @@ export interface PageHealthIssue {
     | "unlabeled_button"
     | "small_touch_target";
   severity: "error" | "warning";
+  priority: number;
   title: string;
   description: string;
 }
@@ -42,6 +43,7 @@ export async function evaluatePageHealth(
     const found: Array<{
       type: string;
       severity: string;
+      priority: number;
       title: string;
       description: string;
     }> = [];
@@ -66,6 +68,7 @@ export async function evaluatePageHealth(
       found.push({
         type: "broken_image",
         severity: "error",
+        priority: 3,
         title: `${brokenImages.length} broken image(s) detected`,
         description: `Images that failed to load: ${brokenImages.slice(0, 5).join(", ")}${brokenImages.length > 5 ? ` and ${brokenImages.length - 5} more` : ""}`,
       });
@@ -104,6 +107,7 @@ export async function evaluatePageHealth(
       found.push({
         type: "element_overlap",
         severity: "error",
+        priority: 2,
         title: `${overlappedElements.length} interactive element(s) obscured by overlapping content`,
         description: overlappedElements.slice(0, 3).join("; "),
       });
@@ -144,6 +148,7 @@ export async function evaluatePageHealth(
       found.push({
         type: "dead_social_button",
         severity: "warning",
+        priority: 3,
         title: `${deadSocial.length} social share button(s) are non-functional`,
         description: `Non-clickable social buttons: ${deadSocial.join(", ")}`,
       });
@@ -176,6 +181,7 @@ export async function evaluatePageHealth(
         found.push({
           type: "cart_math_error",
           severity: "error",
+          priority: 1,
           title: "Cart grand total does not match subtotal + shipping",
           description: `Subtotal ($${subtotal.toFixed(2)}) + Shipping ($${shipping.toFixed(2)}) = $${expected.toFixed(2)}, but Grand Total shows $${grandTotal.toFixed(2)}`,
         });
@@ -197,6 +203,7 @@ export async function evaluatePageHealth(
         found.push({
           type: "grammar_error",
           severity: "warning",
+          priority: 3,
           title: `Grammar error: "${match[0]}"`,
           description: `Should be ${fix} — singular/plural mismatch`,
         });
@@ -220,6 +227,7 @@ export async function evaluatePageHealth(
           found.push({
             type: "defunct_service",
             severity: "warning",
+            priority: 4,
             title: `Link to defunct service: ${name}`,
             description: `Page contains a link/reference to ${name}, which is no longer operational`,
           });
@@ -246,6 +254,7 @@ export async function evaluatePageHealth(
       found.push({
         type: "missing_price",
         severity: "error",
+        priority: 2,
         title: "Product page missing price and add-to-cart",
         description:
           "Product detail page detected but no price or add-to-cart button is visible",
@@ -255,6 +264,7 @@ export async function evaluatePageHealth(
       found.push({
         type: "missing_price",
         severity: "warning",
+        priority: 2,
         title: "Product price hidden behind login",
         description:
           '"Login for Pricing" shown instead of product price — public visitors cannot see the price',
@@ -280,6 +290,7 @@ export async function evaluatePageHealth(
           found.push({
             type: "inconsistent_grid",
             severity: "warning",
+            priority: 3,
             title: `Product grid layout has ${outliers.length} inconsistently sized item(s)`,
             description: `Average item height is ${Math.round(avgHeight)}px but ${outliers.length} item(s) deviate by more than 50%`,
           });
@@ -300,6 +311,7 @@ export async function evaluatePageHealth(
         found.push({
           type: "grammar_error",
           severity: "warning",
+          priority: 3,
           title: `Result count mismatch: claims ${claimed} but shows ${actual}`,
           description: `Page text says "Showing ${claimed} results" but ${actual} product items are visible on the page`,
         });
@@ -330,6 +342,7 @@ export async function evaluatePageHealth(
         found.push({
           type: "grammar_error",
           severity: "warning",
+          priority: 3,
           title: `Filter counts sum (${filterSum}) doesn't match total products (${gridItems.length})`,
           description: `Price filter counts add up to ${filterSum} but ${gridItems.length} products are displayed`,
         });
@@ -358,6 +371,7 @@ export async function evaluatePageHealth(
       found.push({
         type: "empty_link",
         severity: "warning",
+        priority: 3,
         title: `${emptyLinkCount} link(s) with no real destination`,
         description: `Found ${emptyLinkCount} visible link(s) pointing to "#" or with empty href`,
       });
@@ -380,6 +394,7 @@ export async function evaluatePageHealth(
       found.push({
         type: "broken_anchor",
         severity: "warning",
+        priority: 3,
         title: `${brokenAnchors.length} broken anchor link(s)`,
         description: `Anchor targets not found: ${brokenAnchors.slice(0, 5).join(", ")}`,
       });
@@ -405,6 +420,7 @@ export async function evaluatePageHealth(
       found.push({
         type: "missing_noopener",
         severity: "warning",
+        priority: 4,
         title: `${unsafeExternalCount} external link(s) missing rel="noopener"`,
         description: `Links opening in new tab without rel="noopener" are a security risk (reverse tabnabbing)`,
       });
@@ -420,6 +436,7 @@ export async function evaluatePageHealth(
       found.push({
         type: "horizontal_overflow",
         severity: "warning",
+        priority: 3,
         title: "Page has horizontal overflow",
         description: `Page width (${document.documentElement.scrollWidth}px) exceeds viewport (${document.documentElement.clientWidth}px), causing horizontal scrollbar`,
       });
@@ -448,6 +465,7 @@ export async function evaluatePageHealth(
       found.push({
         type: "truncated_text",
         severity: "warning",
+        priority: 3,
         title: `${truncatedCount} element(s) have truncated text`,
         description:
           "Important text (headings, links, titles, prices) is being cut off by CSS overflow",
@@ -477,6 +495,7 @@ export async function evaluatePageHealth(
       found.push({
         type: "invalid_price",
         severity: "error",
+        priority: 1,
         title: `${invalidPrices.length} invalid price(s): zero, negative, or NaN`,
         description: `Invalid prices found: ${invalidPrices.slice(0, 3).join(", ")}`,
       });
@@ -509,6 +528,7 @@ export async function evaluatePageHealth(
             found.push({
               type: "invalid_discount",
               severity: "error",
+              priority: 1,
               title: "Sale price is higher than original price",
               description: `Original: $${original.toFixed(2)}, Sale: $${salePrice.toFixed(2)}`,
             });
@@ -539,6 +559,7 @@ export async function evaluatePageHealth(
           found.push({
             type: "invalid_rating",
             severity: "error",
+            priority: 3,
             title: `Invalid rating value: ${val}`,
             description: `Star rating of ${val} is outside the valid 0-5 range`,
           });
@@ -576,6 +597,7 @@ export async function evaluatePageHealth(
       found.push({
         type: "unlabeled_button",
         severity: "warning",
+        priority: 4,
         title: `${unlabeledCount} icon-only button(s) without accessible label`,
         description:
           "Buttons with only icons and no text, aria-label, or title attribute are inaccessible to screen readers",
@@ -604,6 +626,7 @@ export async function evaluatePageHealth(
       found.push({
         type: "small_touch_target",
         severity: "warning",
+        priority: 4,
         title: `${smallTargetCount} interactive element(s) smaller than 24x24px`,
         description:
           "Small touch targets are difficult to tap on mobile devices (WCAG recommends minimum 44x44px)",
@@ -617,6 +640,7 @@ export async function evaluatePageHealth(
     issues.push({
       type: r.type as PageHealthIssue["type"],
       severity: r.severity as "error" | "warning",
+      priority: r.priority,
       title: r.title,
       description: r.description,
     });

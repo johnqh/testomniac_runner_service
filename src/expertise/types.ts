@@ -13,6 +13,7 @@ export interface Outcome {
   observed: string;
   result: "pass" | "warning" | "error";
   severity?: ExpectationSeverity;
+  priority?: number;
 }
 
 export interface ExpertiseContext {
