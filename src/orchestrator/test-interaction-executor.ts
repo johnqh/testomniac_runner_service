@@ -702,8 +702,11 @@ export async function executeTestInteraction(
         const filename = `screenshots/${testRun.runnerId}/${safePath.replace(/^\//, "") || "root"}-${Date.now()}.png`;
         const uploaded = await api.uploadScreenshot(screenshotBytes, filename);
         screenshotPath = uploaded.path;
-      } catch {
-        // Best effort — continue without screenshot
+      } catch (err) {
+        console.warn(
+          "[executor] screenshot upload failed:",
+          err instanceof Error ? err.message : String(err)
+        );
       }
 
       const analyzerCtx: AnalyzerContext = {
@@ -816,6 +819,19 @@ export async function executeTestInteraction(
   }
 }
 
+/** Convert Uint8Array to base64 without Node.js Buffer (works in browser + Node). */
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  // Use Buffer if available (Node.js), otherwise browser-compatible approach
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(bytes).toString("base64");
+  }
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
 async function emitLiveScreenshot(
   adapter: BrowserAdapter,
   events: ScanEventHandler,
@@ -823,13 +839,16 @@ async function emitLiveScreenshot(
 ): Promise<void> {
   try {
     const bytes = await adapter.screenshot({ type: "png" });
-    const base64 = Buffer.from(bytes).toString("base64");
+    const base64 = uint8ArrayToBase64(bytes);
     events.onScreenshotCaptured({
       dataUrl: `data:image/png;base64,${base64}`,
       pageUrl,
     });
-  } catch {
-    // Best effort only.
+  } catch (err) {
+    console.warn(
+      "[executor] emitLiveScreenshot failed:",
+      err instanceof Error ? err.message : String(err)
+    );
   }
 }
 
