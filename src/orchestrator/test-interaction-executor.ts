@@ -460,6 +460,8 @@ export async function executeTestInteraction(
     );
     const finalControlStates = ensureArray(await captureControlStates(adapter));
     const currentUrl = await adapter.getUrl();
+    const currentUrlParsed = new URL(currentUrl);
+    const currentPath = `${currentUrlParsed.pathname}${currentUrlParsed.search}`;
     await emitLiveScreenshot(adapter, events, currentUrl);
     const scaffoldSelectorByItemSelector = await mapItemsToScaffolds(
       adapter,
@@ -573,48 +575,86 @@ export async function executeTestInteraction(
         allOutcomes.push(...outcomes);
 
         // Create findings for unmet expectations based on configured severity.
+        // Deduplicate by (path, title, description) so the same issue is
+        // reported only once per page per run.  This covers both page-scoped
+        // findings (console errors, 404s) AND interaction-specific findings
+        // that fail identically — if two interactions on the same page produce
+        // the exact same failure text, they represent the same underlying bug.
         for (const outcome of outcomes) {
           const findingType = getFindingTypeForOutcome(outcome);
           if (findingType) {
+            const findingTitle = `[${expertise.name}] ${outcome.expected}`;
+            if (
+              analyzer?.hasReportedPageFinding(
+                currentPath,
+                findingTitle,
+                outcome.observed
+              )
+            ) {
+              continue;
+            }
             const priority = derivePriority(outcome);
             await api.createTestRunFinding({
               testInteractionRunId: testInteractionRun.id,
               type: findingType,
               priority,
-              title: `[${expertise.name}] ${outcome.expected}`,
+              title: findingTitle,
               description: outcome.observed,
             });
             events.onFindingCreated({
               type: findingType,
               priority,
-              title: `[${expertise.name}] ${outcome.expected}`,
+              title: findingTitle,
               description: outcome.observed,
             });
+            analyzer?.markPageFindingReported(
+              currentPath,
+              findingTitle,
+              outcome.observed
+            );
           }
         }
       }
     }
 
     // Page health evaluation — browser-side checks for broken images, overlaps, etc.
+    // These are page-scoped: the same broken images and overlaps will be found
+    // by every interaction on the same page.  Deduplicate via the analyzer so
+    // each unique issue is reported only once per page path per run.
     currentPhase = "evaluating-page-health";
     try {
       const healthIssues = await evaluatePageHealth(adapter);
       for (const issue of healthIssues) {
+        const findingTitle = `[page-health] ${issue.title}`;
+        if (
+          analyzer?.hasReportedPageFinding(
+            currentPath,
+            findingTitle,
+            issue.description
+          )
+        ) {
+          continue;
+        }
         const findingType = issue.severity === "error" ? "error" : "warning";
         const priority = derivePageHealthPriority(issue.severity);
         await api.createTestRunFinding({
           testInteractionRunId: testInteractionRun.id,
           type: findingType,
           priority,
-          title: `[page-health] ${issue.title}`,
+          title: findingTitle,
           description: issue.description,
         });
         events.onFindingCreated({
           type: findingType,
           priority,
-          title: `[page-health] ${issue.title}`,
+          title: findingTitle,
           description: issue.description,
         });
+        analyzer?.markPageFindingReported(
+          currentPath,
+          findingTitle,
+          issue.description
+        );
       }
     } catch (healthError) {
       logExecutor("page-health:error", {
@@ -772,13 +812,16 @@ export async function executeTestInteraction(
           : JSON.stringify(error);
     const errorMessage = `Phase: ${currentPhase}\n${detail}`;
 
-    // "Element not found" and "Could not resolve clickable point" are replay
-    // infrastructure issues, not bugs in the app under test.  Mark the
+    // Infrastructure issues that are not bugs in the app under test.  Mark the
     // interaction as skipped rather than creating a noisy finding.
     const isReplayError =
       error instanceof Error &&
       (error.message.includes("Element not found") ||
-        error.message.includes("Could not resolve clickable point"));
+        error.message.includes("Could not resolve clickable point") ||
+        (error.message.includes("Frame with ID") &&
+          error.message.includes("was removed")) ||
+        error.message.includes("Cannot access a chrome-extension://") ||
+        error.message.includes("Debugger is not attached"));
 
     await api.completeTestInteractionRun(testInteractionRun.id, {
       status: isReplayError ? "skipped" : "failed",

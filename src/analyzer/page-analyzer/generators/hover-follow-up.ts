@@ -1,5 +1,6 @@
 import type { TestInteraction } from "@sudobility/testomniac_types";
 import { matchesActionableItemSelector } from "../../../browser/replay-selector";
+import { computeActionableHash } from "../../../browser/page-utils";
 import type { AnalyzerContext } from "../types";
 
 export async function generateHoverFollowUpCases(
@@ -102,6 +103,30 @@ export async function generateHoverFollowUpCases(
       currentPath,
       currentPageStateId: context.currentPageStateId,
     });
+    await analyzer.reconcileGeneratedSurfaceElements(context, {
+      surfaceId: context.currentTestSurfaceId,
+      surfaceTitle: "",
+      desiredKeys: [],
+      dependencyTestInteractionId: context.currentTestInteractionId,
+    });
+    return;
+  }
+
+  // Skip if a different path already produced the same interactive elements.
+  // Note: we check the hash but don't register it — registration happens in
+  // the full generateTestInteractions pass.  Registering here would
+  // incorrectly block full generation for a page reached via non-hover.
+  const actionableHash = await computeActionableHash(context.actionableItems);
+  if (analyzer.hasGeneratedForActionableHash(actionableHash)) {
+    console.info(
+      "[PageAnalyzer][hover-follow-up] actionable-items-already-covered",
+      {
+        testInteractionId: context.currentTestInteractionId,
+        sourceTitle: testInteraction.title,
+        currentPath,
+        actionableHash,
+      }
+    );
     await analyzer.reconcileGeneratedSurfaceElements(context, {
       surfaceId: context.currentTestSurfaceId,
       surfaceTitle: "",

@@ -44,23 +44,34 @@ export function extractVisibleText(html: string): string {
     .trim();
 }
 
+/**
+ * Compute a hash of visible actionable-item stable keys.  Used both inside
+ * `computeHashes` and by the PageAnalyzer to deduplicate test generation
+ * across pages that share the same set of interactive elements.
+ */
+export async function computeActionableHash(
+  actionableItems: Pick<ActionableItem, "visible" | "stableKey">[]
+): Promise<string> {
+  const visibleKeys = actionableItems
+    .filter(i => i.visible)
+    .map(i => i.stableKey)
+    .sort()
+    .join("|");
+  return sha256(visibleKeys);
+}
+
 export async function computeHashes(
   html: string,
   actionableItems: ActionableItem[]
 ): Promise<PageHashes> {
   const normalized = normalizeHtml(html);
   const visibleText = extractVisibleText(html);
-  const visibleKeys = actionableItems
-    .filter(i => i.visible)
-    .map(i => i.stableKey)
-    .sort()
-    .join("|");
 
   return {
     htmlHash: await sha256(html),
     normalizedHtmlHash: await sha256(normalized),
     textHash: await sha256(visibleText),
-    actionableHash: await sha256(visibleKeys),
+    actionableHash: await computeActionableHash(actionableItems),
   };
 }
 

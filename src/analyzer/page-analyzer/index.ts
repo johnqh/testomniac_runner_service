@@ -18,7 +18,12 @@ import {
   buildReplaySelectorFromActionableItem,
   matchesActionableItemSelector,
 } from "../../browser/replay-selector";
-import { computeHashes, sha256, normalizeHtml } from "../../browser/page-utils";
+import {
+  computeHashes,
+  computeActionableHash,
+  sha256,
+  normalizeHtml,
+} from "../../browser/page-utils";
 import type { ApiClient } from "../../api/client";
 import type { DetectedScaffoldRegion } from "../../scanner/component-detector";
 import { getBody, getContentBody } from "../../scanner/html-decomposer";
@@ -68,9 +73,60 @@ export class PageAnalyzer {
   /** Paths for which full generation has already run in this test-run. */
   private generatedPaths = new Set<string>();
 
+  /**
+   * Actionable-item hashes for which full generation has already run.
+   * Different URL paths can produce the same set of interactive elements
+   * (e.g. `/store/` and `/store/all-items/`).  Generating hover/click tests
+   * for the same elements twice is pure waste, so we deduplicate by the hash
+   * of visible actionable-item stable keys.
+   */
+  private generatedActionableHashes = new Set<string>();
+
+  /**
+   * Tracks page-scoped finding keys already recorded during this run.
+   * Page-level findings (page-health checks, page-load expectations) describe
+   * the page itself, not a specific interaction.  Reporting them once per page
+   * path is sufficient — duplicating them for every hover/click on the same
+   * page just adds noise.
+   */
+  private reportedPageFindingKeys = new Set<string>();
+
   /** Check whether generation already happened for a given path in this run. */
   hasGeneratedForPath(path: string): boolean {
     return this.generatedPaths.has(path);
+  }
+
+  /**
+   * Returns true if an equivalent page-scoped finding has already been
+   * recorded for the given path during this run.
+   */
+  hasReportedPageFinding(
+    path: string,
+    title: string,
+    description: string
+  ): boolean {
+    return this.reportedPageFindingKeys.has(
+      `${path}\0${title}\0${description}`
+    );
+  }
+
+  /**
+   * Mark a page-scoped finding as recorded so it is not duplicated.
+   */
+  markPageFindingReported(
+    path: string,
+    title: string,
+    description: string
+  ): void {
+    this.reportedPageFindingKeys.add(`${path}\0${title}\0${description}`);
+  }
+
+  /**
+   * Check whether full test generation already ran for a page state with the
+   * same visible actionable items (by hash).
+   */
+  hasGeneratedForActionableHash(hash: string): boolean {
+    return this.generatedActionableHashes.has(hash);
   }
 
   /**
@@ -299,6 +355,9 @@ export class PageAnalyzer {
       currentPath: resolvedContext.currentPath,
     });
 
+    // Hover-only interactions have their own same-page-state handling inside
+    // generateHoverFollowUpCases (including click-follow-up reconciliation),
+    // so let them through to that dedicated path.
     if (this.isHoverOnly(testInteraction)) {
       logAnalyzer("generate:hover-only", {
         sourceTitle: testInteraction.title,
@@ -306,6 +365,22 @@ export class PageAnalyzer {
         currentPageStateId: resolvedContext.currentPageStateId,
       });
       await generateHoverFollowUpCases(this, testInteraction, resolvedContext);
+      return;
+    }
+
+    // For non-hover interactions: skip generation when the end page state is
+    // the same as the starting page state — the interaction did not cause a
+    // meaningful change, so there is nothing new to discover or test.
+    if (
+      resolvedContext.beginningPageStateId > 0 &&
+      currentPageStateId === resolvedContext.beginningPageStateId
+    ) {
+      logAnalyzer("generate:same-page-state", {
+        sourceTitle: testInteraction.title,
+        currentTestInteractionId: resolvedContext.currentTestInteractionId,
+        currentPageStateId,
+        beginningPageStateId: resolvedContext.beginningPageStateId,
+      });
       return;
     }
 
@@ -322,7 +397,27 @@ export class PageAnalyzer {
       });
       return;
     }
+
+    // Skip generation if a different path already produced the same set of
+    // interactive elements.  For example /store/ and /store/all-items/ may
+    // resolve to the same product grid — generating hover/click tests for
+    // both is redundant.
+    const actionableHash = await computeActionableHash(
+      resolvedContext.actionableItems
+    );
+    if (this.generatedActionableHashes.has(actionableHash)) {
+      logAnalyzer("generate:actionable-items-already-covered", {
+        sourceTitle: testInteraction.title,
+        currentTestInteractionId: resolvedContext.currentTestInteractionId,
+        currentPageStateId: resolvedContext.currentPageStateId,
+        currentPath,
+        actionableHash,
+      });
+      return;
+    }
+
     this.generatedPaths.add(currentPath);
+    this.generatedActionableHashes.add(actionableHash);
 
     // If a hover+click navigated to a new page, create a direct navigation
     // interaction and use it as the dependency instead of the hover chain

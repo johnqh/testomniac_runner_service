@@ -64,6 +64,43 @@ export async function buildDomSnapshot(
       }
       if (style.pointerEvents === "none") return false;
 
+      // Check if element is fully obscured by another element (e.g., floating
+      // menus, overlays).  Sample the center and four edge midpoints — the
+      // element is only hidden if ALL in-viewport sample points are blocked.
+      // This avoids false negatives for elements that are only partially
+      // covered (e.g., a wide nav bar where only the center is under a modal).
+      const samplePoints = [
+        { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        { x: rect.left + rect.width * 0.1, y: rect.top + rect.height / 2 },
+        { x: rect.left + rect.width * 0.9, y: rect.top + rect.height / 2 },
+        { x: rect.left + rect.width / 2, y: rect.top + rect.height * 0.1 },
+        { x: rect.left + rect.width / 2, y: rect.top + rect.height * 0.9 },
+      ];
+      const vw = document.documentElement.clientWidth;
+      const vh = document.documentElement.clientHeight;
+      const interactiveSelector =
+        "a[href], button, input, select, textarea, [role='button'], [role='link'], [role='menuitem']";
+      let allObscured = true;
+      let anyPointInViewport = false;
+      for (const pt of samplePoints) {
+        if (pt.x < 0 || pt.y < 0 || pt.x >= vw || pt.y >= vh) continue;
+        anyPointInViewport = true;
+        const topEl = document.elementFromPoint(pt.x, pt.y);
+        if (!topEl || topEl === el || el.contains(topEl)) {
+          allObscured = false;
+          break;
+        }
+        if (topEl.closest?.('[hidden], [aria-hidden="true"]')) {
+          allObscured = false;
+          break;
+        }
+        if (topEl.closest(interactiveSelector)?.contains(el)) {
+          allObscured = false;
+          break;
+        }
+      }
+      if (anyPointInViewport && allObscured) return false;
+
       return true;
     }
 
