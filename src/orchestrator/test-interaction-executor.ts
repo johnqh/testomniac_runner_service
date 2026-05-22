@@ -621,20 +621,19 @@ export async function executeTestInteraction(
     // These are page-scoped: the same broken images and overlaps will be found
     // by every interaction on the same page.  Deduplicate via the analyzer so
     // each unique issue is reported only once per page path per run.
+    //
+    // Page-health titles include variable counts ("5 broken image(s)") and
+    // descriptions include variable element lists, so text-based dedup is
+    // unreliable.  Use the stable issue.type + page path as the primary key.
     currentPhase = "evaluating-page-health";
     try {
       const healthIssues = await evaluatePageHealth(adapter);
       for (const issue of healthIssues) {
-        const findingTitle = `[page-health] ${issue.title}`;
-        if (
-          analyzer?.hasReportedPageFinding(
-            currentPath,
-            findingTitle,
-            issue.description
-          )
-        ) {
+        const healthKey = `page-health:${issue.type}:${currentPath}`;
+        if (analyzer?.hasReportedFindingByKey(healthKey)) {
           continue;
         }
+        const findingTitle = `[page-health] ${issue.title}`;
         const findingType = issue.severity === "error" ? "error" : "warning";
         const priority = derivePageHealthPriority(issue.severity);
         await api.createTestRunFinding({
@@ -650,11 +649,7 @@ export async function executeTestInteraction(
           title: findingTitle,
           description: issue.description,
         });
-        analyzer?.markPageFindingReported(
-          currentPath,
-          findingTitle,
-          issue.description
-        );
+        analyzer?.markReportedFindingByKey(healthKey);
       }
     } catch (healthError) {
       logExecutor("page-health:error", {
@@ -814,14 +809,25 @@ export async function executeTestInteraction(
 
     // Infrastructure issues that are not bugs in the app under test.  Mark the
     // interaction as skipped rather than creating a noisy finding.
+    // Use the raw error text (not instanceof Error) because Chrome extension
+    // API rejections are sometimes plain objects, not Error instances.
+    const errorText =
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : String(error);
     const isReplayError =
-      error instanceof Error &&
-      (error.message.includes("Element not found") ||
-        error.message.includes("Could not resolve clickable point") ||
-        (error.message.includes("Frame with ID") &&
-          error.message.includes("was removed")) ||
-        error.message.includes("Cannot access a chrome-extension://") ||
-        error.message.includes("Debugger is not attached"));
+      errorText.includes("Element not found") ||
+      errorText.includes("Could not resolve clickable point") ||
+      (errorText.includes("Frame with ID") &&
+        errorText.includes("was removed")) ||
+      errorText.includes("Cannot access a chrome-extension://") ||
+      errorText.includes("Cannot access contents of") ||
+      errorText.includes("Debugger is not attached") ||
+      errorText.includes("No tab with id") ||
+      errorText.includes("non-web page") ||
+      errorText.includes("Inspected target navigated or closed");
 
     await api.completeTestInteractionRun(testInteractionRun.id, {
       status: isReplayError ? "skipped" : "failed",

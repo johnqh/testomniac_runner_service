@@ -91,34 +91,64 @@ export class PageAnalyzer {
    */
   private reportedPageFindingKeys = new Set<string>();
 
+  /**
+   * Generic key-based dedup for findings where text-based matching is too
+   * fragile (e.g. page-health titles include variable counts).
+   */
+  private reportedFindingKeys = new Set<string>();
+
   /** Check whether generation already happened for a given path in this run. */
   hasGeneratedForPath(path: string): boolean {
     return this.generatedPaths.has(path);
   }
 
   /**
+   * Normalize finding text for dedup: strip leading count numbers that vary
+   * between evaluations.  Preserves URLs, status codes, and other content.
+   *
+   *   "[page-health] 5 broken image(s)" → "[page-health] broken image(s)"
+   *   "3 significant console warning(s)" → "significant console warning(s)"
+   *   "Page returned HTTP 404 for …"    → unchanged
+   */
+  private static normalizeFindingText(text: string): string {
+    return text.replace(/^(\[[^\]]+\]\s*)\d+\s+/, "$1").replace(/^\d+\s+/, "");
+  }
+
+  /**
    * Returns true if an equivalent page-scoped finding has already been
-   * recorded for the given path during this run.
+   * recorded during this run.  Both title and description are normalized
+   * to strip variable leading counts so that "3 console error(s): …" and
+   * "5 console error(s): …" are treated as the same finding.
    */
   hasReportedPageFinding(
-    path: string,
+    _path: string,
     title: string,
     description: string
   ): boolean {
-    return this.reportedPageFindingKeys.has(
-      `${path}\0${title}\0${description}`
-    );
+    const key = `${PageAnalyzer.normalizeFindingText(title)}\0${PageAnalyzer.normalizeFindingText(description)}`;
+    return this.reportedPageFindingKeys.has(key);
   }
 
   /**
    * Mark a page-scoped finding as recorded so it is not duplicated.
    */
   markPageFindingReported(
-    path: string,
+    _path: string,
     title: string,
     description: string
   ): void {
-    this.reportedPageFindingKeys.add(`${path}\0${title}\0${description}`);
+    const key = `${PageAnalyzer.normalizeFindingText(title)}\0${PageAnalyzer.normalizeFindingText(description)}`;
+    this.reportedPageFindingKeys.add(key);
+  }
+
+  /** Check whether a finding with the given stable key has been reported. */
+  hasReportedFindingByKey(key: string): boolean {
+    return this.reportedFindingKeys.has(key);
+  }
+
+  /** Mark a stable finding key as reported. */
+  markReportedFindingByKey(key: string): void {
+    this.reportedFindingKeys.add(key);
   }
 
   /**
