@@ -75,13 +75,67 @@ export async function evaluatePageHealth(
     }
 
     // =========================================================================
-    // 2. Element overlap — check if interactive elements are obscured
+    // 2. Element overlap — check if interactive elements are obscured by a
+    //    TRANSPARENT overlay.  Opaque overlays (modals, tour tips, canvas
+    //    backdrops) intentionally hide content — that is by design.  Only
+    //    flag when the overlapping element is see-through: the user can see
+    //    the interactive element but cannot click it.
     // =========================================================================
     const interactiveSelectors =
       "a[href], button, input, select, textarea, [role='button']";
     const interactiveEls = Array.from(
       document.querySelectorAll(interactiveSelectors)
     );
+
+    /** Returns true if the element (or a close ancestor) is visually opaque. */
+    const isOpaqueOverlay = (overlay: Element): boolean => {
+      // Content-bearing elements are inherently visible
+      const tag = overlay.tagName.toLowerCase();
+      if (
+        tag === "canvas" ||
+        tag === "img" ||
+        tag === "video" ||
+        tag === "svg" ||
+        tag === "iframe"
+      ) {
+        return true;
+      }
+
+      // Walk the overlay and up to 3 ancestors looking for a visible background
+      let current: Element | null = overlay;
+      for (
+        let depth = 0;
+        current && depth < 4;
+        depth++, current = current.parentElement
+      ) {
+        const style = window.getComputedStyle(current);
+
+        // Low opacity → transparent
+        if (parseFloat(style.opacity) < 0.1) return false;
+
+        // Non-transparent background color → opaque
+        const bg = style.backgroundColor;
+        if (bg && bg !== "transparent" && bg !== "rgba(0, 0, 0, 0)") {
+          const rgbaMatch = bg.match(
+            /rgba?\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*(?:,\s*([\d.]+))?\s*\)/
+          );
+          const alpha =
+            rgbaMatch && rgbaMatch[1] !== undefined
+              ? parseFloat(rgbaMatch[1])
+              : 1;
+          if (alpha > 0.1) return true;
+        }
+
+        // Background image → opaque
+        if (style.backgroundImage && style.backgroundImage !== "none") {
+          return true;
+        }
+      }
+
+      // No visible background found → transparent overlay
+      return false;
+    };
+
     const overlappedElements: string[] = [];
     for (const el of interactiveEls.slice(0, 50)) {
       const rect = el.getBoundingClientRect();
@@ -94,7 +148,8 @@ export async function evaluatePageHealth(
         topEl &&
         topEl !== el &&
         !el.contains(topEl) &&
-        !topEl.closest(interactiveSelectors)?.contains(el)
+        !topEl.closest(interactiveSelectors)?.contains(el) &&
+        !isOpaqueOverlay(topEl)
       ) {
         const elDesc = el.textContent?.trim().slice(0, 40) || el.tagName;
         const blockDesc =
@@ -108,7 +163,7 @@ export async function evaluatePageHealth(
         type: "element_overlap",
         severity: "error",
         priority: 2,
-        title: `${overlappedElements.length} interactive element(s) obscured by overlapping content`,
+        title: `${overlappedElements.length} interactive element(s) obscured by transparent overlapping content`,
         description: overlappedElements.slice(0, 3).join("; "),
       });
     }

@@ -575,11 +575,10 @@ export async function executeTestInteraction(
         allOutcomes.push(...outcomes);
 
         // Create findings for unmet expectations based on configured severity.
-        // Deduplicate by (path, title, description) so the same issue is
-        // reported only once per page per run.  This covers both page-scoped
-        // findings (console errors, 404s) AND interaction-specific findings
-        // that fail identically — if two interactions on the same page produce
-        // the exact same failure text, they represent the same underlying bug.
+        // Deduplicate at two levels:
+        //  1. (title, description) — same expectation producing the same text
+        //  2. description alone — different expectations detecting the same
+        //     root cause (e.g. page_loaded + render check both find a 404)
         for (const outcome of outcomes) {
           const findingType = getFindingTypeForOutcome(outcome);
           if (findingType) {
@@ -589,7 +588,8 @@ export async function executeTestInteraction(
                 currentPath,
                 findingTitle,
                 outcome.observed
-              )
+              ) ||
+              analyzer?.hasReportedDescription(outcome.observed)
             ) {
               continue;
             }
@@ -612,6 +612,7 @@ export async function executeTestInteraction(
               findingTitle,
               outcome.observed
             );
+            analyzer?.markReportedDescription(outcome.observed);
           }
         }
       }

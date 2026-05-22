@@ -97,6 +97,15 @@ export class PageAnalyzer {
    */
   private reportedFindingKeys = new Set<string>();
 
+  /**
+   * Description-only dedup.  Multiple expectations (page_loaded,
+   * no_console_errors, page-specific render checks) can all detect the same
+   * root cause (e.g. a 404) and produce identical `observed` text.  Tracking
+   * descriptions independently ensures only the first finding per unique
+   * description is created per run.
+   */
+  private reportedDescriptions = new Set<string>();
+
   /** Check whether generation already happened for a given path in this run. */
   hasGeneratedForPath(path: string): boolean {
     return this.generatedPaths.has(path);
@@ -149,6 +158,23 @@ export class PageAnalyzer {
   /** Mark a stable finding key as reported. */
   markReportedFindingByKey(key: string): void {
     this.reportedFindingKeys.add(key);
+  }
+
+  /**
+   * Check if a finding with this description has already been reported,
+   * regardless of which expectation produced it.
+   */
+  hasReportedDescription(description: string): boolean {
+    return this.reportedDescriptions.has(
+      PageAnalyzer.normalizeFindingText(description)
+    );
+  }
+
+  /** Mark a finding description as reported. */
+  markReportedDescription(description: string): void {
+    this.reportedDescriptions.add(
+      PageAnalyzer.normalizeFindingText(description)
+    );
   }
 
   /**
