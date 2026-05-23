@@ -722,7 +722,13 @@ export class PageAnalyzer {
   private isNonBrowserLink(item: ActionableItem): boolean {
     if (!item.href) return false;
     const href = item.href.trim().toLowerCase();
-    if (href.startsWith("http:") || href.startsWith("https:") || href.startsWith("/") || href.startsWith("#") || href.startsWith("?")) {
+    if (
+      href.startsWith("http:") ||
+      href.startsWith("https:") ||
+      href.startsWith("/") ||
+      href.startsWith("#") ||
+      href.startsWith("?")
+    ) {
       return false;
     }
     // Anything with a scheme that isn't http/https is non-browser

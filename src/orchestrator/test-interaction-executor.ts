@@ -1325,7 +1325,10 @@ async function executeAction(
         // Skip clicking non-browser links (mailto:, tel:, etc.) to avoid
         // launching external applications that cannot be controlled.
         const clickMeta = parseReplaySelector(action.path);
-        if (clickMeta?.href && /^(?!https?:)[a-z][a-z0-9+.-]*:/i.test(clickMeta.href)) {
+        if (
+          clickMeta?.href &&
+          /^(?!https?:)[a-z][a-z0-9+.-]*:/i.test(clickMeta.href)
+        ) {
           logExecutor("click:skipped-non-browser-link", {
             href: clickMeta.href,
             path: action.path,
