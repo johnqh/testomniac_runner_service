@@ -478,8 +478,15 @@ export class PageAnalyzer {
       resolvedContext.actionableItems
     );
 
-    this.generatedPaths.add(currentPath);
-    this.generatedActionableHashes.add(actionableHash);
+    // Only mark the path as covered if actionable items were found.
+    // If the page hadn't fully loaded yet (e.g. SPA hydration), the first
+    // pass may see 0 items.  Keeping the path open lets a later test
+    // (Render, which waits for load state) re-run the full generation pass
+    // with the complete HTML.
+    if (resolvedContext.actionableItems.length > 0) {
+      this.generatedPaths.add(currentPath);
+      this.generatedActionableHashes.add(actionableHash);
+    }
 
     // If a hover+click navigated to a new page, create a direct navigation
     // interaction and use it as the dependency instead of the hover chain
@@ -3997,22 +4004,7 @@ export class PageAnalyzer {
         : group.slice(0, PageAnalyzer.MAX_REPS_PER_STYLE)
     );
 
-    // Also cap passthrough items (no container fingerprint) by action style
-    const passthroughByStyle = new Map<string, ActionableItem[]>();
-    for (const item of passthrough) {
-      const style = this.representativeActionStyle(item);
-      const bucket = passthroughByStyle.get(style) ?? [];
-      bucket.push(item);
-      passthroughByStyle.set(style, bucket);
-    }
-    const cappedPassthrough = Array.from(passthroughByStyle.values()).flatMap(
-      group =>
-        group.length <= PageAnalyzer.MAX_REPS_PER_STYLE
-          ? group
-          : group.slice(0, PageAnalyzer.MAX_REPS_PER_STYLE)
-    );
-
-    return [...cappedPassthrough, ...capped];
+    return [...passthrough, ...capped];
   }
 
   private representativeActionStyle(item: ActionableItem): string {
