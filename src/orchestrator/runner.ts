@@ -180,11 +180,17 @@ export async function runTestRun(
 
   try {
     await waitForCheckpoint("before_claim");
+    logRunner("claim:attempting", {
+      testRunId: config.testRunId,
+      runnerInstanceId: config.runnerInstanceId,
+      runnerInstanceName: config.runnerInstanceName,
+    });
     const claimed = await api.claimTestRun(
       config.testRunId,
       config.runnerInstanceId,
       config.runnerInstanceName
     );
+    logRunner("claim:result", { testRunId: config.testRunId, claimed });
     if (!claimed) {
       throw new Error(
         `Test run ${config.testRunId} already claimed by another runner`
@@ -337,6 +343,18 @@ export async function runTestRun(
 
       if (runnableSurfaceEntries.length === 0) {
         if (blockedSurfaceEntries.length > 0) {
+          logRunner("interaction-runs:blocked-tree", {
+            bundleRunId: testRun.testSurfaceBundleRunId,
+            blockedSurfaceRunCount: blockedSurfaceEntries.length,
+            blockedDetails: blockedSurfaceEntries.map(entry => ({
+              surfaceRunId: entry.surfaceRun.id,
+              surfaceId: entry.surfaceRun.testSurfaceId,
+              allPendingRunIds: entry.allPendingRuns.map(run => run.id),
+              allPendingInteractionIds: entry.allPendingRuns.map(
+                run => run.testInteractionId
+              ),
+            })),
+          });
           throw new Error(
             `Blocked interaction tree detected for bundle run ${testRun.testSurfaceBundleRunId}`
           );
@@ -433,6 +451,12 @@ export async function runTestRun(
       await waitForCheckpoint("after_test_interaction");
     }
 
+    logRunner("loop:exited", {
+      testRunId: config.testRunId,
+      bundleRunId: testRun.testSurfaceBundleRunId,
+      completedInteractionRunCount: completedTestInteractionRunIds.size,
+    });
+
     await waitForCheckpoint("before_completion");
 
     // Flush any pending debounced stats before completing
@@ -491,6 +515,13 @@ export async function runTestRun(
     return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
+    const stack = error instanceof Error ? error.stack : undefined;
+    logRunner("runTestRun:error", {
+      testRunId: config.testRunId,
+      message,
+      stack,
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+    });
     wrappedEvents.onError({ message });
 
     // Try to mark the run as failed
