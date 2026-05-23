@@ -315,6 +315,16 @@ export class PageAnalyzer {
         : {}) as Record<string, unknown>,
     };
 
+    // Don't append click for non-browser links (mailto:, tel:, etc.)
+    if (this.isNonBrowserLink(clickItem)) {
+      logAnalyzer("generate:hover-inline-click-skipped-non-browser-link", {
+        sourceTitle: testInteraction.title,
+        selector,
+        href: clickItem.href,
+      });
+      return { testInteraction, appended: false };
+    }
+
     const clickStep =
       this.buildClickTestInteraction(
         clickItem,
@@ -702,6 +712,21 @@ export class PageAnalyzer {
       !item.disabled &&
       (item.actionKind === "click" || item.actionKind === "navigate")
     );
+  }
+
+  /**
+   * Returns true if the item is a link with a non-browser protocol (mailto:,
+   * tel:, ftp:, etc.).  Clicking such links launches external applications
+   * which cannot be controlled or closed by the test runner.
+   */
+  private isNonBrowserLink(item: ActionableItem): boolean {
+    if (!item.href) return false;
+    const href = item.href.trim().toLowerCase();
+    if (href.startsWith("http:") || href.startsWith("https:") || href.startsWith("/") || href.startsWith("#") || href.startsWith("?")) {
+      return false;
+    }
+    // Anything with a scheme that isn't http/https is non-browser
+    return /^[a-z][a-z0-9+.-]*:/i.test(href);
   }
 
   private isSurfaceCandidate(item: ActionableItem): boolean {

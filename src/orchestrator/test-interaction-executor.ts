@@ -24,6 +24,7 @@ import { captureControlStates } from "../browser/control-snapshot";
 import {
   buildReplaySelectorFromDescription,
   isTransientSnapshotSelector,
+  parseReplaySelector,
 } from "../browser/replay-selector";
 import { captureUiSnapshot, type UiSnapshot } from "../browser/ui-snapshot";
 import { detectScaffoldRegions } from "../scanner/component-detector";
@@ -1321,6 +1322,16 @@ async function executeAction(
       break;
     case "click":
       if (action.path) {
+        // Skip clicking non-browser links (mailto:, tel:, etc.) to avoid
+        // launching external applications that cannot be controlled.
+        const clickMeta = parseReplaySelector(action.path);
+        if (clickMeta?.href && /^(?!https?:)[a-z][a-z0-9+.-]*:/i.test(clickMeta.href)) {
+          logExecutor("click:skipped-non-browser-link", {
+            href: clickMeta.href,
+            path: action.path,
+          });
+          break;
+        }
         await adapter.click(action.path);
         if (_clickWaitMs > 0)
           await new Promise(r => setTimeout(r, _clickWaitMs));
