@@ -456,12 +456,32 @@ export async function detectScaffoldRegions(
     // they don't use .social-* CSS classes.
     if (!foundTypes.has("socialLinks")) {
       const socialDomains = [
-        "facebook.com", "twitter.com", "x.com", "linkedin.com",
-        "pinterest.com", "reddit.com", "tumblr.com", "tiktok.com",
-        "discord.com", "discord.gg", "telegram.org", "whatsapp.com",
-        "myspace.com", "vk.com", "weibo.com", "line.me",
-        "threads.net", "mastodon.social", "bsky.app", "snapchat.com",
-        "t.co", "wa.me", "t.me", "fb.me", "pin.it", "bit.ly",
+        "facebook.com",
+        "twitter.com",
+        "x.com",
+        "linkedin.com",
+        "pinterest.com",
+        "reddit.com",
+        "tumblr.com",
+        "tiktok.com",
+        "discord.com",
+        "discord.gg",
+        "telegram.org",
+        "whatsapp.com",
+        "myspace.com",
+        "vk.com",
+        "weibo.com",
+        "line.me",
+        "threads.net",
+        "mastodon.social",
+        "bsky.app",
+        "snapchat.com",
+        "t.co",
+        "wa.me",
+        "t.me",
+        "fb.me",
+        "pin.it",
+        "bit.ly",
       ];
       const socialPathPatterns =
         /\/(intent\/tweet|shareArticle|sharer|pin\/create|share\b|plus\.google)/i;
