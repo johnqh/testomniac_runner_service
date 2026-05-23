@@ -465,6 +465,30 @@ export async function executeTestInteraction(
     const currentUrlParsed = new URL(currentUrl);
     const currentPath = `${currentUrlParsed.pathname}${currentUrlParsed.search}`;
     const findingPath = currentUrlParsed.pathname;
+
+    // Flag abnormally slow steps — a step taking >10s likely indicates a page
+    // freeze or unresponsive interaction (e.g. currency dropdown crash).
+    const SLOW_STEP_THRESHOLD_MS = 10_000;
+    for (const exec of stepExecutions) {
+      const stepDuration = exec.endedAtMs - exec.startedAtMs;
+      if (stepDuration > SLOW_STEP_THRESHOLD_MS) {
+        const stepDesc =
+          exec.step.action?.description ??
+          exec.step.action?.actionType ??
+          "unknown";
+        await api.ensureTestRunFinding({
+          testRunId: testRun.id,
+          testInteractionRunId: testInteractionRun.id,
+          type: "warning",
+          priority: 2,
+          title: `[tester] Interaction step took ${Math.round(stepDuration / 1000)}s`,
+          description: `Step "${stepDesc}" took ${stepDuration}ms — possible page freeze or performance issue`,
+          path: findingPath,
+        });
+        break;
+      }
+    }
+
     await emitLiveScreenshot(adapter, events, currentUrl);
     const scaffoldSelectorByItemSelector = await mapItemsToScaffolds(
       adapter,

@@ -3996,7 +3996,10 @@ export class PageAnalyzer {
    */
   private static readonly MAX_REPS_PER_STYLE = 2;
 
-  private selectRepresentativeItems(items: ActionableItem[]): ActionableItem[] {
+  selectRepresentativeItems(
+    items: ActionableItem[],
+    maxPerStyle: number = PageAnalyzer.MAX_REPS_PER_STYLE
+  ): ActionableItem[] {
     const groups = new Map<string, ActionableItem[]>();
     const passthrough: ActionableItem[] = [];
 
@@ -4021,7 +4024,7 @@ export class PageAnalyzer {
 
     // Cap per action style: when many different containers share the same
     // functional action (e.g. 14 product cards each with "ADD TO CART"),
-    // keep at most MAX_REPS_PER_STYLE representatives per style.
+    // keep at most maxPerStyle representatives per style.
     // Include passthrough items in the cap — items without a container
     // fingerprint (e.g. product links in a grid that wasn't detected as a
     // repeated container) should still be deduplicated by functional style.
@@ -4034,9 +4037,7 @@ export class PageAnalyzer {
       byStyle.set(style, bucket);
     }
     return Array.from(byStyle.values()).flatMap(group =>
-      group.length <= PageAnalyzer.MAX_REPS_PER_STYLE
-        ? group
-        : group.slice(0, PageAnalyzer.MAX_REPS_PER_STYLE)
+      group.length <= maxPerStyle ? group : group.slice(0, maxPerStyle)
     );
   }
 

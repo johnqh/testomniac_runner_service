@@ -23,7 +23,13 @@ export interface PageHealthIssue {
     | "invalid_discount"
     | "invalid_rating"
     | "unlabeled_button"
-    | "small_touch_target";
+    | "small_touch_target"
+    | "placeholder_text"
+    | "price_format_error"
+    | "duplicate_element"
+    | "error_message_visible"
+    | "empty_product_page"
+    | "missing_stock_info";
   severity: "error" | "warning";
   priority: number;
   title: string;
@@ -269,7 +275,7 @@ export async function evaluatePageHealth(
     // 6. Defunct service links (MySpace, Google+, etc.)
     // =========================================================================
     const defunctServices = [
-      { pattern: /myspace\.com|class.*myspace/i, name: "MySpace" },
+      { pattern: /myspace/i, name: "MySpace" },
       { pattern: /plus\.google\.com/i, name: "Google+" },
       { pattern: /vine\.co(?!mcast)/i, name: "Vine" },
     ];
@@ -686,6 +692,165 @@ export async function evaluatePageHealth(
         description:
           "Small touch targets are difficult to tap on mobile devices (WCAG recommends minimum 44x44px)",
       });
+    }
+
+    // =========================================================================
+    // 21. Placeholder text — Lorem Ipsum or common filler in content areas
+    // =========================================================================
+    const contentEls = Array.from(
+      document.querySelectorAll(
+        ".ec_details_description, .product-description, [class*='description'], article p, .entry-content p"
+      )
+    );
+    const placeholderPatterns = [
+      /\bLorem ipsum\b/i,
+      /\bNam nec tellus a odio tincidunt\b/i,
+      /\bdolor sit amet, consectetur adipiscing\b/i,
+      /\bsed do eiusmod tempor incididunt\b/i,
+    ];
+    for (const el of contentEls) {
+      const text = el.textContent?.trim() || "";
+      if (text.length < 20) continue;
+      const match = placeholderPatterns.find(p => p.test(text));
+      if (match) {
+        found.push({
+          type: "placeholder_text",
+          severity: "warning",
+          priority: 2,
+          title: "Placeholder text in content area",
+          description:
+            "Product or page content contains Lorem Ipsum or filler text instead of real content",
+        });
+        break;
+      }
+    }
+
+    // =========================================================================
+    // 22. Price format errors — prices with 3+ decimal places
+    // =========================================================================
+    const allPriceEls = Array.from(
+      document.querySelectorAll(
+        '[class*="price"], [class*="amount"], [class*="cost"]'
+      )
+    );
+    for (const el of allPriceEls) {
+      const text = el.textContent?.trim() || "";
+      const badFormat = text.match(/[$€£]\s*\d+\.\d{3,}/);
+      if (badFormat) {
+        found.push({
+          type: "price_format_error",
+          severity: "warning",
+          priority: 2,
+          title: "Price displayed with incorrect decimal format",
+          description: `Price "${badFormat[0]}" has too many decimal places — expected 2 decimal places`,
+        });
+        break;
+      }
+    }
+
+    // =========================================================================
+    // 23. Duplicate structural elements — breadcrumbs, headers rendered twice
+    // =========================================================================
+    const breadcrumbEls = document.querySelectorAll(
+      '[class*="breadcrumb"], nav[aria-label*="breadcrumb"]'
+    );
+    if (breadcrumbEls.length >= 2) {
+      const texts = Array.from(breadcrumbEls).map(el =>
+        el.textContent?.trim().replace(/\s+/g, " ")
+      );
+      const uniqueTexts = new Set(texts);
+      if (uniqueTexts.size < texts.length) {
+        found.push({
+          type: "duplicate_element",
+          severity: "warning",
+          priority: 3,
+          title: "Duplicate breadcrumb navigation",
+          description: `Breadcrumb trail appears ${texts.length} times on the page`,
+        });
+      }
+    }
+
+    // =========================================================================
+    // 24. Visible error messages — e-commerce error text exposed in the DOM
+    // =========================================================================
+    const errorPatterns = [
+      {
+        pattern: /\bMaximum purchase amount of 0\b/i,
+        desc: '"Maximum purchase amount of 0" — add-to-cart is effectively disabled',
+      },
+      {
+        pattern: /\bMinimum purchase amount of 0 is required\b/i,
+        desc: '"Minimum purchase amount of 0 is required" — contradictory validation',
+      },
+      {
+        pattern: /\bMaximum quantity exceeded\b/i,
+        desc: '"Maximum quantity exceeded" — error shown before user action',
+      },
+    ];
+    for (const { pattern, desc } of errorPatterns) {
+      if (pattern.test(pageText)) {
+        found.push({
+          type: "error_message_visible",
+          severity: "error",
+          priority: 2,
+          title: "Error message visible on page",
+          description: desc,
+        });
+        break;
+      }
+    }
+
+    // =========================================================================
+    // 25. Empty product page — product detail URL with no product content
+    // =========================================================================
+    const isProductPage =
+      /\/store\/[^/]+\/?$/.test(window.location.pathname) ||
+      !!document.querySelector(
+        ".ec_details_right, .product-details, [class*='product_details']"
+      );
+    if (isProductPage) {
+      const hasTitle = !!document.querySelector(
+        ".ec_details_title, .product-title, [class*='product_title']"
+      );
+      const hasPrice = !!document.querySelector(
+        ".ec_details_price, .product-price, [class*='product_price']"
+      );
+      const hasImage = !!document.querySelector(
+        ".ec_details_main_image img, .product-image img, [class*='product_image'] img"
+      );
+      if (!hasTitle && !hasPrice && !hasImage) {
+        found.push({
+          type: "empty_product_page",
+          severity: "error",
+          priority: 1,
+          title: "Product page has no content",
+          description:
+            "Product detail page loaded but contains no product title, price, or image",
+        });
+      }
+    }
+
+    // =========================================================================
+    // 26. Missing stock info — product detail page lacks stock count
+    //     when the page structure suggests it should have one
+    // =========================================================================
+    if (isProductPage) {
+      const hasAddToCart = !!document.querySelector(
+        ".ec_addtocart, [class*='add_to_cart'], [class*='addtocart']"
+      );
+      const hasStockInfo = !!document.querySelector(
+        "[class*='stock'], [class*='inventory'], [class*='availability']"
+      );
+      if (hasAddToCart && !hasStockInfo) {
+        found.push({
+          type: "missing_stock_info",
+          severity: "warning",
+          priority: 4,
+          title: "Product page missing stock information",
+          description:
+            "Product has add-to-cart but no visible stock count or availability indicator",
+        });
+      }
     }
 
     return found;

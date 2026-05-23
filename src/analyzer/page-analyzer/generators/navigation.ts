@@ -54,7 +54,7 @@ export async function generateNavigationTestInteractions(
   if (navItems.length === 0) return;
 
   // Apply the same representative-item dedup used for hover/content
-  // interactions — product grid links get capped to MAX_REPS_PER_STYLE
+  // interactions — product grid links get capped per style
   const representative = analyzer.selectRepresentativeItems(navItems);
 
   // Deduplicate by relative path
