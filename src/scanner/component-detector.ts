@@ -455,12 +455,23 @@ export async function detectScaffoldRegions(
     // Detect containers with social share links by URL pattern, even when
     // they don't use .social-* CSS classes.
     if (!foundTypes.has("socialLinks")) {
-      const socialPatterns =
-        /\/(intent\/tweet|shareArticle|sharer\/sharer|pin\/create|share\?|plus\.google)|((facebook|twitter|x|linkedin|pinterest|reddit|tumblr|tiktok|discord|telegram|whatsapp|myspace|vk|weibo|line\.me|threads\.net|mastodon|bsky\.app|snapchat)\.com|t\.co|wa\.me|t\.me)\//i;
+      const socialDomains = [
+        "facebook.com", "twitter.com", "x.com", "linkedin.com",
+        "pinterest.com", "reddit.com", "tumblr.com", "tiktok.com",
+        "discord.com", "discord.gg", "telegram.org", "whatsapp.com",
+        "myspace.com", "vk.com", "weibo.com", "line.me",
+        "threads.net", "mastodon.social", "bsky.app", "snapchat.com",
+        "t.co", "wa.me", "t.me", "fb.me", "pin.it", "bit.ly",
+      ];
+      const socialPathPatterns =
+        /\/(intent\/tweet|shareArticle|sharer|pin\/create|share\b|plus\.google)/i;
       const allLinks = Array.from(document.querySelectorAll("a[href]"));
       const socialLinks = allLinks.filter(a => {
         const href = a.getAttribute("href") || "";
-        return socialPatterns.test(href) || /^mailto:\?/.test(href);
+        if (/^mailto:\?/.test(href)) return true;
+        if (socialPathPatterns.test(href)) return true;
+        const lower = href.toLowerCase();
+        return socialDomains.some(d => lower.includes(d));
       });
 
       if (socialLinks.length >= 2) {
