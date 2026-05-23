@@ -451,6 +451,54 @@ export async function detectScaffoldRegions(
       }
     }
 
+    // --- socialLinks heuristic ---
+    // Detect containers with social share links by URL pattern, even when
+    // they don't use .social-* CSS classes.
+    if (!foundTypes.has("socialLinks")) {
+      const socialPatterns =
+        /\/(intent\/tweet|shareArticle|sharer\/sharer|pin\/create|share\?|plus\.google|myspace\.com)/i;
+      const allLinks = Array.from(document.querySelectorAll("a[href]"));
+      const socialLinks = allLinks.filter(a => {
+        const href = a.getAttribute("href") || "";
+        return socialPatterns.test(href);
+      });
+
+      if (socialLinks.length >= 2) {
+        // Find the nearest common ancestor of social share links
+        let container: Element | null = socialLinks[0]?.parentElement ?? null;
+        while (
+          container &&
+          container !== document.body &&
+          !socialLinks.every(link => container!.contains(link))
+        ) {
+          container = container.parentElement;
+        }
+
+        // Walk down to the tightest container
+        if (container && container !== document.body) {
+          while (container.children.length === 1) {
+            const child = container.children[0] as HTMLElement;
+            if (socialLinks.every(link => child.contains(link))) {
+              container = child;
+            } else {
+              break;
+            }
+          }
+
+          if (!seen.has(container)) {
+            seen.add(container);
+            detected.push({
+              type: "socialLinks",
+              selector: buildSelector(container),
+              outerHtml: container.outerHTML,
+              method: "heuristic:social-share-urls",
+            });
+            foundTypes.add("socialLinks");
+          }
+        }
+      }
+    }
+
     return detected;
   }, typeEntries);
 
