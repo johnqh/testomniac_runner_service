@@ -280,4 +280,25 @@ describe("PageAnalyzer repeated item selection", () => {
     expect(selected).toHaveLength(1);
     expect(selected[0]?.selector).toBe("[data-tmnc-id='sidebar-item-1']");
   });
+
+  it("caps items without container fingerprints by action style", () => {
+    const analyzer = new PageAnalyzer() as any;
+    // Simulate product grid links that lack _containerFingerprint
+    // (container detection missed the grid)
+    const items: ActionableItem[] = Array.from({ length: 10 }, (_, i) =>
+      createItem(`[data-tmnc-id='product-${i}']`, {
+        actionKind: "navigate",
+        accessibleName: `Product ${i}`,
+        textContent: `Product ${i}`,
+        href: `/product/${i}`,
+        attributes: {},
+      })
+    );
+
+    const selected = analyzer.selectRepresentativeItems(items);
+
+    // Without fingerprints, items previously bypassed the cap.
+    // Now they should be capped to MAX_REPS_PER_STYLE (2).
+    expect(selected).toHaveLength(2);
+  });
 });

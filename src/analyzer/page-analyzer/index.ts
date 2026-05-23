@@ -4022,20 +4022,22 @@ export class PageAnalyzer {
     // Cap per action style: when many different containers share the same
     // functional action (e.g. 14 product cards each with "ADD TO CART"),
     // keep at most MAX_REPS_PER_STYLE representatives per style.
+    // Include passthrough items in the cap — items without a container
+    // fingerprint (e.g. product links in a grid that wasn't detected as a
+    // repeated container) should still be deduplicated by functional style.
+    const allCandidates = [...passthrough, ...representatives];
     const byStyle = new Map<string, ActionableItem[]>();
-    for (const rep of representatives) {
+    for (const rep of allCandidates) {
       const style = this.representativeActionStyle(rep);
       const bucket = byStyle.get(style) ?? [];
       bucket.push(rep);
       byStyle.set(style, bucket);
     }
-    const capped = Array.from(byStyle.values()).flatMap(group =>
+    return Array.from(byStyle.values()).flatMap(group =>
       group.length <= PageAnalyzer.MAX_REPS_PER_STYLE
         ? group
         : group.slice(0, PageAnalyzer.MAX_REPS_PER_STYLE)
     );
-
-    return [...passthrough, ...capped];
   }
 
   private representativeActionStyle(item: ActionableItem): string {
