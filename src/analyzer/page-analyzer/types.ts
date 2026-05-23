@@ -35,6 +35,7 @@ export interface AnalyzerContext {
   bundleRun: TestSurfaceBundleRunResponse;
   api: ApiClient;
   events: ScanEventHandler;
+  siteOrigin?: string;
   scanScopePath?: string;
   screenshotPath?: string;
   loginDetection?: LoginDetectionResult;

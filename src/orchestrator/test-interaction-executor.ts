@@ -643,47 +643,56 @@ export async function executeTestInteraction(
     // by every interaction on the same page.  Deduplicate via the analyzer so
     // each unique issue is reported only once per page path per run.
     //
+    // Skip page-health entirely when the page returned a 404 — the checks
+    // would describe the error page layout, not the intended page content.
+    //
     // Page-health titles include variable counts ("5 broken image(s)") and
     // descriptions include variable element lists, so text-based dedup is
     // unreliable.  Use the stable issue.type + page path as the primary key.
     currentPhase = "evaluating-page-health";
-    try {
-      const healthIssues = await evaluatePageHealth(adapter);
-      for (const issue of healthIssues) {
-        const healthKey = `page-health:${issue.type}:${currentPath}`;
-        if (analyzer?.hasReportedFindingByKey(healthKey)) {
-          continue;
-        }
-        const findingTitle = `[page-health] ${issue.title}`;
-        const findingType = issue.severity === "error" ? "error" : "warning";
-        const priority = derivePageHealthPriority(issue.severity);
-        await api.ensureTestRunFinding({
-          testRunId: testRun.id,
-          testInteractionRunId: testInteractionRun.id,
-          type: findingType,
-          priority,
-          title: findingTitle,
-          description: issue.description,
-          path: findingPath,
-        });
-        events.onFindingCreated({
-          type: findingType,
-          priority,
-          title: findingTitle,
-          description: issue.description,
-        });
-        analyzer?.markReportedFindingByKey(healthKey);
-      }
-    } catch (healthError) {
-      logExecutor("page-health:error", {
+    if (reported404Path === findingPath) {
+      logExecutor("page-health:skipped-404", {
         testRunId: testRun.id,
         currentPath,
-        error:
-          healthError instanceof Error
-            ? healthError.message
-            : String(healthError),
       });
-    }
+    } else
+      try {
+        const healthIssues = await evaluatePageHealth(adapter);
+        for (const issue of healthIssues) {
+          const healthKey = `page-health:${issue.type}:${currentPath}`;
+          if (analyzer?.hasReportedFindingByKey(healthKey)) {
+            continue;
+          }
+          const findingTitle = `[page-health] ${issue.title}`;
+          const findingType = issue.severity === "error" ? "error" : "warning";
+          const priority = derivePageHealthPriority(issue.severity);
+          await api.ensureTestRunFinding({
+            testRunId: testRun.id,
+            testInteractionRunId: testInteractionRun.id,
+            type: findingType,
+            priority,
+            title: findingTitle,
+            description: issue.description,
+            path: findingPath,
+          });
+          events.onFindingCreated({
+            type: findingType,
+            priority,
+            title: findingTitle,
+            description: issue.description,
+          });
+          analyzer?.markReportedFindingByKey(healthKey);
+        }
+      } catch (healthError) {
+        logExecutor("page-health:error", {
+          testRunId: testRun.id,
+          currentPath,
+          error:
+            healthError instanceof Error
+              ? healthError.message
+              : String(healthError),
+        });
+      }
 
     // Aggregate outcomes
     const expectedOutcome = allOutcomes.map(o => o.expected).join("\n");
@@ -799,6 +808,7 @@ export async function executeTestInteraction(
         bundleRun: discoveryContext.bundleRun,
         api,
         events,
+        siteOrigin: currentUrlParsed.origin,
         scanScopePath,
         screenshotPath,
         loginDetection,

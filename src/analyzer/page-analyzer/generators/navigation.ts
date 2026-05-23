@@ -38,6 +38,10 @@ export async function generateNavigationTestInteractions(
     ) {
       return false;
     }
+    // Skip absolute URLs pointing to external domains.  Relative paths
+    // (e.g. "/intent/tweet") are kept — if the site links to a relative
+    // path that 404s, that is a genuine broken-link bug.
+    if (isExternalAbsoluteUrl(item.href, context.siteOrigin)) return false;
     // Skip action URLs (e.g. add-to-cart links with side effects)
     const path = extractRelativePath(item.href);
     if (!path) return false;
@@ -98,6 +102,25 @@ export async function generateNavigationTestInteractions(
 
   // Do NOT reconcile — other navigation interactions (from hover-click
   // discovery or scan bootstrap) should not be retired.
+}
+
+/**
+ * Returns true when href is an absolute URL pointing to a different origin
+ * than the current site.  Relative paths like "/intent/tweet" return false
+ * (they should be tested — if the site links to them, a 404 is a real bug).
+ */
+function isExternalAbsoluteUrl(
+  href: string,
+  siteOrigin: string | undefined
+): boolean {
+  if (!/^https?:\/\//i.test(href)) return false;
+  try {
+    const parsed = new URL(href);
+    if (!siteOrigin) return true;
+    return parsed.origin !== new URL(siteOrigin).origin;
+  } catch {
+    return false;
+  }
 }
 
 function extractRelativePath(href: string): string | null {
