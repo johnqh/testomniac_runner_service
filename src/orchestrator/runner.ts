@@ -724,13 +724,16 @@ function getSurfaceExecutionGroup(
 ): number {
   const title = surface?.title ?? "";
 
-  if (title.startsWith("Page: ")) return 0;
-  if (title.startsWith("Variants: ")) return 1;
-  if (title.startsWith("Keyboard: ")) return 2;
-  if (title.startsWith("Dialogs: ")) return 3;
-  if (title.startsWith("Render: ")) return 4;
-  if (title.startsWith("Journeys: ")) return 5;
-  if (title === "Direct Navigations") return 6;
+  // Direct Navigations run first so that follow-up interactions on
+  // discovered pages depend on a simple navigate interaction instead of
+  // a long hover+click chain.
+  if (title === "Direct Navigations") return 0;
+  if (title.startsWith("Page: ")) return 1;
+  if (title.startsWith("Variants: ")) return 2;
+  if (title.startsWith("Keyboard: ")) return 3;
+  if (title.startsWith("Dialogs: ")) return 4;
+  if (title.startsWith("Render: ")) return 5;
+  if (title.startsWith("Journeys: ")) return 6;
   return 7;
 }
 
