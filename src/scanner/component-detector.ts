@@ -456,11 +456,11 @@ export async function detectScaffoldRegions(
     // they don't use .social-* CSS classes.
     if (!foundTypes.has("socialLinks")) {
       const socialPatterns =
-        /\/(intent\/tweet|shareArticle|sharer\/sharer|pin\/create|share\?|plus\.google|myspace\.com)/i;
+        /\/(intent\/tweet|shareArticle|sharer\/sharer|pin\/create|share\?|plus\.google)|((facebook|twitter|x|linkedin|pinterest|reddit|tumblr|tiktok|discord|telegram|whatsapp|myspace|vk|weibo|line\.me|threads\.net|mastodon|bsky\.app|snapchat)\.com|t\.co|wa\.me|t\.me)\//i;
       const allLinks = Array.from(document.querySelectorAll("a[href]"));
       const socialLinks = allLinks.filter(a => {
         const href = a.getAttribute("href") || "";
-        return socialPatterns.test(href);
+        return socialPatterns.test(href) || /^mailto:\?/.test(href);
       });
 
       if (socialLinks.length >= 2) {
