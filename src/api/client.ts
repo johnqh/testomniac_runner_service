@@ -54,6 +54,7 @@ import type {
   CreateTestActionRequest,
   TestActionResponse,
   CreateTestRunFindingRequest,
+  EnsureTestRunFindingRequest,
   TestRunFindingResponse,
   ExpertiseResponse,
   CreateExpertiseRequest,
@@ -517,6 +518,12 @@ export class ApiClient {
     params: CreateTestRunFindingRequest
   ): Promise<TestRunFindingResponse> {
     return this.post("/test-run-findings", params);
+  }
+
+  ensureTestRunFinding(
+    params: EnsureTestRunFindingRequest
+  ): Promise<TestRunFindingResponse> {
+    return this.post("/test-run-findings/ensure", params);
   }
 
   // ===========================================================================
