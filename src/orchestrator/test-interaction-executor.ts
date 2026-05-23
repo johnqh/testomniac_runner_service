@@ -144,7 +144,8 @@ export async function executeTestInteraction(
     bundleRun: TestSurfaceBundleRunResponse;
   },
   scanScopePath?: string,
-  loginManager?: import("./login-manager").LoginManager
+  loginManager?: import("./login-manager").LoginManager,
+  cachedTestInteractions?: TestInteractionResponse[]
 ): Promise<void> {
   const startTime = Date.now();
   const consoleLogs: string[] = [];
@@ -179,9 +180,9 @@ export async function executeTestInteraction(
 
   try {
     currentPhase = "loading-test-interactions";
-    const allTestInteractions = await api.getTestInteractionsByRunner(
-      testRun.runnerId
-    );
+    const allTestInteractions =
+      cachedTestInteractions ??
+      (await api.getTestInteractionsByRunner(testRun.runnerId));
     const testInteractionById = new Map(
       allTestInteractions.map(testInteraction => [
         testInteraction.id,

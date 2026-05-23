@@ -59,35 +59,14 @@ export async function runTestRun(
   let totalPausedMs = 0;
   let activeDependencyBranch: number[] = [];
 
-  // Wrap event handler to track stats
-  const wrappedEvents: ScanEventHandler = {
-    ...events,
-    onPageFound(page) {
-      pageIdsFound.add(page.pageId);
-      events.onPageFound(page);
-      void emitStats();
-    },
-    onPageStateCreated(state) {
-      pageStateIdsFound.add(state.pageStateId);
-      events.onPageStateCreated(state);
-      void emitStats();
-    },
-    onTestInteractionRunCompleted(run) {
-      completedTestInteractionRunIds.add(run.testInteractionRunId);
-      events.onTestInteractionRunCompleted(run);
-      void emitStats();
-    },
-    onTestRunCompleted(run) {
-      events.onTestRunCompleted(run);
-    },
-    onFindingCreated(finding) {
-      findingsFound++;
-      events.onFindingCreated(finding);
-      void emitStats();
-    },
-  };
+  // ---------------------------------------------------------------------------
+  // Debounced stats emission — emits local event immediately but batches the
+  // API call to at most once per 2 seconds to avoid flooding the server.
+  // ---------------------------------------------------------------------------
+  let statsFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  let statsDirty = false;
 
-  async function emitStats() {
+  function emitStatsLocal() {
     const pagesFound = pageIdsFound.size;
     const pageStatesFound = pageStateIdsFound.size;
     const testRunsCompleted = completedTestInteractionRunIds.size;
@@ -100,6 +79,13 @@ export async function runTestRun(
       findingsFound,
       elapsedMs,
     });
+  }
+
+  async function flushStatsToApi() {
+    statsDirty = false;
+    const pagesFound = pageIdsFound.size;
+    const pageStatesFound = pageStateIdsFound.size;
+    const testRunsCompleted = completedTestInteractionRunIds.size;
 
     try {
       await api.updateTestRunStats(config.testRunId, {
@@ -114,6 +100,49 @@ export async function runTestRun(
       });
     }
   }
+
+  function scheduleStatsFlush() {
+    statsDirty = true;
+    if (statsFlushTimer != null) return;
+    statsFlushTimer = setTimeout(() => {
+      statsFlushTimer = null;
+      if (statsDirty) {
+        void flushStatsToApi();
+      }
+    }, 2000);
+  }
+
+  // Wrap event handler to track stats
+  const wrappedEvents: ScanEventHandler = {
+    ...events,
+    onPageFound(page) {
+      pageIdsFound.add(page.pageId);
+      events.onPageFound(page);
+      emitStatsLocal();
+      scheduleStatsFlush();
+    },
+    onPageStateCreated(state) {
+      pageStateIdsFound.add(state.pageStateId);
+      events.onPageStateCreated(state);
+      emitStatsLocal();
+      scheduleStatsFlush();
+    },
+    onTestInteractionRunCompleted(run) {
+      completedTestInteractionRunIds.add(run.testInteractionRunId);
+      events.onTestInteractionRunCompleted(run);
+      emitStatsLocal();
+      scheduleStatsFlush();
+    },
+    onTestRunCompleted(run) {
+      events.onTestRunCompleted(run);
+    },
+    onFindingCreated(finding) {
+      findingsFound++;
+      events.onFindingCreated(finding);
+      emitStatsLocal();
+      scheduleStatsFlush();
+    },
+  };
 
   async function hydratePersistedDiscoveryStats(
     runnerId: number,
@@ -232,7 +261,8 @@ export async function runTestRun(
           config.runnerId,
           testRun.testEnvironmentId
         );
-        await emitStats();
+        emitStatsLocal();
+        await flushStatsToApi();
       } catch (err) {
         logRunner("hydration:failed", {
           runnerId: config.runnerId,
@@ -387,7 +417,8 @@ export async function runTestRun(
             }
           : undefined,
         config.scanScopePath,
-        loginManager ?? undefined
+        loginManager ?? undefined,
+        testInteractions
       );
       activeDependencyBranch = buildDependencyChainIds(
         selected.testInteractionRun.testInteractionId,
@@ -403,6 +434,13 @@ export async function runTestRun(
     }
 
     await waitForCheckpoint("before_completion");
+
+    // Flush any pending debounced stats before completing
+    if (statsFlushTimer != null) {
+      clearTimeout(statsFlushTimer);
+      statsFlushTimer = null;
+    }
+    await flushStatsToApi();
 
     const remainingSurfaceRuns = await api.getOpenTestSurfaceRuns(
       testRun.testSurfaceBundleRunId

@@ -23,6 +23,7 @@ import {
   computeActionableHash,
   sha256,
   normalizeHtml,
+  htmlToMarkdown,
 } from "../../browser/page-utils";
 import type { ApiClient } from "../../api/client";
 import type { DetectedScaffoldRegion } from "../../scanner/component-detector";
@@ -394,6 +395,37 @@ export class PageAnalyzer {
     }
 
     const normalizedContext = this.normalizeContext(context);
+    const isHover = this.isHoverOnly(testInteraction);
+    const currentPath = normalizedContext.currentPath.trim();
+
+    // For non-hover interactions: check cheap path/hash guards BEFORE the
+    // expensive ensureTargetPageState call so we can skip all the API work
+    // (scaffold resolution, hash computation, page-state creation) when the
+    // page has already been covered in this run.
+    if (!isHover) {
+      if (this.generatedPaths.has(currentPath)) {
+        logAnalyzer("generate:page-already-covered", {
+          sourceTitle: testInteraction.title,
+          currentTestInteractionId: normalizedContext.currentTestInteractionId,
+          currentPath,
+        });
+        return;
+      }
+
+      const actionableHash = await computeActionableHash(
+        normalizedContext.actionableItems
+      );
+      if (this.generatedActionableHashes.has(actionableHash)) {
+        logAnalyzer("generate:actionable-items-already-covered", {
+          sourceTitle: testInteraction.title,
+          currentTestInteractionId: normalizedContext.currentTestInteractionId,
+          currentPath,
+          actionableHash,
+        });
+        return;
+      }
+    }
+
     const currentPageStateId =
       await this.ensureTargetPageState(normalizedContext);
     const resolvedContext: AnalyzerContext = {
@@ -414,7 +446,7 @@ export class PageAnalyzer {
     // Hover-only interactions have their own same-page-state handling inside
     // generateHoverFollowUpCases (including click-follow-up reconciliation),
     // so let them through to that dedicated path.
-    if (this.isHoverOnly(testInteraction)) {
+    if (isHover) {
       logAnalyzer("generate:hover-only", {
         sourceTitle: testInteraction.title,
         currentTestInteractionId: resolvedContext.currentTestInteractionId,
@@ -440,37 +472,11 @@ export class PageAnalyzer {
       return;
     }
 
-    // Skip generation if we already generated tests for this path during this
-    // run.  The check is scoped to the PageAnalyzer instance (one per run) so
-    // previous runs on the same runner don't block re-discovery.
-    const currentPath = resolvedContext.currentPath.trim();
-    if (this.generatedPaths.has(currentPath)) {
-      logAnalyzer("generate:page-already-covered", {
-        sourceTitle: testInteraction.title,
-        currentTestInteractionId: resolvedContext.currentTestInteractionId,
-        currentPageStateId: resolvedContext.currentPageStateId,
-        currentPath,
-      });
-      return;
-    }
-
-    // Skip generation if a different path already produced the same set of
-    // interactive elements.  For example /store/ and /store/all-items/ may
-    // resolve to the same product grid — generating hover/click tests for
-    // both is redundant.
+    // Re-check actionableHash (already passed the guard above, but we need
+    // to record it and the path now that we're committed to generation).
     const actionableHash = await computeActionableHash(
       resolvedContext.actionableItems
     );
-    if (this.generatedActionableHashes.has(actionableHash)) {
-      logAnalyzer("generate:actionable-items-already-covered", {
-        sourceTitle: testInteraction.title,
-        currentTestInteractionId: resolvedContext.currentTestInteractionId,
-        currentPageStateId: resolvedContext.currentPageStateId,
-        currentPath,
-        actionableHash,
-      });
-      return;
-    }
 
     this.generatedPaths.add(currentPath);
     this.generatedActionableHashes.add(actionableHash);
@@ -1031,7 +1037,7 @@ export class PageAnalyzer {
       pageId: context.pageId,
       sizeClass: context.sizeClass,
       hashes,
-      contentText: context.html.slice(0, 5000),
+      contentText: htmlToMarkdown(context.html).slice(0, 5000),
       contentHtmlElementId: contentElement.id,
       screenshotPath: context.screenshotPath,
     });
