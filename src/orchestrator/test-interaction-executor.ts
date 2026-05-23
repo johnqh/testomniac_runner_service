@@ -463,6 +463,7 @@ export async function executeTestInteraction(
     const currentUrl = await adapter.getUrl();
     const currentUrlParsed = new URL(currentUrl);
     const currentPath = `${currentUrlParsed.pathname}${currentUrlParsed.search}`;
+    const findingPath = currentUrlParsed.pathname;
     await emitLiveScreenshot(adapter, events, currentUrl);
     const scaffoldSelectorByItemSelector = await mapItemsToScaffolds(
       adapter,
@@ -558,6 +559,7 @@ export async function executeTestInteraction(
     });
 
     currentPhase = "evaluating-expectations";
+    let reported404Path: string | null = null;
     for (const expertise of expertises) {
       for (const group of expectationGroups) {
         const outcomes = expertise.evaluate({
@@ -575,15 +577,21 @@ export async function executeTestInteraction(
         });
         allOutcomes.push(...outcomes);
 
-        // Create findings for unmet expectations based on configured severity.
-        // Deduplicate at two levels:
-        //  1. (title, description) — same expectation producing the same text
-        //  2. description alone — different expectations detecting the same
-        //     root cause (e.g. page_loaded + render check both find a 404)
         for (const outcome of outcomes) {
           const findingType = getFindingTypeForOutcome(outcome);
           if (findingType) {
             const findingTitle = `[${expertise.name}] ${outcome.expected}`;
+
+            // Suppress network-error finding when a 404 page-load error
+            // was already reported for the same path
+            if (
+              reported404Path === findingPath &&
+              outcome.expected.includes("No network errors") &&
+              outcome.observed.includes("404")
+            ) {
+              continue;
+            }
+
             if (
               analyzer?.hasReportedPageFinding(
                 currentPath,
@@ -595,12 +603,14 @@ export async function executeTestInteraction(
               continue;
             }
             const priority = derivePriority(outcome);
-            await api.createTestRunFinding({
+            await api.ensureTestRunFinding({
+              testRunId: testRun.id,
               testInteractionRunId: testInteractionRun.id,
               type: findingType,
               priority,
               title: findingTitle,
               description: outcome.observed,
+              path: findingPath,
             });
             events.onFindingCreated({
               type: findingType,
@@ -614,6 +624,14 @@ export async function executeTestInteraction(
               outcome.observed
             );
             analyzer?.markReportedDescription(outcome.observed);
+
+            // Track 404 page-load errors to suppress redundant network-error
+            if (
+              outcome.result === "error" &&
+              outcome.observed.includes("Page returned HTTP 404")
+            ) {
+              reported404Path = findingPath;
+            }
           }
         }
       }
@@ -638,12 +656,14 @@ export async function executeTestInteraction(
         const findingTitle = `[page-health] ${issue.title}`;
         const findingType = issue.severity === "error" ? "error" : "warning";
         const priority = derivePageHealthPriority(issue.severity);
-        await api.createTestRunFinding({
+        await api.ensureTestRunFinding({
+          testRunId: testRun.id,
           testInteractionRunId: testInteractionRun.id,
           type: findingType,
           priority,
           title: findingTitle,
           description: issue.description,
+          path: findingPath,
         });
         events.onFindingCreated({
           type: findingType,
@@ -856,12 +876,20 @@ export async function executeTestInteraction(
     });
 
     if (!isReplayError) {
-      await api.createTestRunFinding({
+      let errorPath: string | undefined;
+      try {
+        errorPath = new URL(await adapter.getUrl()).pathname;
+      } catch {
+        // URL may not be available after crash
+      }
+      await api.ensureTestRunFinding({
+        testRunId: testRun.id,
         testInteractionRunId: testInteractionRun.id,
         type: "error",
         priority: FindingPriority.Crash,
         title: `Test execution error`,
         description: errorMessage,
+        path: errorPath,
       });
 
       events.onFindingCreated({
