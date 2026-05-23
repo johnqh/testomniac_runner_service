@@ -50,6 +50,7 @@ export interface ScanEventHandler {
     pageStatesFound: number;
     testRunsCompleted: number;
     findingsFound: number;
+    elapsedMs: number;
   }): void;
   onScreenshotCaptured(data: { dataUrl: string; pageUrl: string }): void;
   onScanComplete(summary: {

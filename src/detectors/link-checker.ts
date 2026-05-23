@@ -1,3 +1,7 @@
+function logModule(step: string, details?: Record<string, unknown>): void {
+  console.info("[LinkChecker]", step, details ?? {});
+}
+
 export interface LinkCheckResult {
   url: string;
   text: string;
@@ -35,6 +39,7 @@ export function extractLinks(
       const resolved = new URL(href, baseUrl).href;
       links.push({ href: resolved, text });
     } catch {
+      logModule("URL resolution failed", { href, baseUrl });
       links.push({ href, text });
     }
   }
@@ -61,6 +66,7 @@ export async function checkLinks(
       const url = new URL(link.href);
       if (url.origin !== baseOrigin) continue;
     } catch {
+      logModule("URL parsing failed", { href: link.href });
       results.push({
         url: link.href,
         text: link.text,
@@ -86,6 +92,10 @@ export async function checkLinks(
         });
       }
     } catch (err) {
+      logModule("URL fetch failed", {
+        href: link.href,
+        error: err instanceof Error ? err.message : "Fetch failed",
+      });
       results.push({
         url: link.href,
         text: link.text,

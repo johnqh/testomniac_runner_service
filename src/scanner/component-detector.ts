@@ -1,3 +1,7 @@
+function _logModule(step: string, details?: Record<string, unknown>): void {
+  console.info("[ComponentDetector]", step, details ?? {});
+}
+
 import { createHash } from "node:crypto";
 import { normalizeHtml } from "../browser/page-utils";
 import type { BrowserAdapter } from "../adapter";
@@ -163,7 +167,9 @@ export async function detectScaffoldRegions(
             break;
           }
         } catch {
-          // Invalid selector
+          console.info("[ComponentDetector]", "Invalid selector", {
+            selector: sel,
+          });
         }
       }
     }

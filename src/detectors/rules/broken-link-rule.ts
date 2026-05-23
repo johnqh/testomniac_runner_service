@@ -1,3 +1,7 @@
+function logModule(step: string, details?: Record<string, unknown>): void {
+  console.info("[BrokenLinkRule]", step, details ?? {});
+}
+
 import type {
   DetectionRule,
   DetectionContext,
@@ -25,7 +29,7 @@ export const brokenLinkRule: DetectionRule = {
             results.push({ href, text });
           }
         } catch {
-          // Invalid URL, skip
+          console.info("[BrokenLinkRule]", "Invalid URL, skip", { href });
         }
       });
       return results;
@@ -54,7 +58,7 @@ export const brokenLinkRule: DetectionRule = {
           });
         }
       } catch {
-        // Unreachable/CSP-blocked, skip
+        logModule("Unreachable URL", { href });
       }
     }
 

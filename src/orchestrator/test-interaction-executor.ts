@@ -654,6 +654,8 @@ export async function executeTestInteraction(
       }
     } catch (healthError) {
       logExecutor("page-health:error", {
+        testRunId: testRun.id,
+        currentPath,
         error:
           healthError instanceof Error
             ? healthError.message
@@ -727,7 +729,12 @@ export async function executeTestInteraction(
 
       // If login page detected, mark it in the DB
       if (loginDetection.isLoginPage) {
-        await api.markIsLoginPage(page.id).catch(() => {});
+        await api.markIsLoginPage(page.id).catch(err =>
+          logExecutor("mark-login-page:failed", {
+            pageId: page.id,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        );
       }
 
       // Capture and upload screenshot for page state
@@ -739,10 +746,12 @@ export async function executeTestInteraction(
         const uploaded = await api.uploadScreenshot(screenshotBytes, filename);
         screenshotPath = uploaded.path;
       } catch (err) {
-        console.warn(
-          "[executor] screenshot upload failed:",
-          err instanceof Error ? err.message : String(err)
-        );
+        logExecutor("screenshot-upload:failed", {
+          testRunId: testRun.id,
+          runnerId: testRun.runnerId,
+          currentPath,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
 
       const analyzerCtx: AnalyzerContext = {
@@ -895,10 +904,10 @@ async function emitLiveScreenshot(
       pageUrl,
     });
   } catch (err) {
-    console.warn(
-      "[executor] emitLiveScreenshot failed:",
-      err instanceof Error ? err.message : String(err)
-    );
+    logExecutor("live-screenshot:failed", {
+      pageUrl: adapter.url(),
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
@@ -928,7 +937,12 @@ async function mapItemsToScaffolds(
         let itemEl: Element | null = null;
         try {
           itemEl = document.querySelector(itemSelector);
-        } catch {
+        } catch (err) {
+          console.warn(
+            "[scaffold-mapping] invalid item selector:",
+            itemSelector,
+            String(err)
+          );
           itemEl = null;
         }
         if (!itemEl) continue;
@@ -939,8 +953,12 @@ async function mapItemsToScaffolds(
               assignments[itemSelector] = scaffoldSelector;
               break;
             }
-          } catch {
-            // Ignore invalid selectors and continue matching.
+          } catch (err) {
+            console.warn(
+              "[scaffold-mapping] invalid scaffold selector:",
+              scaffoldSelector,
+              String(err)
+            );
           }
         }
       }
@@ -1269,6 +1287,7 @@ async function executeAction(
         });
       } catch {
         // No navigation pending is fine
+        logExecutor("wait-load-state:timeout", { step: "action-execution" });
       }
       break;
     case "click":

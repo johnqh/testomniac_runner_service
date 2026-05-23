@@ -233,7 +233,11 @@ export async function executeSSOFlow(
           }
           logSSO("step:clicked", { selector: step.selector });
           // Wait for potential navigation after click
-          await adapter.waitForNavigation({ timeout: 10000 }).catch(() => {});
+          await adapter.waitForNavigation({ timeout: 10000 }).catch(err =>
+            logSSO("navigation-wait:timeout", {
+              error: err instanceof Error ? err.message : String(err),
+            })
+          );
           break;
         }
         case "wait": {
@@ -264,8 +268,16 @@ export async function executeSSOFlow(
     logSSO("flow:timeout-waiting-for-redirect");
     return false;
   } catch (error) {
+    let currentUrl: string | undefined;
+    try {
+      currentUrl = await adapter.getUrl();
+    } catch {
+      // ignore – we're already in an error path
+    }
     logSSO("flow:error", {
       error: error instanceof Error ? error.message : String(error),
+      provider,
+      currentUrl,
     });
     return false;
   }

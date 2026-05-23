@@ -511,8 +511,12 @@ export class PageAnalyzer {
             testInteractionId: saved.id,
             testSurfaceRunId: navSurfaceRun.id,
           });
-        } catch {
+        } catch (err) {
           // Run may already exist
+          logAnalyzer("create-interaction-run:skipped", {
+            reason: "may already exist",
+            error: err instanceof Error ? err.message : String(err),
+          });
         }
       }
       logAnalyzer("generate:navigation-dependency-created", {
@@ -594,8 +598,6 @@ export class PageAnalyzer {
         const isGenerated = Boolean((testInteraction as any).isGenerated);
         const isActive = (testInteraction as any).isActive !== false;
         if (!isGenerated || !isActive) return false;
-        if (testInteraction.startingPageStateId !== context.currentPageStateId)
-          return false;
         if (
           (testInteraction.dependencyTestInteractionId ?? null) !==
           (params.dependencyTestInteractionId ?? null)
@@ -701,7 +703,11 @@ export class PageAnalyzer {
     try {
       const url = new URL(href, "http://placeholder");
       return url.pathname + url.search;
-    } catch {
+    } catch (err) {
+      logAnalyzer("extract-relative-path:failed", {
+        href,
+        error: err instanceof Error ? err.message : String(err),
+      });
       return null;
     }
   }
@@ -1041,8 +1047,12 @@ export class PageAnalyzer {
           scaffoldsHash: "",
           patternsHash: "",
         });
-      } catch {
+      } catch (err) {
         // Best effort — decomposed hashes are optional
+        logAnalyzer("decomposed-hashes:failed", {
+          pageStateId: pageState.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
@@ -3846,7 +3856,10 @@ export class PageAnalyzer {
     try {
       const parsed = JSON.parse(rawOptions);
       return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
-    } catch {
+    } catch (err) {
+      logAnalyzer("parse-select-options:json-fallback", {
+        error: err instanceof Error ? err.message : String(err),
+      });
       return rawOptions
         .split(",")
         .map(value => value.trim())

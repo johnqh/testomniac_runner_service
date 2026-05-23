@@ -1,3 +1,7 @@
+function _logModule(step: string, details?: Record<string, unknown>): void {
+  console.info("[PatternDetector]", step, details ?? {});
+}
+
 import type { BrowserAdapter } from "../adapter";
 import type {
   UiPatternType,
@@ -100,7 +104,10 @@ export async function detectPatternsWithInstances(
               break; // first matching selector per type
             }
           } catch {
-            // invalid selector, skip
+            console.info("[PatternDetector]", "Invalid selector", {
+              selector,
+              type,
+            });
           }
         }
       }

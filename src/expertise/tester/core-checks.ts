@@ -1,3 +1,7 @@
+function logModule(step: string, details?: Record<string, unknown>): void {
+  console.info("[CoreChecks]", step, details ?? {});
+}
+
 import type { ExpertiseContext, Outcome } from "../types";
 import type { NetworkLogEntry } from "@sudobility/testomniac_types";
 
@@ -245,6 +249,7 @@ function getPageOrigin(context: ExpertiseContext): string | null {
   try {
     return candidateUrl ? new URL(candidateUrl).origin : null;
   } catch {
+    logModule("Failed to parse page origin", { url: candidateUrl });
     return null;
   }
 }
@@ -283,6 +288,7 @@ function isSameOrigin(url: string, origin: string): boolean {
   try {
     return new URL(url).origin === origin;
   } catch {
+    logModule("Failed to parse URL in origin check", { url });
     return false;
   }
 }
@@ -293,6 +299,7 @@ function normalizeComparableUrl(url: string): string | null {
     const pathname = parsed.pathname.replace(/\/+$/, "") || "/";
     return `${parsed.origin}${pathname}${parsed.search}`;
   } catch {
+    logModule("Failed to normalize URL", { url });
     return null;
   }
 }

@@ -217,7 +217,11 @@ export class LoginManager {
       }
 
       // Wait for navigation after submit
-      await this.adapter.waitForNavigation({ timeout: 10000 }).catch(() => {});
+      await this.adapter.waitForNavigation({ timeout: 10000 }).catch(err =>
+        logLogin("navigation-wait:timeout", {
+          error: err instanceof Error ? err.message : String(err),
+        })
+      );
 
       // Verify login succeeded by checking we're no longer on a login page
       const success = await this.verifyLoginSuccess();
@@ -227,6 +231,8 @@ export class LoginManager {
     } catch (error) {
       logLogin("email-password:error", {
         error: error instanceof Error ? error.message : String(error),
+        loginUrl: this.config.loginUrl,
+        attempt: this.state.loginAttempts,
       });
       return false;
     }

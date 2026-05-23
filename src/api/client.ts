@@ -71,6 +71,10 @@ type InsertTestInteractionRequestCompat = InsertTestInteractionRequest & {
   existingTestInteractionId?: number;
 };
 
+function logApi(step: string, details?: Record<string, unknown>): void {
+  console.info("[ApiClient]", step, details ?? {});
+}
+
 export class ApiClient {
   private baseUrl: string;
   private apiKey: string;
@@ -98,6 +102,12 @@ export class ApiClient {
 
     const json = (await res.json()) as BaseResponse<T>;
     if (!json.success) {
+      logApi("request:failed", {
+        method,
+        path,
+        status: res.status,
+        error: json.error,
+      });
       throw new Error(`API error [${method} ${path}]: ${json.error}`);
     }
     return json.data as T;
@@ -226,12 +236,7 @@ export class ApiClient {
     imageBytes: Uint8Array,
     filename: string
   ): Promise<{ path: string; thumbnailPath: string }> {
-    // Artifacts endpoint is at /api/v1/artifacts, not /api/v1/scanner
-    const artifactsUrl = this.baseUrl.replace(
-      "/api/v1/scanner",
-      "/api/v1/artifacts"
-    );
-    const url = `${artifactsUrl}/upload?path=${encodeURIComponent(filename)}`;
+    const url = `${this.baseUrl}/api/v1/artifacts/upload?path=${encodeURIComponent(filename)}`;
     const blob = new Blob([new Uint8Array(imageBytes)], { type: "image/png" });
     const res = await fetch(url, {
       method: "POST",
@@ -772,7 +777,14 @@ export class ApiClient {
       runnerInstanceName,
     })
       .then(() => true)
-      .catch(() => false);
+      .catch(err => {
+        logApi("claim-test-run:failed", {
+          testRunId,
+          instanceId: runnerInstanceId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return false;
+      });
   }
 
   // ===========================================================================

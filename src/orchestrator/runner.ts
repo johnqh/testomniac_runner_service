@@ -56,6 +56,7 @@ export async function runTestRun(
   const pageStateIdsFound = new Set<number>();
   const completedTestInteractionRunIds = new Set<number>();
   let findingsFound = 0;
+  let totalPausedMs = 0;
   let activeDependencyBranch: number[] = [];
 
   // Wrap event handler to track stats
@@ -90,12 +91,14 @@ export async function runTestRun(
     const pagesFound = pageIdsFound.size;
     const pageStatesFound = pageStateIdsFound.size;
     const testRunsCompleted = completedTestInteractionRunIds.size;
+    const elapsedMs = Date.now() - startTime - totalPausedMs;
 
     events.onStatsUpdated({
       pagesFound,
       pageStatesFound,
       testRunsCompleted,
       findingsFound,
+      elapsedMs,
     });
 
     try {
@@ -104,8 +107,11 @@ export async function runTestRun(
         pageStatesFound,
         testRunsCompleted,
       });
-    } catch {
-      // best effort while the run is still in flight
+    } catch (err) {
+      logRunner("stats-update:failed", {
+        testRunId: config.testRunId,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -135,7 +141,9 @@ export async function runTestRun(
     if (config.signal?.aborted) {
       throw createAbortError();
     }
+    const checkpointStart = Date.now();
     await config.waitForCheckpoint?.(checkpoint);
+    totalPausedMs += Date.now() - checkpointStart;
     if (config.signal?.aborted) {
       throw createAbortError();
     }
@@ -225,8 +233,12 @@ export async function runTestRun(
           testRun.testEnvironmentId
         );
         await emitStats();
-      } catch {
-        // best effort hydration for live counters
+      } catch (err) {
+        logRunner("hydration:failed", {
+          runnerId: config.runnerId,
+          testEnvironmentId: testRun.testEnvironmentId,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
@@ -449,8 +461,14 @@ export async function runTestRun(
         status: "failed",
         totalDurationMs: Date.now() - startTime,
       });
-    } catch {
-      // best effort
+    } catch (completionErr) {
+      logRunner("complete-failed-run:error", {
+        testRunId: config.testRunId,
+        error:
+          completionErr instanceof Error
+            ? completionErr.message
+            : String(completionErr),
+      });
     }
 
     throw error;

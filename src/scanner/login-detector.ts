@@ -1,3 +1,7 @@
+function logModule(step: string, details?: Record<string, unknown>): void {
+  console.info("[LoginDetector]", step, details ?? {});
+}
+
 import type { BrowserAdapter } from "../adapter";
 import type { FormInfo } from "../domain/types";
 
@@ -309,6 +313,7 @@ export function isLoginUrl(url: string, explicitLoginUrl?: string): boolean {
         current.origin === login.origin && current.pathname === login.pathname
       );
     } catch {
+      logModule("URL parsing failed in login check", { url, explicitLoginUrl });
       return url.includes(explicitLoginUrl);
     }
   }

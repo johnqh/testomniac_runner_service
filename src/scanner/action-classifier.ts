@@ -1,3 +1,7 @@
+function logModule(step: string, details?: Record<string, unknown>): void {
+  console.info("[ActionClassifier]", step, details ?? {});
+}
+
 import type { ActionableItem } from "@sudobility/testomniac_types";
 
 export function normalizeHref(href: string, baseUrl: string): string | null {
@@ -6,6 +10,7 @@ export function normalizeHref(href: string, baseUrl: string): string | null {
     url.hash = "";
     return url.href;
   } catch {
+    logModule("Malformed URL", { href, baseUrl });
     return null;
   }
 }

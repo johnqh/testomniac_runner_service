@@ -1,3 +1,7 @@
+function logModule(step: string, details?: Record<string, unknown>): void {
+  console.info("[BugDetector]", step, details ?? {});
+}
+
 import type { BrowserAdapter } from "../adapter";
 
 export interface BrokenLinkResult {
@@ -39,7 +43,7 @@ export async function detectBrokenLinks(
           results.push({ href, text });
         }
       } catch {
-        // Invalid URL, skip
+        console.info("[BugDetector]", "Invalid URL, skip", { href });
       }
     });
     return results;
@@ -62,7 +66,7 @@ export async function detectBrokenLinks(
         broken.push({ href, text, error: `HTTP ${resp.status}` });
       }
     } catch {
-      // Unreachable/CSP-blocked, skip
+      logModule("Unreachable URL", { href });
     }
   }
 
