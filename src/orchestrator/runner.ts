@@ -784,11 +784,42 @@ function selectNextInteractionAcrossBundle(
   testInteractionRun: TestInteractionRunResponse;
 } {
   if (activeDependencyBranch.length > 0) {
-    const branchCandidates = runnableSurfaceEntries.flatMap(
+    // Respect surface execution group ordering even within the dependency
+    // branch.  This ensures Direct Navigations run before hover/content
+    // interactions, so discovered pages get short dependency chains.
+    const testSurfaceById = new Map(testSurfaces.map(s => [s.id, s]));
+    const sortedEntries = [...runnableSurfaceEntries].sort((a, b) => {
+      const aGroup = getSurfaceExecutionGroup(
+        testSurfaceById.get(a.surfaceRun.testSurfaceId)
+      );
+      const bGroup = getSurfaceExecutionGroup(
+        testSurfaceById.get(b.surfaceRun.testSurfaceId)
+      );
+      return aGroup - bGroup;
+    });
+
+    // Try each surface group in order — pick the first one that has
+    // branch candidates.
+    for (const entry of sortedEntries) {
+      if (entry.eligibleRuns.length === 0) continue;
+      const selectedRun = selectNextOpenTestInteractionRun(
+        entry.eligibleRuns,
+        testInteractions,
+        activeDependencyBranch
+      );
+      return {
+        surfaceRun: entry.surfaceRun,
+        testInteractionRun: selectedRun,
+      };
+    }
+
+    // Fallback: no branch candidates found in any surface (shouldn't happen
+    // since runnableSurfaceEntries is pre-filtered, but be safe)
+    const allCandidates = runnableSurfaceEntries.flatMap(
       entry => entry.eligibleRuns
     );
     const selectedRun = selectNextOpenTestInteractionRun(
-      branchCandidates,
+      allCandidates,
       testInteractions,
       activeDependencyBranch
     );
