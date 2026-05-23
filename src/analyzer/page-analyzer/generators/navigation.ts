@@ -8,6 +8,10 @@ import type { AnalyzerContext } from "../types";
  *
  * Navigation interactions never have a dependencyTestInteractionId — they
  * navigate directly via goto.
+ *
+ * Items are passed through selectRepresentativeItems so that product grids
+ * (18 product links with the same structure) produce only a few representative
+ * navigations instead of one per product.
  */
 export async function generateNavigationTestInteractions(
   analyzer: any,
@@ -21,29 +25,44 @@ export async function generateNavigationTestInteractions(
 
   const navSurfaceId = context.navigationSurface.id;
 
-  // Collect unique same-origin relative paths from actionable navigation items
-  const seenPaths = new Set<string>();
-  seenPaths.add(context.currentPath); // skip the current page
-
-  const navPaths: string[] = [];
-  for (const item of context.actionableItems) {
-    if (item.actionKind !== "navigate" || !item.href) continue;
-
-    const relativePath = extractRelativePath(item.href);
-    if (!relativePath || seenPaths.has(relativePath)) continue;
-    // Skip external links, anchors, and non-http
+  // Filter to navigation items with valid same-origin hrefs
+  const navItems = context.actionableItems.filter(item => {
+    if (item.actionKind !== "navigate" || !item.href) return false;
+    // Skip anchors, mailto, tel, javascript
     if (
+      item.href === "#" ||
+      item.href.startsWith("#") ||
       item.href.startsWith("mailto:") ||
       item.href.startsWith("tel:") ||
-      item.href.startsWith("javascript:") ||
-      item.href === "#" ||
-      item.href.startsWith("#")
+      item.href.startsWith("javascript:")
     ) {
-      continue;
+      return false;
     }
+    // Skip action URLs (e.g. add-to-cart links with side effects)
+    const path = extractRelativePath(item.href);
+    if (!path) return false;
+    if (isActionUrl(path)) return false;
+    // Skip current page
+    if (path === context.currentPath) return false;
+    return true;
+  });
 
-    seenPaths.add(relativePath);
-    navPaths.push(relativePath);
+  if (navItems.length === 0) return;
+
+  // Apply the same representative-item dedup used for hover/content
+  // interactions — product grid links get capped to MAX_REPS_PER_STYLE
+  const representative = analyzer.selectRepresentativeItems(navItems);
+
+  // Deduplicate by relative path
+  const seenPaths = new Set<string>();
+  seenPaths.add(context.currentPath);
+
+  const navPaths: string[] = [];
+  for (const item of representative) {
+    const path = extractRelativePath(item.href);
+    if (!path || seenPaths.has(path)) continue;
+    seenPaths.add(path);
+    navPaths.push(path);
   }
 
   if (navPaths.length === 0) return;
@@ -88,4 +107,12 @@ function extractRelativePath(href: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Detect URLs that trigger server-side actions (add to cart, delete, etc.)
+ * rather than navigating to a viewable page.
+ */
+function isActionUrl(path: string): boolean {
+  return /[?&](ec_action|action|add_to_cart|remove|delete)=/i.test(path);
 }
