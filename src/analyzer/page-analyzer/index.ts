@@ -3949,6 +3949,15 @@ export class PageAnalyzer {
       .toLowerCase();
   }
 
+  /**
+   * Max representatives per action style.  Product grids can have dozens of
+   * cards each producing a unique container fingerprint (because the product
+   * title differs), but the CTA buttons ("ADD TO CART", "Select Options") are
+   * functionally identical.  Capping per style prevents 14× duplicate hover
+   * tests for the same button type across different cards.
+   */
+  private static readonly MAX_REPS_PER_STYLE = 2;
+
   private selectRepresentativeItems(items: ActionableItem[]): ActionableItem[] {
     const groups = new Map<string, ActionableItem[]>();
     const passthrough: ActionableItem[] = [];
@@ -3972,7 +3981,38 @@ export class PageAnalyzer {
       this.pickRepresentativeItem(group)
     );
 
-    return [...passthrough, ...representatives];
+    // Cap per action style: when many different containers share the same
+    // functional action (e.g. 14 product cards each with "ADD TO CART"),
+    // keep at most MAX_REPS_PER_STYLE representatives per style.
+    const byStyle = new Map<string, ActionableItem[]>();
+    for (const rep of representatives) {
+      const style = this.representativeActionStyle(rep);
+      const bucket = byStyle.get(style) ?? [];
+      bucket.push(rep);
+      byStyle.set(style, bucket);
+    }
+    const capped = Array.from(byStyle.values()).flatMap(group =>
+      group.length <= PageAnalyzer.MAX_REPS_PER_STYLE
+        ? group
+        : group.slice(0, PageAnalyzer.MAX_REPS_PER_STYLE)
+    );
+
+    // Also cap passthrough items (no container fingerprint) by action style
+    const passthroughByStyle = new Map<string, ActionableItem[]>();
+    for (const item of passthrough) {
+      const style = this.representativeActionStyle(item);
+      const bucket = passthroughByStyle.get(style) ?? [];
+      bucket.push(item);
+      passthroughByStyle.set(style, bucket);
+    }
+    const cappedPassthrough = Array.from(passthroughByStyle.values()).flatMap(
+      group =>
+        group.length <= PageAnalyzer.MAX_REPS_PER_STYLE
+          ? group
+          : group.slice(0, PageAnalyzer.MAX_REPS_PER_STYLE)
+    );
+
+    return [...cappedPassthrough, ...capped];
   }
 
   private representativeActionStyle(item: ActionableItem): string {

@@ -204,6 +204,33 @@ describe("PageAnalyzer repeated item selection", () => {
     expect(sidebarItems[0]?.selector).toBe(sidebarItem.selector);
   });
 
+  it("caps per action style when many different containers share the same CTA", () => {
+    const analyzer = new PageAnalyzer() as any;
+    // Simulate a product grid where each card has a unique fingerprint
+    // (different title shape) but the same "ADD TO CART" CTA
+    const items: ActionableItem[] = Array.from({ length: 8 }, (_, i) =>
+      createItem(`[data-tmnc-id='card-${i}']`, {
+        actionKind: "click",
+        accessibleName: "ADD TO CART",
+        textContent: "ADD TO CART",
+        attributes: {
+          _containerFingerprint: `product-card-${i}|price|img|add to cart`,
+        },
+      })
+    );
+
+    const selected = analyzer.selectRepresentativeItems(items);
+
+    // 8 different fingerprints each produce 1 representative, but the
+    // per-style cap (2) collapses them to at most 2
+    expect(selected).toHaveLength(2);
+    expect(
+      selected.every(
+        (item: ActionableItem) => item.textContent === "ADD TO CART"
+      )
+    ).toBe(true);
+  });
+
   it("dedupes repeated items within a single scaffold after scoping to that scaffold", () => {
     const analyzer = new PageAnalyzer() as any;
     const sidebarScaffold: DetectedScaffoldRegion = {
