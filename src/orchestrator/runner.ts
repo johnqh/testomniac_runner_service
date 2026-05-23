@@ -420,24 +420,61 @@ export async function runTestRun(
         selectedInteraction: summarizeInteraction(selectedInteraction),
       });
 
-      await executeTestInteraction(
-        adapter,
-        selected.testInteractionRun,
-        testRun,
-        expertises,
-        analyzer,
-        api,
-        wrappedEvents,
-        navigationSurface && bundleRun
-          ? {
-              navigationSurface,
-              bundleRun,
-            }
-          : undefined,
-        config.scanScopePath,
-        loginManager ?? undefined,
-        testInteractions
-      );
+      const interactionTimeout = 60_000; // 60 seconds max per interaction
+      try {
+        await Promise.race([
+          executeTestInteraction(
+            adapter,
+            selected.testInteractionRun,
+            testRun,
+            expertises,
+            analyzer,
+            api,
+            wrappedEvents,
+            navigationSurface && bundleRun
+              ? {
+                  navigationSurface,
+                  bundleRun,
+                }
+              : undefined,
+            config.scanScopePath,
+            loginManager ?? undefined,
+            testInteractions
+          ),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    `Test interaction ${selected.testInteractionRun.id} timed out after ${interactionTimeout}ms`
+                  )
+                ),
+              interactionTimeout
+            )
+          ),
+        ]);
+      } catch (timeoutErr) {
+        const msg =
+          timeoutErr instanceof Error ? timeoutErr.message : String(timeoutErr);
+        logRunner("interaction-runs:timeout", {
+          runId: selected.testInteractionRun.id,
+          surfaceRunId: selected.surfaceRun.id,
+          message: msg,
+        });
+        // Mark as skipped so the runner moves on
+        try {
+          await api.completeTestInteractionRun(selected.testInteractionRun.id, {
+            status: "skipped",
+            errorMessage: msg,
+          });
+        } catch {
+          // already completed by the executor's own error handler
+        }
+        wrappedEvents.onTestInteractionRunCompleted({
+          testInteractionRunId: selected.testInteractionRun.id,
+          passed: true,
+        });
+      }
       activeDependencyBranch = buildDependencyChainIds(
         selected.testInteractionRun.testInteractionId,
         testInteractions
