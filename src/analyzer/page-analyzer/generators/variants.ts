@@ -4,7 +4,21 @@ export async function generateVariantTestInteractions(
   analyzer: any,
   context: AnalyzerContext
 ): Promise<void> {
-  const tests = analyzer.buildVariantTestInteractions(context);
+  const allTests = analyzer.buildVariantTestInteractions(context);
+
+  // Filter out interactions whose replay selector was already generated
+  // under a different URL variant of the same base path.
+  const tests = allTests.filter((test: any) => {
+    const selector = test.steps?.[0]?.action?.path;
+    const actionType = test.steps?.[0]?.action?.actionType;
+    if (!selector || !actionType) return true;
+    return !analyzer.hasGeneratedSelectorForBasePath(
+      context.currentPath,
+      actionType,
+      selector
+    );
+  });
+
   const surfaceTitle = `Variants: ${context.currentPath}`;
   if (tests.length === 0) {
     await analyzer.reconcileGeneratedSurfaceElements(context, {
@@ -52,6 +66,16 @@ export async function generateVariantTestInteractions(
       testInteractionId: tc.id,
       testSurfaceRunId: surfaceRun.id,
     });
+
+    const selector = test.steps?.[0]?.action?.path;
+    const actionType = test.steps?.[0]?.action?.actionType;
+    if (selector && actionType) {
+      analyzer.markGeneratedSelectorForBasePath(
+        context.currentPath,
+        actionType,
+        selector
+      );
+    }
   }
 
   await analyzer.reconcileGeneratedSurfaceElements(context, {

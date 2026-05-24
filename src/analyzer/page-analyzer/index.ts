@@ -67,6 +67,41 @@ function logAnalyzer(step: string, details?: Record<string, unknown>): void {
 }
 
 /**
+ * Normalize a URL path for dedup comparison:
+ *  1. Remove query params with empty values (`foo=` or `foo`)
+ *  2. Sort remaining params so order doesn't matter
+ *
+ * `/store/?b=2&a=1` and `/store/?a=1&b=2` → same key.
+ * `/store/?filternum=0&pagenum=1` keeps both (non-empty values).
+ * `/store/?foo=&bar` drops both (empty values).
+ */
+function normalizePathForDedup(raw: string): string {
+  const qIndex = raw.indexOf("?");
+  if (qIndex === -1) return raw;
+
+  const base = raw.slice(0, qIndex);
+  const search = raw.slice(qIndex + 1);
+  if (!search) return base;
+
+  const kept = search
+    .split("&")
+    .filter(pair => {
+      const eqIndex = pair.indexOf("=");
+      if (eqIndex === -1) return false; // bare key, no value
+      return pair.slice(eqIndex + 1).length > 0; // non-empty value
+    })
+    .sort();
+
+  return kept.length > 0 ? `${base}?${kept.join("&")}` : base;
+}
+
+/** Strip the query string entirely to get the base path. */
+function basePathOf(raw: string): string {
+  const qIndex = raw.indexOf("?");
+  return qIndex === -1 ? raw : raw.slice(0, qIndex);
+}
+
+/**
  * PageAnalyzer generates expectations and discovers new test elements
  * during discovery mode.
  */
@@ -82,6 +117,17 @@ export class PageAnalyzer {
    * of visible actionable-item stable keys.
    */
   private generatedActionableHashes = new Set<string>();
+
+  /**
+   * Tracks replay selectors already generated under each base path (path
+   * without query string).  Shared layout controls (header, sidebar, footer)
+   * produce the same replay selector on `/store/`, `/store/?pricepoint=3`,
+   * etc.  Testing them once per base path is sufficient.
+   *
+   * Key: base path (e.g. `/store/`)
+   * Value: Set of `actionType\0replaySelector` strings
+   */
+  private generatedSelectorsByBasePath = new Map<string, Set<string>>();
 
   /**
    * Tracks page-scoped finding keys already recorded during this run.
@@ -109,7 +155,42 @@ export class PageAnalyzer {
 
   /** Check whether generation already happened for a given path in this run. */
   hasGeneratedForPath(path: string): boolean {
-    return this.generatedPaths.has(path);
+    return this.generatedPaths.has(normalizePathForDedup(path));
+  }
+
+  /**
+   * Check whether a (actionType, replaySelector) pair has already been
+   * generated for any URL variant of the same base path.  Shared layout
+   * elements (header, sidebar, footer) appear identically across query-param
+   * variants and only need testing once per base path.
+   */
+  hasGeneratedSelectorForBasePath(
+    path: string,
+    actionType: string,
+    replaySelector: string
+  ): boolean {
+    const key = `${actionType}\0${replaySelector}`;
+    return (
+      this.generatedSelectorsByBasePath.get(basePathOf(path))?.has(key) ?? false
+    );
+  }
+
+  /**
+   * Record that a (actionType, replaySelector) was generated under a base
+   * path so future URL variants can skip it.
+   */
+  markGeneratedSelectorForBasePath(
+    path: string,
+    actionType: string,
+    replaySelector: string
+  ): void {
+    const bp = basePathOf(path);
+    let set = this.generatedSelectorsByBasePath.get(bp);
+    if (!set) {
+      set = new Set();
+      this.generatedSelectorsByBasePath.set(bp, set);
+    }
+    set.add(`${actionType}\0${replaySelector}`);
   }
 
   /**
@@ -407,17 +488,19 @@ export class PageAnalyzer {
     const normalizedContext = this.normalizeContext(context);
     const isHover = this.isHoverOnly(testInteraction);
     const currentPath = normalizedContext.currentPath.trim();
+    const dedupPath = normalizePathForDedup(currentPath);
 
     // For non-hover interactions: check cheap path/hash guards BEFORE the
     // expensive ensureTargetPageState call so we can skip all the API work
     // (scaffold resolution, hash computation, page-state creation) when the
     // page has already been covered in this run.
     if (!isHover) {
-      if (this.generatedPaths.has(currentPath)) {
+      if (this.generatedPaths.has(dedupPath)) {
         logAnalyzer("generate:page-already-covered", {
           sourceTitle: testInteraction.title,
           currentTestInteractionId: normalizedContext.currentTestInteractionId,
           currentPath,
+          dedupPath,
         });
         return;
       }
@@ -494,7 +577,7 @@ export class PageAnalyzer {
     // (Render, which waits for load state) re-run the full generation pass
     // with the complete HTML.
     if (resolvedContext.actionableItems.length > 0) {
-      this.generatedPaths.add(currentPath);
+      this.generatedPaths.add(dedupPath);
       this.generatedActionableHashes.add(actionableHash);
     }
 
@@ -831,7 +914,7 @@ export class PageAnalyzer {
         "hover",
         startingPageStateId,
         dependencyTestInteractionId,
-        item.stableKey ?? item.selector ?? label
+        replaySelector
       ),
     };
   }
@@ -874,7 +957,7 @@ export class PageAnalyzer {
         "click",
         startingPageStateId,
         dependencyTestInteractionId,
-        item.stableKey ?? item.selector ?? label
+        replaySelector
       ),
     };
   }
@@ -3486,6 +3569,7 @@ export class PageAnalyzer {
     startingPageStateId?: number
   ): GeneratedTestInteraction {
     const label = this.describeActionableItem(item);
+    const replaySelector = buildReplaySelectorFromActionableItem(item);
     return {
       title: `Toggle disclosure ${label}`,
       type: "interaction",
@@ -3498,8 +3582,8 @@ export class PageAnalyzer {
         {
           action: {
             actionType: PlaywrightAction.Click,
-            path: item.selector,
-            playwrightCode: `await page.click('${item.selector}')`,
+            path: replaySelector,
+            playwrightCode: `await page.click('${replaySelector}')`,
             description: `Toggle disclosure ${label}`,
           },
           expectations: [
@@ -3507,7 +3591,7 @@ export class PageAnalyzer {
               "expanded_state_changed",
               "Clicking the disclosure should toggle its expanded state",
               {
-                targetPath: item.selector,
+                targetPath: replaySelector,
               }
             ),
           ],
@@ -3522,7 +3606,7 @@ export class PageAnalyzer {
       generatedKey: this.buildGeneratedKey(
         "disclosure-click",
         startingPageStateId,
-        item.stableKey ?? item.selector ?? label
+        replaySelector
       ),
     };
   }
@@ -3538,6 +3622,7 @@ export class PageAnalyzer {
     startingPageStateId?: number
   ): GeneratedTestInteraction {
     const label = this.describeActionableItem(item);
+    const replaySelector = buildReplaySelectorFromActionableItem(item);
     return {
       title: `${titlePrefix} ${label}`,
       type: "interaction",
@@ -3553,8 +3638,8 @@ export class PageAnalyzer {
         {
           action: {
             actionType: PlaywrightAction.Focus,
-            path: item.selector,
-            playwrightCode: `await page.locator('${item.selector}').focus()`,
+            path: replaySelector,
+            playwrightCode: `await page.locator('${replaySelector}').focus()`,
             description: `Focus ${label}`,
           },
           expectations: [
@@ -3562,7 +3647,7 @@ export class PageAnalyzer {
               ExpectationType.ElementFocused,
               `${label} should be keyboard-focusable`,
               {
-                targetPath: item.selector,
+                targetPath: replaySelector,
               }
             ),
           ],
@@ -3589,7 +3674,7 @@ export class PageAnalyzer {
         "keyboard",
         startingPageStateId,
         key === " " ? "space" : key,
-        item.stableKey ?? item.selector ?? label
+        replaySelector
       ),
     };
   }
@@ -3602,6 +3687,7 @@ export class PageAnalyzer {
     startingPageStateId?: number
   ): GeneratedTestInteraction {
     const label = this.describeActionableItem(item);
+    const replaySelector = buildReplaySelectorFromActionableItem(item);
     return {
       title: `Close dialog via ${label}`,
       type: "interaction",
@@ -3614,8 +3700,8 @@ export class PageAnalyzer {
         {
           action: {
             actionType: PlaywrightAction.Click,
-            path: item.selector,
-            playwrightCode: `await page.click('${item.selector}')`,
+            path: replaySelector,
+            playwrightCode: `await page.click('${replaySelector}')`,
             description: `Close dialog via ${label}`,
           },
           expectations: [
@@ -3639,7 +3725,7 @@ export class PageAnalyzer {
       generatedKey: this.buildGeneratedKey(
         "dialog-close",
         startingPageStateId,
-        item.stableKey ?? item.selector ?? label
+        replaySelector
       ),
     };
   }
@@ -3824,7 +3910,7 @@ export class PageAnalyzer {
         dependencyTestInteractionId,
         isImmutable ? "immutable" : "enabled",
         role || inputType || item.actionKind || "control",
-        item.stableKey ?? item.selector ?? label
+        replaySelector
       ),
     };
   }

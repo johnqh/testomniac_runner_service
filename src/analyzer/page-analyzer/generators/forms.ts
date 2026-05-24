@@ -47,6 +47,18 @@ export async function generateFormTestInteractions(
     const formType = analyzer.identifyFormType(form, context.currentPath);
     const formLabel = analyzer.describeForm(form, index);
 
+    // Skip forms already tested under a different URL variant of the same
+    // base path (e.g. login sidebar form on /store/ vs /store/?pricepoint=3).
+    if (
+      analyzer.hasGeneratedSelectorForBasePath(
+        context.currentPath,
+        "form",
+        formLabel
+      )
+    ) {
+      continue;
+    }
+
     const validValues = analyzer.planFormValues(form, context.actionableItems);
     if (analyzer.isSearchForm(form)) {
       const searchTests = analyzer.buildSearchTestInteractions(
@@ -177,6 +189,12 @@ export async function generateFormTestInteractions(
         });
       }
     }
+
+    analyzer.markGeneratedSelectorForBasePath(
+      context.currentPath,
+      "form",
+      formLabel
+    );
   }
 
   await analyzer.reconcileGeneratedSurfaceElements(context, {

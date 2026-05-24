@@ -1,3 +1,4 @@
+import { buildReplaySelectorFromActionableItem } from "../../../browser/replay-selector";
 import type { AnalyzerContext } from "../types";
 
 export async function generateContentTestInteractions(
@@ -50,23 +51,40 @@ export async function generateContentTestInteractions(
 
   const desiredKeys: string[] = [];
   for (const item of contentItems) {
-    const testInteraction = analyzer.shouldUseDirectControlInteraction(item)
-      ? analyzer.buildControlInteractionTestInteraction(
-          item,
-          context.currentPath,
-          sizeClass,
-          uid,
-          context.currentPageStateId,
-          context.currentTestInteractionId
-        )
-      : analyzer.buildHoverTestInteraction(
-          item,
-          context.currentPath,
-          sizeClass,
-          uid,
-          context.currentPageStateId,
-          context.currentTestInteractionId
-        );
+    // Skip interactions for shared layout elements already tested under
+    // a different URL variant of the same base path.
+    const replaySelector = buildReplaySelectorFromActionableItem(item);
+    const actionType = analyzer.shouldUseDirectControlInteraction(item)
+      ? "control"
+      : "hover";
+    if (
+      analyzer.hasGeneratedSelectorForBasePath(
+        context.currentPath,
+        actionType,
+        replaySelector
+      )
+    ) {
+      continue;
+    }
+
+    const testInteraction =
+      actionType === "control"
+        ? analyzer.buildControlInteractionTestInteraction(
+            item,
+            context.currentPath,
+            sizeClass,
+            uid,
+            context.currentPageStateId,
+            context.currentTestInteractionId
+          )
+        : analyzer.buildHoverTestInteraction(
+            item,
+            context.currentPath,
+            sizeClass,
+            uid,
+            context.currentPageStateId,
+            context.currentTestInteractionId
+          );
     desiredKeys.push(analyzer.getGeneratedKey(testInteraction));
     const tc = await api.ensureTestInteraction(
       runnerId,
@@ -78,6 +96,11 @@ export async function generateContentTestInteractions(
       testInteractionId: tc.id,
       testSurfaceRunId: surfaceRun.id,
     });
+    analyzer.markGeneratedSelectorForBasePath(
+      context.currentPath,
+      actionType,
+      replaySelector
+    );
   }
 
   await analyzer.reconcileGeneratedSurfaceElements(context, {
