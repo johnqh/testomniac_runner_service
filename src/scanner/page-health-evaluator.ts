@@ -275,7 +275,7 @@ export async function evaluatePageHealth(
     // 6. Defunct service links (MySpace, Google+, etc.)
     // =========================================================================
     const defunctServices = [
-      { pattern: /myspace/i, name: "MySpace" },
+      { pattern: /myspace\.com|[/_]myspace\b/i, name: "MySpace" },
       { pattern: /plus\.google\.com/i, name: "Google+" },
       { pattern: /vine\.co(?!mcast)/i, name: "Vine" },
     ];
@@ -699,7 +699,7 @@ export async function evaluatePageHealth(
     // =========================================================================
     const contentEls = Array.from(
       document.querySelectorAll(
-        ".ec_details_description, .product-description, [class*='description'], article p, .entry-content p"
+        "[class*='description'], article p, .entry-content p, main p"
       )
     );
     const placeholderPatterns = [
@@ -771,30 +771,26 @@ export async function evaluatePageHealth(
     }
 
     // =========================================================================
-    // 24. Visible error messages — e-commerce error text exposed in the DOM
+    // 24. Visible error messages — validation or system errors exposed in DOM
     // =========================================================================
     const errorPatterns = [
-      {
-        pattern: /\bMaximum purchase amount of 0\b/i,
-        desc: '"Maximum purchase amount of 0" — add-to-cart is effectively disabled',
-      },
-      {
-        pattern: /\bMinimum purchase amount of 0 is required\b/i,
-        desc: '"Minimum purchase amount of 0 is required" — contradictory validation',
-      },
-      {
-        pattern: /\bMaximum quantity exceeded\b/i,
-        desc: '"Maximum quantity exceeded" — error shown before user action',
-      },
+      /\b(?:maximum|minimum)\s+(?:purchase|order)\s+amount\s+of\s+0\b/i,
+      /\b(?:maximum|minimum)\s+quantity\s+(?:exceeded|is\s+0)\b/i,
+      /\binternal\s+server\s+error\b/i,
+      /\b(?:fatal|uncaught)\s+(?:error|exception)\b/i,
+      /\bstack\s*trace\b/i,
+      /\bsyntax\s*error\b.*\bline\s+\d+/i,
+      /\bundefined\s+is\s+not\s+(?:a\s+function|an?\s+object)\b/i,
     ];
-    for (const { pattern, desc } of errorPatterns) {
-      if (pattern.test(pageText)) {
+    for (const pattern of errorPatterns) {
+      const match = pageText.match(pattern);
+      if (match) {
         found.push({
           type: "error_message_visible",
           severity: "error",
           priority: 2,
           title: "Error message visible on page",
-          description: desc,
+          description: `Page contains visible error text: "${match[0]}"`,
         });
         break;
       }
@@ -803,20 +799,26 @@ export async function evaluatePageHealth(
     // =========================================================================
     // 25. Empty product page — product detail URL with no product content
     // =========================================================================
-    const isProductPage =
-      /\/store\/[^/]+\/?$/.test(window.location.pathname) ||
-      !!document.querySelector(
-        ".ec_details_right, .product-details, [class*='product_details']"
-      );
+    // =========================================================================
+    // 25. Empty product page — page has product-page indicators but no
+    //     actual product content (title, price, or image)
+    // =========================================================================
+    const productIndicators = document.querySelectorAll(
+      "[class*='product'], [class*='item-detail'], [itemtype*='schema.org/Product']"
+    );
+    const hasCartButton = !!document.querySelector(
+      "[class*='add_to_cart'], [class*='addtocart'], [class*='add-to-cart'], button[name*='cart']"
+    );
+    const isProductPage = productIndicators.length > 0 || hasCartButton;
     if (isProductPage) {
       const hasTitle = !!document.querySelector(
-        ".ec_details_title, .product-title, [class*='product_title']"
+        "h1, [class*='product_title'], [class*='product-title'], [class*='product-name'], [itemprop='name']"
       );
       const hasPrice = !!document.querySelector(
-        ".ec_details_price, .product-price, [class*='product_price']"
+        "[class*='price'], [itemprop='price'], [class*='amount']"
       );
       const hasImage = !!document.querySelector(
-        ".ec_details_main_image img, .product-image img, [class*='product_image'] img"
+        "[class*='product'] img, [class*='gallery'] img, [itemprop='image'], main img"
       );
       if (!hasTitle && !hasPrice && !hasImage) {
         found.push({
@@ -825,23 +827,20 @@ export async function evaluatePageHealth(
           priority: 1,
           title: "Product page has no content",
           description:
-            "Product detail page loaded but contains no product title, price, or image",
+            "Page has product-page indicators but contains no product title, price, or image",
         });
       }
     }
 
     // =========================================================================
-    // 26. Missing stock info — product detail page lacks stock count
-    //     when the page structure suggests it should have one
+    // 26. Missing stock info — product page with add-to-cart but no
+    //     stock count or availability indicator
     // =========================================================================
-    if (isProductPage) {
-      const hasAddToCart = !!document.querySelector(
-        ".ec_addtocart, [class*='add_to_cart'], [class*='addtocart']"
-      );
+    if (isProductPage && hasCartButton) {
       const hasStockInfo = !!document.querySelector(
-        "[class*='stock'], [class*='inventory'], [class*='availability']"
+        "[class*='stock'], [class*='inventory'], [class*='availability'], [itemprop='availability']"
       );
-      if (hasAddToCart && !hasStockInfo) {
+      if (!hasStockInfo) {
         found.push({
           type: "missing_stock_info",
           severity: "warning",
