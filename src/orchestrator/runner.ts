@@ -420,6 +420,27 @@ export async function runTestRun(
         selectedInteraction: summarizeInteraction(selectedInteraction),
       });
 
+      // Quick scan: skip hover interactions where a navigation interaction exists for the same element
+      if (
+        config.quickScan &&
+        isHoverInteraction(selectedInteraction) &&
+        hasNavigationInteractionForSameElement(
+          selectedInteraction,
+          testInteractions
+        )
+      ) {
+        logRunner("quick-scan:skipping-hover", {
+          testInteractionRunId: selected.testInteractionRun.id,
+          testInteractionId: selectedInteraction.id,
+          title: selectedInteraction.title,
+        });
+        await api.completeTestInteractionRun(selected.testInteractionRun.id, {
+          status: "cancelled",
+          errorMessage: "Skipped: quick scan mode",
+        });
+        continue;
+      }
+
       const interactionTimeout = 60_000; // 60 seconds max per interaction
       try {
         await Promise.race([
@@ -683,6 +704,19 @@ function isHoverInteraction(
   return (
     testInteraction.surfaceTags.includes("hover") ||
     testInteraction.title.startsWith("Hover over ")
+  );
+}
+
+function hasNavigationInteractionForSameElement(
+  hoverInteraction: TestInteractionResponse,
+  allInteractions: TestInteractionResponse[]
+): boolean {
+  return allInteractions.some(
+    other =>
+      other.id !== hoverInteraction.id &&
+      other.testType === "navigation" &&
+      other.testSurfaceId === hoverInteraction.testSurfaceId &&
+      other.pageId === hoverInteraction.pageId
   );
 }
 

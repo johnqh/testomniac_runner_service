@@ -17,6 +17,7 @@ export interface RunConfig {
   loginUrl?: string;
   entityCredentialId?: number;
   credentials?: Credentials;
+  quickScan?: boolean;
 }
 
 export type RunCheckpoint =
