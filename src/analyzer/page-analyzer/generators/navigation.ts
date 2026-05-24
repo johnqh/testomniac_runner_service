@@ -53,9 +53,15 @@ export async function generateNavigationTestInteractions(
 
   if (navItems.length === 0) return;
 
-  // Apply the same representative-item dedup used for hover/content
-  // interactions — product grid links get capped per style
-  const representative = analyzer.selectRepresentativeItems(navItems);
+  // Apply representative-item dedup with a higher cap than hover/content
+  // surfaces.  Navigation is for page discovery — we need enough variety
+  // to catch bugs on different product pages and utility pages (cart,
+  // account) while still avoiding 18× identical product navigations.
+  const MAX_NAV_REPS_PER_STYLE = 5;
+  const representative = analyzer.selectRepresentativeItems(
+    navItems,
+    MAX_NAV_REPS_PER_STYLE
+  );
 
   // Deduplicate by relative path
   const seenPaths = new Set<string>();
