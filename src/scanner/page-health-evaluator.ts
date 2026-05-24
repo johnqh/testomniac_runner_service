@@ -735,7 +735,7 @@ export async function evaluatePageHealth(
     );
     for (const el of allPriceEls) {
       const text = el.textContent?.trim() || "";
-      const badFormat = text.match(/[$€£]\s*\d+\.\d{3,}/);
+      const badFormat = text.match(/[$€£]?\s*\d+\.\d{3,}/);
       if (badFormat) {
         found.push({
           type: "price_format_error",
