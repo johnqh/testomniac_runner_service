@@ -18,6 +18,9 @@ export interface RunConfig {
   entityCredentialId?: number;
   credentials?: Credentials;
   quickScan?: boolean;
+  /** Scan depth: 'full' runs everything, 'partial' skips hover
+   *  interactions, 'minimum' runs only direct navigation. */
+  scanMode?: "full" | "partial" | "minimum";
 }
 
 export type RunCheckpoint =

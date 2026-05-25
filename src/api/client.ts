@@ -126,6 +126,10 @@ export class ApiClient {
     return this.request<T>("PUT", path, body);
   }
 
+  private patch<T>(path: string, body?: unknown): Promise<T> {
+    return this.request<T>("PATCH", path, body);
+  }
+
   // ===========================================================================
   // Test Runs
   // ===========================================================================
@@ -608,6 +612,15 @@ export class ApiClient {
 
   getScaffolds(runnerId: number): Promise<ScaffoldResponse[]> {
     return this.get(`/scaffolds?runnerId=${runnerId}`);
+  }
+
+  updateScaffoldScreenshot(
+    scaffoldId: number,
+    screenshotPath: string
+  ): Promise<ScaffoldResponse> {
+    return this.patch(`/scaffolds/${scaffoldId}/screenshot`, {
+      screenshotPath,
+    });
   }
 
   linkPageStateScaffolds(

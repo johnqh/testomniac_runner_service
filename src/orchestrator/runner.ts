@@ -424,23 +424,45 @@ export async function runTestRun(
         selectedInteraction: summarizeInteraction(selectedInteraction),
       });
 
-      // Quick scan: skip hover interactions where a navigation interaction exists for the same element
+      // Scan mode filtering
+      const effectiveScanMode =
+        config.scanMode ?? (config.quickScan ? "partial" : "full");
+
+      // Minimum mode: only run direct navigation interactions
+      if (effectiveScanMode === "minimum") {
+        const isNavigation =
+          selectedInteraction.title.startsWith("Navigate to ") ||
+          selectedInteraction.testType === "navigation";
+        if (!isNavigation) {
+          logRunner("minimum-scan:skipping", {
+            testInteractionRunId: selected.testInteractionRun.id,
+            title: selectedInteraction.title,
+          });
+          await api.completeTestInteractionRun(selected.testInteractionRun.id, {
+            status: "cancelled",
+            errorMessage: "Skipped: minimum scan mode",
+          });
+          continue;
+        }
+      }
+
+      // Partial mode: skip hover interactions where a navigation interaction exists
       if (
-        config.quickScan &&
+        effectiveScanMode === "partial" &&
         isHoverInteraction(selectedInteraction) &&
         hasNavigationInteractionForSameElement(
           selectedInteraction,
           testInteractions
         )
       ) {
-        logRunner("quick-scan:skipping-hover", {
+        logRunner("partial-scan:skipping-hover", {
           testInteractionRunId: selected.testInteractionRun.id,
           testInteractionId: selectedInteraction.id,
           title: selectedInteraction.title,
         });
         await api.completeTestInteractionRun(selected.testInteractionRun.id, {
           status: "cancelled",
-          errorMessage: "Skipped: quick scan mode",
+          errorMessage: "Skipped: partial scan mode",
         });
         continue;
       }

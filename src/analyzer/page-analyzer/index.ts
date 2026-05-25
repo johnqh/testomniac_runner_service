@@ -1164,6 +1164,18 @@ export class PageAnalyzer {
         hash: scaffold.hash,
       });
       scaffoldIdsBySelector.set(scaffold.selector, result.id);
+
+      // Link page state screenshot to scaffold if it doesn't have one
+      if (!result.screenshotPath && context.screenshotPath) {
+        try {
+          await context.api.updateScaffoldScreenshot(
+            result.id,
+            context.screenshotPath
+          );
+        } catch {
+          // Best effort — scaffold screenshot is optional
+        }
+      }
     }
 
     return scaffoldIdsBySelector;
