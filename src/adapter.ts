@@ -90,4 +90,13 @@ export interface BrowserAdapter {
 
   /** Clear any buffered runtime artifacts, when supported by the adapter. */
   resetRuntimeArtifacts?(): void;
+
+  /** Wait for a new tab/window to open. Returns a tab identifier, or null on timeout. */
+  waitForNewTab?(timeoutMs?: number): Promise<number | null>;
+
+  /** Switch the adapter to operate on a different tab/window. */
+  switchToTab?(tabId: number): Promise<void>;
+
+  /** Return the current tab identifier. */
+  getCurrentTabId?(): number;
 }

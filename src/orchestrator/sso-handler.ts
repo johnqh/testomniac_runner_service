@@ -173,12 +173,88 @@ function resolveValue(
 }
 
 /**
+ * Wait for the current tab URL to change from `startUrl`.
+ * Returns true if the URL changed, false on timeout.
+ */
+async function waitForUrlChange(
+  adapter: BrowserAdapter,
+  startUrl: string,
+  timeoutMs: number
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const currentUrl = await adapter.getUrl();
+    if (currentUrl !== startUrl) return true;
+    await new Promise(r => setTimeout(r, 300));
+  }
+  return false;
+}
+
+/**
+ * Execute the provider-specific SSO steps (type email, password, click
+ * submit, etc.) on whatever page the adapter is currently pointed at.
+ */
+async function executeProviderSteps(
+  adapter: BrowserAdapter,
+  provider: AuthProviderType,
+  credentials: SSOCredentials
+): Promise<void> {
+  const steps = SSO_FLOWS[provider] ?? GENERIC_SSO_FLOW;
+
+  for (const step of steps) {
+    const timeout = step.timeout ?? 10000;
+
+    const found = await adapter.waitForSelector(step.waitFor, {
+      visible: true,
+      timeout,
+    });
+
+    if (!found) {
+      logSSO("step:element-not-found", {
+        waitFor: step.waitFor,
+        action: step.action,
+      });
+      continue;
+    }
+
+    switch (step.action) {
+      case "type": {
+        const value = resolveValue(step.value, credentials);
+        if (step.selector) {
+          await adapter.type(step.selector, value);
+        }
+        logSSO("step:typed", { selector: step.selector });
+        break;
+      }
+      case "click": {
+        if (step.selector) {
+          await adapter.click(step.selector, { timeout: 5000 });
+        }
+        logSSO("step:clicked", { selector: step.selector });
+        await adapter.waitForNavigation({ timeout: 10000 }).catch(err =>
+          logSSO("navigation-wait:timeout", {
+            error: err instanceof Error ? err.message : String(err),
+          })
+        );
+        break;
+      }
+      case "wait": {
+        break;
+      }
+    }
+  }
+}
+
+/**
  * Execute an SSO login flow for a specific provider.
  *
- * 1. Clicks the SSO button on the app's login page
- * 2. Waits for navigation to the provider
- * 3. Walks through the provider-specific steps
- * 4. Waits for redirect back to the app
+ * After clicking the SSO button the function races two signals:
+ *   - **Redirect:** the current tab navigates to the provider (same-window OAuth)
+ *   - **Popup:** a new tab/window opens (popup-based OAuth)
+ *
+ * Whichever fires first determines the execution path. The provider-
+ * specific steps (type email → next → password → submit) are the same
+ * in both cases — only the tab context differs.
  */
 export async function executeSSOFlow(
   adapter: BrowserAdapter,
@@ -190,69 +266,106 @@ export async function executeSSOFlow(
   logSSO("flow:start", { provider, ssoButtonSelector });
 
   try {
+    const startUrl = await adapter.getUrl();
+    const originalTabId = adapter.getCurrentTabId?.();
+
     // Click SSO button on the app login page
     await adapter.click(ssoButtonSelector, { timeout: 5000 });
     logSSO("button:clicked");
 
-    // Wait for navigation to the provider
-    await adapter.waitForNavigation({ timeout: 10000 });
-    logSSO("navigated:to-provider");
+    // Race: popup vs redirect
+    const supportsPopup = !!(adapter.waitForNewTab && adapter.switchToTab);
+    let popupTabId: number | null = null;
 
-    // Get the flow steps for this provider
-    const steps = SSO_FLOWS[provider] ?? GENERIC_SSO_FLOW;
+    if (supportsPopup) {
+      // Race popup detection against URL change (redirect)
+      const [newTabId, urlChanged] = await Promise.all([
+        adapter.waitForNewTab!(10000),
+        waitForUrlChange(adapter, startUrl, 10000),
+      ]);
 
-    for (const step of steps) {
-      const timeout = step.timeout ?? 10000;
+      if (newTabId != null) {
+        popupTabId = newTabId;
+        logSSO("popup:detected", { popupTabId });
+      } else if (urlChanged) {
+        logSSO("redirect:detected");
+      } else {
+        logSSO("flow:no-navigation-or-popup");
+        return false;
+      }
+    } else {
+      // Adapter doesn't support popup detection — assume redirect
+      await adapter.waitForNavigation({ timeout: 10000 });
+      logSSO("navigated:to-provider");
+    }
 
-      // Wait for the expected element
-      const found = await adapter.waitForSelector(step.waitFor, {
-        visible: true,
-        timeout,
+    // If popup, switch to it
+    if (popupTabId != null) {
+      await adapter.switchToTab!(popupTabId);
+      // Wait for the popup page to finish loading
+      await adapter.waitForNavigation({ timeout: 10000 }).catch(() => {
+        /* popup may already be loaded */
       });
+      logSSO("popup:switched", { url: await adapter.getUrl() });
+    }
 
-      if (!found) {
-        logSSO("step:element-not-found", {
-          waitFor: step.waitFor,
-          action: step.action,
-        });
-        continue;
+    // Execute provider-specific steps (same logic for both paths)
+    await executeProviderSteps(adapter, provider, credentials);
+
+    // Return to original tab if we used a popup
+    if (popupTabId != null && originalTabId != null) {
+      // Wait for the popup to close or the original tab to receive
+      // the auth callback (URL change)
+      logSSO("popup:waiting-for-completion");
+      const deadline = Date.now() + 15000;
+      let returned = false;
+
+      while (Date.now() < deadline) {
+        // Check if original tab URL changed (auth callback received)
+        await adapter.switchToTab!(originalTabId);
+        const origUrl = await adapter.getUrl();
+        try {
+          if (origUrl !== startUrl && new URL(origUrl).origin === appOrigin) {
+            returned = true;
+            break;
+          }
+        } catch {
+          // Invalid URL, keep waiting
+        }
+
+        // Brief pause before checking again
+        await new Promise(r => setTimeout(r, 1000));
       }
 
-      switch (step.action) {
-        case "type": {
-          const value = resolveValue(step.value, credentials);
-          if (step.selector) {
-            await adapter.type(step.selector, value);
-          }
-          logSSO("step:typed", { selector: step.selector });
-          break;
+      // Try to close the popup tab
+      if (popupTabId != null) {
+        try {
+          await adapter.switchToTab!(popupTabId);
+          await adapter.close();
+        } catch {
+          // Popup may already be closed
         }
-        case "click": {
-          if (step.selector) {
-            await adapter.click(step.selector, { timeout: 5000 });
-          }
-          logSSO("step:clicked", { selector: step.selector });
-          // Wait for potential navigation after click
-          await adapter.waitForNavigation({ timeout: 10000 }).catch(err =>
-            logSSO("navigation-wait:timeout", {
-              error: err instanceof Error ? err.message : String(err),
-            })
-          );
-          break;
+        // Ensure we're back on the original tab
+        try {
+          await adapter.switchToTab!(originalTabId);
+        } catch {
+          // Best effort
         }
-        case "wait": {
-          // Just wait for the selector (already done above)
-          break;
-        }
+      }
+
+      if (returned) {
+        logSSO("flow:success:popup", { returnUrl: await adapter.getUrl() });
+        return true;
       }
     }
 
-    // Wait for redirect back to the app
+    // Wait for redirect back to the app (redirect flow, or popup
+    // fallback if we didn't detect the callback above)
     logSSO("waiting:redirect-back", { appOrigin });
-    const startTime = Date.now();
+    const redirectStart = Date.now();
     const maxWait = 30000;
 
-    while (Date.now() - startTime < maxWait) {
+    while (Date.now() - redirectStart < maxWait) {
       const currentUrl = await adapter.getUrl();
       try {
         if (new URL(currentUrl).origin === appOrigin) {
