@@ -50,11 +50,18 @@ export async function generateNavigationTestInteractions(
 
   if (navItems.length === 0) return;
 
-  // Deduplicate by relative path — no representative-item dedup here.
-  // Navigation is for page discovery: we want to visit ALL distinct pages
-  // to maximise coverage.  The path-level dedup below is sufficient.
+  // Deduplicate navigation targets:
+  // - Every unique base path (pathname without query string) is navigated
+  //   so that all distinct pages are discovered.
+  // - Query-string variants of the same base path are capped at
+  //   MAX_QUERY_VARIANTS to avoid exploding on filter/sort/pagination links.
+  const MAX_QUERY_VARIANTS = 2;
+
   const seenPaths = new Set<string>();
   seenPaths.add(context.currentPath);
+
+  // Track how many query-string variants we've accepted per base path
+  const queryVariantCounts = new Map<string, number>();
 
   const navPaths: string[] = [];
   for (const item of navItems) {
@@ -71,6 +78,21 @@ export async function generateNavigationTestInteractions(
         navPaths.push(basePath);
       }
       continue;
+    }
+
+    const basePath = extractBasePath(path);
+    const hasQuery = path.includes("?");
+
+    if (hasQuery && basePath) {
+      // Always ensure the base path itself is queued first
+      if (!seenPaths.has(basePath)) {
+        seenPaths.add(basePath);
+        navPaths.push(basePath);
+      }
+      // Cap query-string variants per base path
+      const count = queryVariantCounts.get(basePath) ?? 0;
+      if (count >= MAX_QUERY_VARIANTS) continue;
+      queryVariantCounts.set(basePath, count + 1);
     }
 
     seenPaths.add(path);

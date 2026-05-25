@@ -60,18 +60,12 @@ export async function evaluatePageHealth(
     const images = Array.from(document.querySelectorAll("img"));
     const brokenImages: string[] = [];
     for (const img of images) {
-      const isVisible =
-        img.offsetParent !== null ||
-        window.getComputedStyle(img).display !== "none";
-      if (!img.src || !isVisible) continue;
-
-      // Standard check: loaded but zero natural size
-      const loadedButEmpty = img.complete && img.naturalWidth === 0;
-      // Lazy-load check: src is set but currentSrc is empty (browser
-      // rejected or hasn't fetched — still a broken reference)
-      const lazyBroken = img.complete && img.src && !img.currentSrc;
-
-      if (loadedButEmpty || lazyBroken) {
+      if (
+        img.complete &&
+        img.naturalWidth === 0 &&
+        img.src &&
+        img.offsetParent !== null
+      ) {
         const alt = img.alt || img.src.split("/").pop() || "unknown";
         brokenImages.push(alt);
       }
