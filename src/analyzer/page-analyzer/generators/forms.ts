@@ -50,7 +50,7 @@ export async function generateFormTestInteractions(
     // Skip forms already tested under a different URL variant of the same
     // base path (e.g. login sidebar form on /store/ vs /store/?pricepoint=3).
     if (
-      analyzer.hasGeneratedSelectorForBasePath(
+      await analyzer.hasGeneratedSelectorForBasePath(
         context.currentPath,
         "form",
         formLabel
@@ -190,7 +190,7 @@ export async function generateFormTestInteractions(
       }
     }
 
-    analyzer.markGeneratedSelectorForBasePath(
+    await analyzer.markGeneratedSelectorForBasePath(
       context.currentPath,
       "form",
       formLabel

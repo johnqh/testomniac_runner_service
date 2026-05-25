@@ -1,6 +1,10 @@
 // Browser abstraction
 export type { BrowserAdapter, RuntimeArtifacts } from "./adapter";
 
+// Storage
+export type { DedupStore } from "./storage/dedup-store";
+export { InMemoryDedupStore } from "./storage/dedup-store";
+
 // Scanner modules (existing)
 export * from "./scanner/issue-detector";
 // action-queue is deprecated, no longer exported

@@ -1,5 +1,6 @@
 import type { BrowserAdapter } from "../adapter";
 import type { ApiClient } from "../api/client";
+import type { DedupStore } from "../storage/dedup-store";
 import type {
   TestInteractionResponse,
   TestInteractionRunResponse,
@@ -49,7 +50,8 @@ export async function runTestRun(
   config: RunConfig,
   api: ApiClient,
   expertises: Expertise[],
-  events: ScanEventHandler
+  events: ScanEventHandler,
+  options?: { dedupStore?: DedupStore }
 ): Promise<ScanResult> {
   const startTime = Date.now();
   const pageIdsFound = new Set<number>();
@@ -259,7 +261,9 @@ export async function runTestRun(
     }
 
     // Set up analyzer for discovery mode
-    const analyzer = testRun.discovery ? new PageAnalyzer() : null;
+    const analyzer = testRun.discovery
+      ? new PageAnalyzer(options?.dedupStore)
+      : null;
 
     if (testRun.discovery) {
       try {

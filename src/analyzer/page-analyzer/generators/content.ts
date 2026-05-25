@@ -58,7 +58,7 @@ export async function generateContentTestInteractions(
       ? "control"
       : "hover";
     if (
-      analyzer.hasGeneratedSelectorForBasePath(
+      await analyzer.hasGeneratedSelectorForBasePath(
         context.currentPath,
         actionType,
         replaySelector
@@ -96,7 +96,7 @@ export async function generateContentTestInteractions(
       testInteractionId: tc.id,
       testSurfaceRunId: surfaceRun.id,
     });
-    analyzer.markGeneratedSelectorForBasePath(
+    await analyzer.markGeneratedSelectorForBasePath(
       context.currentPath,
       actionType,
       replaySelector

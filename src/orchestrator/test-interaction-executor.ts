@@ -618,12 +618,12 @@ export async function executeTestInteraction(
             }
 
             if (
-              analyzer?.hasReportedPageFinding(
+              (await analyzer?.hasReportedPageFinding(
                 currentPath,
                 findingTitle,
                 outcome.observed
-              ) ||
-              analyzer?.hasReportedDescription(outcome.observed)
+              )) ||
+              (await analyzer?.hasReportedDescription(outcome.observed))
             ) {
               continue;
             }
@@ -643,12 +643,12 @@ export async function executeTestInteraction(
               title: findingTitle,
               description: outcome.observed,
             });
-            analyzer?.markPageFindingReported(
+            await analyzer?.markPageFindingReported(
               currentPath,
               findingTitle,
               outcome.observed
             );
-            analyzer?.markReportedDescription(outcome.observed);
+            await analyzer?.markReportedDescription(outcome.observed);
 
             // Track 404 page-load errors to suppress redundant network-error
             if (
@@ -684,7 +684,7 @@ export async function executeTestInteraction(
         const healthIssues = await evaluatePageHealth(adapter);
         for (const issue of healthIssues) {
           const healthKey = `page-health:${issue.type}:${currentPath}`;
-          if (analyzer?.hasReportedFindingByKey(healthKey)) {
+          if (await analyzer?.hasReportedFindingByKey(healthKey)) {
             continue;
           }
           const findingTitle = `[page-health] ${issue.title}`;
@@ -705,7 +705,7 @@ export async function executeTestInteraction(
             title: findingTitle,
             description: issue.description,
           });
-          analyzer?.markReportedFindingByKey(healthKey);
+          await analyzer?.markReportedFindingByKey(healthKey);
         }
       } catch (healthError) {
         logExecutor("page-health:error", {

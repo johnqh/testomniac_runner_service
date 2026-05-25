@@ -32,6 +32,8 @@ import { createHash } from "node:crypto";
 import { fillValuePlanner } from "../../planners/fill-value-planner";
 import { AUTH_URL_PATTERNS, SIGNUP_URL_PATTERNS } from "../../config/constants";
 import type { AnalyzerContext } from "./types";
+import type { DedupStore } from "../../storage/dedup-store";
+import { InMemoryDedupStore } from "../../storage/dedup-store";
 import { generateHoverFollowUpCases } from "./generators/hover-follow-up";
 import { generateNavigationTestInteractions } from "./generators/navigation";
 import { generateScaffoldTestInteractions } from "./generators/scaffolds";
@@ -106,73 +108,28 @@ function basePathOf(raw: string): string {
  * during discovery mode.
  */
 export class PageAnalyzer {
-  /** Paths for which full generation has already run in this test-run. */
-  private generatedPaths = new Set<string>();
+  private store: DedupStore;
 
-  /**
-   * Actionable-item hashes for which full generation has already run.
-   * Different URL paths can produce the same set of interactive elements
-   * (e.g. `/store/` and `/store/all-items/`).  Generating hover/click tests
-   * for the same elements twice is pure waste, so we deduplicate by the hash
-   * of visible actionable-item stable keys.
-   */
-  private generatedActionableHashes = new Set<string>();
-
-  /**
-   * Tracks replay selectors already generated under each base path (path
-   * without query string).  Shared layout controls (header, sidebar, footer)
-   * produce the same replay selector on `/store/`, `/store/?pricepoint=3`,
-   * etc.  Testing them once per base path is sufficient.
-   *
-   * Key: base path (e.g. `/store/`)
-   * Value: Set of `actionType\0replaySelector` strings
-   */
-  private generatedSelectorsByBasePath = new Map<string, Set<string>>();
-
-  /**
-   * Tracks page-scoped finding keys already recorded during this run.
-   * Page-level findings (page-health checks, page-load expectations) describe
-   * the page itself, not a specific interaction.  Reporting them once per page
-   * path is sufficient — duplicating them for every hover/click on the same
-   * page just adds noise.
-   */
-  private reportedPageFindingKeys = new Set<string>();
-
-  /**
-   * Generic key-based dedup for findings where text-based matching is too
-   * fragile (e.g. page-health titles include variable counts).
-   */
-  private reportedFindingKeys = new Set<string>();
-
-  /**
-   * Description-only dedup.  Multiple expectations (page_loaded,
-   * no_console_errors, page-specific render checks) can all detect the same
-   * root cause (e.g. a 404) and produce identical `observed` text.  Tracking
-   * descriptions independently ensures only the first finding per unique
-   * description is created per run.
-   */
-  private reportedDescriptions = new Set<string>();
+  constructor(dedupStore?: DedupStore) {
+    this.store = dedupStore ?? new InMemoryDedupStore();
+  }
 
   /** Check whether generation already happened for a given path in this run. */
-  hasGeneratedForPath(path: string): boolean {
-    return this.generatedPaths.has(normalizePathForDedup(path));
+  hasGeneratedForPath(path: string): Promise<boolean> {
+    return this.store.has("generatedPaths", normalizePathForDedup(path));
   }
 
   /**
    * Check whether a (actionType, replaySelector) pair has already been
-   * generated for any URL variant of the same base path.  Shared layout
-   * elements (header, sidebar, footer) appear identically across query-param
-   * variants and only need testing once per base path.
+   * generated for any URL variant of the same base path.
    */
   hasGeneratedSelectorForBasePath(
     path: string,
     actionType: string,
     replaySelector: string
-  ): boolean {
-    const key = `${actionType}\0${replaySelector}`;
-    return (
-      this.generatedSelectorsByBasePath.get(basePathOf(path))?.has(key) ?? false
-    );
+  ): Promise<boolean> {
+    const key = `${basePathOf(path)}\0${actionType}\0${replaySelector}`;
+    return this.store.has("generatedSelectors", key);
   }
 
   /**
@@ -183,14 +140,9 @@ export class PageAnalyzer {
     path: string,
     actionType: string,
     replaySelector: string
-  ): void {
-    const bp = basePathOf(path);
-    let set = this.generatedSelectorsByBasePath.get(bp);
-    if (!set) {
-      set = new Set();
-      this.generatedSelectorsByBasePath.set(bp, set);
-    }
-    set.add(`${actionType}\0${replaySelector}`);
+  ): Promise<void> {
+    const key = `${basePathOf(path)}\0${actionType}\0${replaySelector}`;
+    return this.store.add("generatedSelectors", key);
   }
 
   /**
@@ -207,17 +159,15 @@ export class PageAnalyzer {
 
   /**
    * Returns true if an equivalent page-scoped finding has already been
-   * recorded during this run.  Both title and description are normalized
-   * to strip variable leading counts so that "3 console error(s): …" and
-   * "5 console error(s): …" are treated as the same finding.
+   * recorded during this run.
    */
   hasReportedPageFinding(
     _path: string,
     title: string,
     description: string
-  ): boolean {
+  ): Promise<boolean> {
     const key = `${PageAnalyzer.normalizeFindingText(title)}\0${PageAnalyzer.normalizeFindingText(description)}`;
-    return this.reportedPageFindingKeys.has(key);
+    return this.store.has("reportedPageFindings", key);
   }
 
   /**
@@ -227,34 +177,35 @@ export class PageAnalyzer {
     _path: string,
     title: string,
     description: string
-  ): void {
+  ): Promise<void> {
     const key = `${PageAnalyzer.normalizeFindingText(title)}\0${PageAnalyzer.normalizeFindingText(description)}`;
-    this.reportedPageFindingKeys.add(key);
+    return this.store.add("reportedPageFindings", key);
   }
 
   /** Check whether a finding with the given stable key has been reported. */
-  hasReportedFindingByKey(key: string): boolean {
-    return this.reportedFindingKeys.has(key);
+  hasReportedFindingByKey(key: string): Promise<boolean> {
+    return this.store.has("reportedFindingKeys", key);
   }
 
   /** Mark a stable finding key as reported. */
-  markReportedFindingByKey(key: string): void {
-    this.reportedFindingKeys.add(key);
+  markReportedFindingByKey(key: string): Promise<void> {
+    return this.store.add("reportedFindingKeys", key);
   }
 
   /**
-   * Check if a finding with this description has already been reported,
-   * regardless of which expectation produced it.
+   * Check if a finding with this description has already been reported.
    */
-  hasReportedDescription(description: string): boolean {
-    return this.reportedDescriptions.has(
+  hasReportedDescription(description: string): Promise<boolean> {
+    return this.store.has(
+      "reportedDescriptions",
       PageAnalyzer.normalizeFindingText(description)
     );
   }
 
   /** Mark a finding description as reported. */
-  markReportedDescription(description: string): void {
-    this.reportedDescriptions.add(
+  markReportedDescription(description: string): Promise<void> {
+    return this.store.add(
+      "reportedDescriptions",
       PageAnalyzer.normalizeFindingText(description)
     );
   }
@@ -263,8 +214,8 @@ export class PageAnalyzer {
    * Check whether full test generation already ran for a page state with the
    * same visible actionable items (by hash).
    */
-  hasGeneratedForActionableHash(hash: string): boolean {
-    return this.generatedActionableHashes.has(hash);
+  hasGeneratedForActionableHash(hash: string): Promise<boolean> {
+    return this.store.has("generatedActionableHashes", hash);
   }
 
   /**
@@ -495,7 +446,7 @@ export class PageAnalyzer {
     // (scaffold resolution, hash computation, page-state creation) when the
     // page has already been covered in this run.
     if (!isHover) {
-      if (this.generatedPaths.has(dedupPath)) {
+      if (await this.store.has("generatedPaths", dedupPath)) {
         logAnalyzer("generate:page-already-covered", {
           sourceTitle: testInteraction.title,
           currentTestInteractionId: normalizedContext.currentTestInteractionId,
@@ -508,7 +459,7 @@ export class PageAnalyzer {
       const actionableHash = await computeActionableHash(
         normalizedContext.actionableItems
       );
-      if (this.generatedActionableHashes.has(actionableHash)) {
+      if (await this.store.has("generatedActionableHashes", actionableHash)) {
         logAnalyzer("generate:actionable-items-already-covered", {
           sourceTitle: testInteraction.title,
           currentTestInteractionId: normalizedContext.currentTestInteractionId,
@@ -577,8 +528,8 @@ export class PageAnalyzer {
     // (Render, which waits for load state) re-run the full generation pass
     // with the complete HTML.
     if (resolvedContext.actionableItems.length > 0) {
-      this.generatedPaths.add(dedupPath);
-      this.generatedActionableHashes.add(actionableHash);
+      await this.store.add("generatedPaths", dedupPath);
+      await this.store.add("generatedActionableHashes", actionableHash);
     }
 
     // If a hover+click navigated to a new page, create a direct navigation

@@ -8,16 +8,23 @@ export async function generateKeyboardAndDisclosureTestInteractions(
 
   // Filter out interactions whose replay selector was already generated
   // under a different URL variant of the same base path.
-  const tests = allTests.filter((test: any) => {
+  const tests: any[] = [];
+  for (const test of allTests) {
     const selector = test.steps?.[0]?.action?.path;
     const actionType = test.steps?.[0]?.action?.actionType;
-    if (!selector || !actionType) return true;
-    return !analyzer.hasGeneratedSelectorForBasePath(
+    if (!selector || !actionType) {
+      tests.push(test);
+      continue;
+    }
+    const alreadyGenerated = await analyzer.hasGeneratedSelectorForBasePath(
       context.currentPath,
       actionType,
       selector
     );
-  });
+    if (!alreadyGenerated) {
+      tests.push(test);
+    }
+  }
 
   const surfaceTitle = `Keyboard: ${context.currentPath}`;
   if (tests.length === 0) {
@@ -71,7 +78,7 @@ export async function generateKeyboardAndDisclosureTestInteractions(
     const selector = test.steps?.[0]?.action?.path;
     const actionType = test.steps?.[0]?.action?.actionType;
     if (selector && actionType) {
-      analyzer.markGeneratedSelectorForBasePath(
+      await analyzer.markGeneratedSelectorForBasePath(
         context.currentPath,
         actionType,
         selector

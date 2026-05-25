@@ -95,7 +95,7 @@ export async function generateHoverFollowUpCases(
   // Skip follow-up generation if this page path was already generated for in
   // this run (the analyzer instance tracks covered paths per run)
   const currentPath = context.currentPath.trim();
-  const pageAlreadyCovered = analyzer.hasGeneratedForPath(currentPath);
+  const pageAlreadyCovered = await analyzer.hasGeneratedForPath(currentPath);
   if (pageAlreadyCovered) {
     console.info("[PageAnalyzer][hover-follow-up] page-already-covered", {
       testInteractionId: context.currentTestInteractionId,
@@ -117,7 +117,7 @@ export async function generateHoverFollowUpCases(
   // the full generateTestInteractions pass.  Registering here would
   // incorrectly block full generation for a page reached via non-hover.
   const actionableHash = await computeActionableHash(context.actionableItems);
-  if (analyzer.hasGeneratedForActionableHash(actionableHash)) {
+  if (await analyzer.hasGeneratedForActionableHash(actionableHash)) {
     console.info(
       "[PageAnalyzer][hover-follow-up] actionable-items-already-covered",
       {
