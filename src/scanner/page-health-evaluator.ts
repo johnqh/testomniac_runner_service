@@ -29,6 +29,7 @@ export interface PageHealthIssue {
     | "duplicate_element"
     | "error_message_visible"
     | "empty_product_page"
+    | "missing_product_image"
     | "missing_stock_info";
   severity: "error" | "warning";
   priority: number;
@@ -345,7 +346,7 @@ export async function evaluatePageHealth(
       if (heights.length >= 3) {
         const avgHeight = heights.reduce((a, b) => a + b, 0) / heights.length;
         const outliers = heights.filter(
-          h => Math.abs(h - avgHeight) > avgHeight * 0.5
+          h => Math.abs(h - avgHeight) > avgHeight * 0.3
         );
         if (outliers.length > 0) {
           found.push({
@@ -870,23 +871,28 @@ export async function evaluatePageHealth(
     // 25. Empty product page — page has product-page indicators but no
     //     actual product content (title, price, or image)
     // =========================================================================
-    const productIndicators = document.querySelectorAll(
-      "[class*='product'], [class*='item-detail'], [itemtype*='schema.org/Product']"
+    const productContainer = document.querySelector(
+      "[class*='product_details'], [class*='ec_details'], .product-details, [class*='product-detail'], [itemtype*='schema.org/Product']"
     );
+    const productArea =
+      productContainer ||
+      document.querySelector("[class*='product'], [class*='item-detail']");
     const hasCartButton = !!document.querySelector(
       "[class*='add_to_cart'], [class*='addtocart'], [class*='add-to-cart'], button[name*='cart']"
     );
-    const isProductPage = productIndicators.length > 0 || hasCartButton;
+    const isProductPage = !!productArea || hasCartButton;
     if (isProductPage) {
-      const hasTitle = !!document.querySelector(
+      // Scope title/price/image checks to the product area when available,
+      // so that a site-level h1 or sidebar image doesn't mask an empty
+      // product content section.
+      const scope = productContainer || document;
+      const hasTitle = !!scope.querySelector(
         "h1, [class*='product_title'], [class*='product-title'], [class*='product-name'], [itemprop='name']"
       );
-      const hasPrice = !!document.querySelector(
-        "[class*='price'], [itemprop='price'], [class*='amount']"
+      const hasPrice = !!scope.querySelector(
+        "[class*='price']:not([class*='price_filter']), [itemprop='price'], [class*='amount']"
       );
-      const hasImage = !!document.querySelector(
-        "[class*='product'] img, [class*='gallery'] img, [itemprop='image'], main img"
-      );
+      const hasImage = !!scope.querySelector("img, [itemprop='image']");
       if (!hasTitle && !hasPrice && !hasImage) {
         found.push({
           type: "empty_product_page",
@@ -897,10 +903,25 @@ export async function evaluatePageHealth(
             "Page has product-page indicators but contains no product title, price, or image",
         });
       }
+
+      // -----------------------------------------------------------------------
+      // 26. Missing product image — product page has title or price but
+      //     no product image at all
+      // -----------------------------------------------------------------------
+      if ((hasTitle || hasPrice) && !hasImage) {
+        found.push({
+          type: "missing_product_image",
+          severity: "warning",
+          priority: 2,
+          title: "Product page has no product image",
+          description:
+            "Product page has title or price but no product image is present",
+        });
+      }
     }
 
     // =========================================================================
-    // 26. Missing stock info — product page with add-to-cart but no
+    // 27. Missing stock info — product page with add-to-cart but no
     //     stock count or availability indicator
     // =========================================================================
     if (isProductPage && hasCartButton) {
