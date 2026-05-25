@@ -9,9 +9,8 @@ import type { AnalyzerContext } from "../types";
  * Navigation interactions never have a dependencyTestInteractionId — they
  * navigate directly via goto.
  *
- * Items are passed through selectRepresentativeItems so that product grids
- * (18 product links with the same structure) produce only a few representative
- * navigations instead of one per product.
+ * Items are deduplicated by relative path.  Action URLs (add-to-cart, etc.)
+ * are not navigated directly but their base page path is discovered.
  */
 export async function generateNavigationTestInteractions(
   analyzer: any,
@@ -42,10 +41,8 @@ export async function generateNavigationTestInteractions(
     // (e.g. "/intent/tweet") are kept — if the site links to a relative
     // path that 404s, that is a genuine broken-link bug.
     if (isExternalAbsoluteUrl(item.href, context.siteOrigin)) return false;
-    // Skip action URLs (e.g. add-to-cart links with side effects)
     const path = extractRelativePath(item.href);
     if (!path) return false;
-    if (isActionUrl(path)) return false;
     // Skip current page
     if (path === context.currentPath) return false;
     return true;
@@ -53,24 +50,29 @@ export async function generateNavigationTestInteractions(
 
   if (navItems.length === 0) return;
 
-  // Apply representative-item dedup with a higher cap than hover/content
-  // surfaces.  Navigation is for page discovery — we need enough variety
-  // to catch bugs on different product pages and utility pages (cart,
-  // account) while still avoiding 18× identical product navigations.
-  const MAX_NAV_REPS_PER_STYLE = 5;
-  const representative = analyzer.selectRepresentativeItems(
-    navItems,
-    MAX_NAV_REPS_PER_STYLE
-  );
-
-  // Deduplicate by relative path
+  // Deduplicate by relative path — no representative-item dedup here.
+  // Navigation is for page discovery: we want to visit ALL distinct pages
+  // to maximise coverage.  The path-level dedup below is sufficient.
   const seenPaths = new Set<string>();
   seenPaths.add(context.currentPath);
 
   const navPaths: string[] = [];
-  for (const item of representative) {
-    const path = extractRelativePath(item.href);
+  for (const item of navItems) {
+    const path = extractRelativePath(item.href!);
     if (!path || seenPaths.has(path)) continue;
+
+    // For action URLs (e.g. /my-cart/?ec_action=addtocart), don't
+    // navigate to the action URL itself (which triggers side effects),
+    // but DO discover the base page path (e.g. /my-cart/).
+    if (isActionUrl(path)) {
+      const basePath = extractBasePath(path);
+      if (basePath && basePath !== "/" && !seenPaths.has(basePath)) {
+        seenPaths.add(basePath);
+        navPaths.push(basePath);
+      }
+      continue;
+    }
+
     seenPaths.add(path);
     navPaths.push(path);
   }
@@ -144,4 +146,18 @@ function extractRelativePath(href: string): string | null {
  */
 function isActionUrl(path: string): boolean {
   return /[?&](ec_action|action|add_to_cart|remove|delete)=/i.test(path);
+}
+
+/**
+ * Extract the base page path from an action URL by stripping the query string.
+ * e.g. "/my-cart/?ec_action=addtocart&model_number=123" → "/my-cart/"
+ */
+function extractBasePath(path: string): string | null {
+  try {
+    const url = new URL(path, "http://placeholder");
+    const base = url.pathname;
+    return base || null;
+  } catch {
+    return null;
+  }
 }

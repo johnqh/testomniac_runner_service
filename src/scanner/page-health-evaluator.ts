@@ -60,12 +60,18 @@ export async function evaluatePageHealth(
     const images = Array.from(document.querySelectorAll("img"));
     const brokenImages: string[] = [];
     for (const img of images) {
-      if (
-        img.complete &&
-        img.naturalWidth === 0 &&
-        img.src &&
-        img.offsetParent !== null
-      ) {
+      const isVisible =
+        img.offsetParent !== null ||
+        window.getComputedStyle(img).display !== "none";
+      if (!img.src || !isVisible) continue;
+
+      // Standard check: loaded but zero natural size
+      const loadedButEmpty = img.complete && img.naturalWidth === 0;
+      // Lazy-load check: src is set but currentSrc is empty (browser
+      // rejected or hasn't fetched — still a broken reference)
+      const lazyBroken = img.complete && img.src && !img.currentSrc;
+
+      if (loadedButEmpty || lazyBroken) {
         const alt = img.alt || img.src.split("/").pop() || "unknown";
         brokenImages.push(alt);
       }
@@ -336,7 +342,7 @@ export async function evaluatePageHealth(
     // 8. Grid/layout inconsistency — product grid items with wildly different heights
     // =========================================================================
     const gridItems = document.querySelectorAll(
-      '[class*="product_li"], .product-card, [class*="product-item"]'
+      '[class*="product_li"], [class*="product-card"], [class*="product-item"], [class*="product_item"], li[class*="product"], [class*="ProductCard"], [class*="productCard"], [itemtype*="schema.org/Product"]'
     );
     if (gridItems.length >= 3) {
       const heights = Array.from(gridItems)
@@ -384,15 +390,21 @@ export async function evaluatePageHealth(
     // =========================================================================
     const filterLinks = Array.from(
       document.querySelectorAll(
-        '[class*="price_filter"] a, [class*="filter_list"] a'
+        '[class*="price_filter"] a, [class*="filter_list"] a, [class*="filter-list"] a, [class*="product_filter"] a, [class*="product-filter"] a, .widget_price_filter a, nav[class*="filter"] a'
       )
     );
     if (filterLinks.length >= 2) {
       let filterSum = 0;
+      const filterCounts: Array<{ label: string; count: number }> = [];
       for (const link of filterLinks) {
         const countMatch = link.textContent?.match(/\((\d+)\)/);
         if (countMatch) {
-          filterSum += parseInt(countMatch[1], 10);
+          const count = parseInt(countMatch[1], 10);
+          filterSum += count;
+          filterCounts.push({
+            label: link.textContent?.trim().slice(0, 40) || "unknown",
+            count,
+          });
         }
       }
       if (
@@ -407,6 +419,39 @@ export async function evaluatePageHealth(
           title: `Filter counts sum (${filterSum}) doesn't match total products (${gridItems.length})`,
           description: `Price filter counts add up to ${filterSum} but ${gridItems.length} products are displayed`,
         });
+      }
+
+      // Per-filter validation: if the current URL has a filter applied,
+      // check whether the claimed count matches actual visible items
+      const urlParams = window.location.search;
+      if (urlParams && gridItems.length > 0) {
+        for (const link of filterLinks) {
+          const href = (link as HTMLAnchorElement).href || "";
+          const countMatch = link.textContent?.match(/\((\d+)\)/);
+          if (!countMatch) continue;
+          // Check if this filter's URL matches the current page URL
+          try {
+            const linkUrl = new URL(href);
+            if (
+              linkUrl.pathname + linkUrl.search ===
+              window.location.pathname + window.location.search
+            ) {
+              const claimed = parseInt(countMatch[1], 10);
+              if (claimed !== gridItems.length) {
+                found.push({
+                  type: "grammar_error",
+                  severity: "warning",
+                  priority: 3,
+                  title: `Active filter claims ${claimed} results but ${gridItems.length} are shown`,
+                  description: `Filter "${link.textContent?.trim().slice(0, 40)}" claims (${claimed}) but page displays ${gridItems.length} product(s)`,
+                });
+              }
+              break;
+            }
+          } catch {
+            /* ignore invalid URLs */
+          }
+        }
       }
     }
 
@@ -782,6 +827,7 @@ export async function evaluatePageHealth(
       /\bsyntax\s*error\b.*\bline\s+\d+/i,
       /\bundefined\s+is\s+not\s+(?:a\s+function|an?\s+object)\b/i,
     ];
+    // Check visible text first
     for (const pattern of errorPatterns) {
       const match = pageText.match(pattern);
       if (match) {
@@ -793,6 +839,33 @@ export async function evaluatePageHealth(
           description: `Page contains visible error text: "${match[0]}"`,
         });
         break;
+      }
+    }
+    // Also check full DOM text (includes hidden elements) for
+    // high-confidence error patterns that indicate broken validation
+    // messages or debug output left in the DOM.
+    const fullDomText = document.body?.textContent || "";
+    if (fullDomText !== pageText) {
+      const hiddenErrorPatterns = [
+        /\b(?:maximum|minimum)\s+(?:purchase|order)\s+amount\s+of\s+0\b/i,
+        /\b(?:maximum|minimum)\s+quantity\s+(?:exceeded|is\s+0|allowed)\b/i,
+        /\b(?:fatal|uncaught)\s+(?:error|exception)\b/i,
+        /\bstack\s*trace\b/i,
+        /\bundefined\s+is\s+not\s+(?:a\s+function|an?\s+object)\b/i,
+      ];
+      for (const pattern of hiddenErrorPatterns) {
+        if (pageText.match(pattern)) continue; // already reported above
+        const match = fullDomText.match(pattern);
+        if (match) {
+          found.push({
+            type: "error_message_visible",
+            severity: "error",
+            priority: 2,
+            title: "Error message present in DOM",
+            description: `Page DOM contains error text (possibly hidden): "${match[0]}"`,
+          });
+          break;
+        }
       }
     }
 

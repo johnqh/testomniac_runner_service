@@ -4325,7 +4325,7 @@ export class PageAnalyzer {
       return false;
     }
 
-    return /\b(variant|option|size|color|colour|style|material|finish|width|length)\b/.test(
+    return /\b(variant|option|size|color|colour|style|material|finish|width|length|currency|language|locale|region|country|sort|order|per\s*page|show|display|view)\b/.test(
       this.semanticText(item)
     );
   }
