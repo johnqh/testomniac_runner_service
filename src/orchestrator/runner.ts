@@ -383,6 +383,67 @@ export async function runTestRun(
         continue;
       }
 
+      // Batch-cancel interactions that the scan mode will skip so we don't
+      // spin through them one-by-one in the main loop (each iteration makes
+      // multiple API round-trips).
+      const effectiveScanMode =
+        config.scanMode ?? (config.quickScan ? "partial" : "full");
+
+      if (effectiveScanMode === "minimum" || effectiveScanMode === "partial") {
+        const skippableRuns: Array<{
+          run: { id: number };
+          reason: string;
+        }> = [];
+
+        for (const entry of runnableSurfaceEntries) {
+          for (const run of entry.eligibleRuns) {
+            const interaction = testInteractions.find(
+              ti => ti.id === run.testInteractionId
+            );
+            if (!interaction) continue;
+
+            if (
+              effectiveScanMode === "minimum" &&
+              interaction.testType !== "navigation"
+            ) {
+              skippableRuns.push({
+                run,
+                reason: "Skipped: minimum scan mode",
+              });
+            } else if (
+              effectiveScanMode === "partial" &&
+              isHoverInteraction(interaction) &&
+              hasNavigationInteractionForSameElement(
+                interaction,
+                testInteractions
+              )
+            ) {
+              skippableRuns.push({
+                run,
+                reason: "Skipped: partial scan mode",
+              });
+            }
+          }
+        }
+
+        if (skippableRuns.length > 0) {
+          logRunner("batch-skip:cancelling", {
+            scanMode: effectiveScanMode,
+            count: skippableRuns.length,
+          });
+          await Promise.all(
+            skippableRuns.map(({ run, reason }) =>
+              api.completeTestInteractionRun(run.id, {
+                status: "cancelled",
+                errorMessage: reason,
+              })
+            )
+          );
+          // Re-fetch after batch cancel to get updated state
+          continue;
+        }
+      }
+
       await waitForCheckpoint("before_test_interaction");
 
       // Check for session expiry and re-login if needed
@@ -423,47 +484,6 @@ export async function runTestRun(
         activeDependencyBranch,
         selectedInteraction: summarizeInteraction(selectedInteraction),
       });
-
-      // Scan mode filtering
-      const effectiveScanMode =
-        config.scanMode ?? (config.quickScan ? "partial" : "full");
-
-      // Minimum mode: only run direct navigation interactions
-      if (effectiveScanMode === "minimum") {
-        if (selectedInteraction.testType !== "navigation") {
-          logRunner("minimum-scan:skipping", {
-            testInteractionRunId: selected.testInteractionRun.id,
-            title: selectedInteraction.title,
-            testType: selectedInteraction.testType,
-          });
-          await api.completeTestInteractionRun(selected.testInteractionRun.id, {
-            status: "cancelled",
-            errorMessage: "Skipped: minimum scan mode",
-          });
-          continue;
-        }
-      }
-
-      // Partial mode: skip hover interactions where a navigation interaction exists
-      if (
-        effectiveScanMode === "partial" &&
-        isHoverInteraction(selectedInteraction) &&
-        hasNavigationInteractionForSameElement(
-          selectedInteraction,
-          testInteractions
-        )
-      ) {
-        logRunner("partial-scan:skipping-hover", {
-          testInteractionRunId: selected.testInteractionRun.id,
-          testInteractionId: selectedInteraction.id,
-          title: selectedInteraction.title,
-        });
-        await api.completeTestInteractionRun(selected.testInteractionRun.id, {
-          status: "cancelled",
-          errorMessage: "Skipped: partial scan mode",
-        });
-        continue;
-      }
 
       const interactionTimeout = 60_000; // 60 seconds max per interaction
       try {
