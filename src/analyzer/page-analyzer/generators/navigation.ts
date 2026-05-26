@@ -45,6 +45,10 @@ export async function generateNavigationTestInteractions(
     if (!path) return false;
     // Skip current page
     if (path === context.currentPath) return false;
+    // Skip paths outside the scan scope boundary
+    if (context.scanScopePath && !path.startsWith(context.scanScopePath)) {
+      return false;
+    }
     return true;
   });
 
