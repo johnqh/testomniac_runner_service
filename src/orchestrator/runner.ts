@@ -430,13 +430,11 @@ export async function runTestRun(
 
       // Minimum mode: only run direct navigation interactions
       if (effectiveScanMode === "minimum") {
-        const isNavigation =
-          selectedInteraction.title.startsWith("Navigate to ") ||
-          selectedInteraction.testType === "navigation";
-        if (!isNavigation) {
+        if (selectedInteraction.testType !== "navigation") {
           logRunner("minimum-scan:skipping", {
             testInteractionRunId: selected.testInteractionRun.id,
             title: selectedInteraction.title,
+            testType: selectedInteraction.testType,
           });
           await api.completeTestInteractionRun(selected.testInteractionRun.id, {
             status: "cancelled",
