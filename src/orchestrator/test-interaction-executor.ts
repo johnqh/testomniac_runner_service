@@ -893,7 +893,8 @@ export async function executeTestInteraction(
       errorText.includes("Debugger is not attached") ||
       errorText.includes("No tab with id") ||
       errorText.includes("non-web page") ||
-      errorText.includes("Inspected target navigated or closed");
+      errorText.includes("Inspected target navigated or closed") ||
+      errorText.includes("Page has no meaningful content after load");
 
     await api.completeTestInteractionRun(testInteractionRun.id, {
       status: isReplayError ? "skipped" : "failed",
