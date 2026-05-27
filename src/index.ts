@@ -110,6 +110,11 @@ export { generateE2ETest, enumerateE2EPaths } from "./generation/e2e";
 // Orchestrator (new)
 export { runTestRun } from "./orchestrator/runner";
 export {
+  runSequenceRun,
+  type SequenceRunConfig,
+  type SequenceRunResult,
+} from "./orchestrator/sequence-runner";
+export {
   executeTestInteraction,
   setClickWaitMs,
 } from "./orchestrator/test-interaction-executor";

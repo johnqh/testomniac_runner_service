@@ -199,6 +199,13 @@ export async function runTestRun(
       );
     }
 
+    // Resolve productId for post-scan persona detection
+    let productId = config.productId;
+    if (!productId) {
+      const runner = await api.getRunner(config.runnerId);
+      productId = runner?.productId;
+    }
+
     // Get the test run to find the bundle run
     const testRun = await api.getTestRun(config.testRunId);
     if (!testRun) {
@@ -613,6 +620,25 @@ export async function runTestRun(
       testRunId: config.testRunId,
       passed: findingsFound === 0,
     });
+
+    // Post-scan: detect personas
+    if (productId) {
+      try {
+        const detectedPersonas = await api.detectPersonas(productId);
+        result.personas = detectedPersonas.map(p => ({
+          id: p.id,
+          title: p.title,
+          description: p.description ?? "",
+        }));
+        if (result.personas.length > 0) {
+          wrappedEvents.onPersonasDetected?.(result.personas);
+        }
+      } catch (err) {
+        wrappedEvents.onError({
+          message: `Persona detection failed: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+    }
 
     return result;
   } catch (error) {

@@ -4,6 +4,7 @@ import type { SizeClass } from "../domain/types";
 export interface RunConfig {
   testRunId: number;
   runnerId: number;
+  productId?: number;
   baseUrl: string;
   sizeClass: SizeClass;
   testEnvironmentId?: number;
@@ -70,6 +71,9 @@ export interface ScanEventHandler {
       }
     >;
   }): void;
+  onPersonasDetected?(
+    personas: Array<{ id: number; title: string; description: string }>
+  ): void;
   onError(error: { message: string }): void;
 }
 
@@ -88,4 +92,5 @@ export interface ScanResult {
       errors: number;
     }
   >;
+  personas?: Array<{ id: number; title: string; description: string }>;
 }

@@ -202,5 +202,8 @@ bun run build
 
 ## Related Packages
 
-- `testomniac_extension`: Chrome-hosted runner client
+- `testomniac_extension`: Chrome-hosted runner client (uses `ChromeAdapter`)
+- `testomniac_runner`: server-side polling worker (uses `PuppeteerAdapter`)
+- `testomniac_runner_mcp`: MCP server for AI-driven browser automation
 - `testomniac_api`: persistence and read APIs
+- `testomniac_types`: shared type definitions

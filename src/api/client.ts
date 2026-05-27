@@ -424,6 +424,10 @@ export class ApiClient {
     return this.get(`/personas?productId=${productId}`);
   }
 
+  detectPersonas(productId: number): Promise<PersonaResponse[]> {
+    return this.post("/personas/detect", { productId });
+  }
+
   createUseCase(
     personaId: number,
     title: string,
@@ -454,6 +458,43 @@ export class ApiClient {
 
   getInputValuesByUseCase(useCaseId: number): Promise<InputValueResponse[]> {
     return this.get(`/input-values?useCaseId=${useCaseId}`);
+  }
+
+  // ===========================================================================
+  // Test Scenario Sequences
+  // ===========================================================================
+
+  getTestScenarioSequence(id: number): Promise<{
+    id: number;
+    testScenarioId: number;
+    testEnvironmentId: number;
+  } | null> {
+    return this.get(`/test-scenario-sequences/${id}`);
+  }
+
+  getSequenceTestInteractions(sequenceId: number): Promise<
+    Array<{
+      id: number;
+      testScenarioSequenceId: number;
+      testInteractionId: number;
+      stepOrder: number;
+    }>
+  > {
+    return this.get(
+      `/test-scenario-sequence-test-interactions?testScenarioSequenceId=${sequenceId}`
+    );
+  }
+
+  getSequenceRun(id: number): Promise<{
+    id: number;
+    testScenarioSequenceId: number;
+    status: string;
+  } | null> {
+    return this.get(`/test-scenario-sequence-runs/${id}`);
+  }
+
+  completeSequenceRun(id: number, payload: { status?: string }): Promise<void> {
+    return this.put(`/test-scenario-sequence-runs/${id}/complete`, payload);
   }
 
   // ===========================================================================
