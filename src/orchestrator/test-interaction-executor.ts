@@ -5,6 +5,7 @@ import {
   FindingPriority,
 } from "@sudobility/testomniac_types";
 import type {
+  EnsureTestRunFindingRequest,
   NetworkLogEntry,
   TestInteractionResponse,
   TestInteractionRunResponse,
@@ -585,6 +586,13 @@ export async function executeTestInteraction(
 
     currentPhase = "evaluating-expectations";
     let reported404Path: string | null = null;
+    const findingItems: EnsureTestRunFindingRequest[] = [];
+    const pendingFindingEvents: Array<{
+      type: string;
+      priority: number;
+      title: string;
+      description: string;
+    }> = [];
     for (const expertise of expertises) {
       for (const group of expectationGroups) {
         const outcomes = expertise.evaluate({
@@ -628,7 +636,7 @@ export async function executeTestInteraction(
               continue;
             }
             const priority = derivePriority(outcome);
-            await api.ensureTestRunFinding({
+            findingItems.push({
               testRunId: testRun.id,
               testInteractionRunId: testInteractionRun.id,
               type: findingType,
@@ -637,7 +645,7 @@ export async function executeTestInteraction(
               description: outcome.observed,
               path: findingPath,
             });
-            events.onFindingCreated({
+            pendingFindingEvents.push({
               type: findingType,
               priority,
               title: findingTitle,
@@ -661,6 +669,12 @@ export async function executeTestInteraction(
         }
       }
     }
+    if (findingItems.length > 0) {
+      await api.ensureTestRunFindingBatch(findingItems);
+    }
+    for (const evt of pendingFindingEvents) {
+      events.onFindingCreated(evt);
+    }
 
     // Page health evaluation — browser-side checks for broken images, overlaps, etc.
     // These are page-scoped: the same broken images and overlaps will be found
@@ -682,6 +696,13 @@ export async function executeTestInteraction(
     } else
       try {
         const healthIssues = await evaluatePageHealth(adapter);
+        const healthFindingItems: EnsureTestRunFindingRequest[] = [];
+        const healthFindingEvents: Array<{
+          type: string;
+          priority: number;
+          title: string;
+          description: string;
+        }> = [];
         for (const issue of healthIssues) {
           const healthKey = `page-health:${issue.type}:${currentPath}`;
           if (await analyzer?.hasReportedFindingByKey(healthKey)) {
@@ -690,7 +711,7 @@ export async function executeTestInteraction(
           const findingTitle = `[page-health] ${issue.title}`;
           const findingType = issue.severity === "error" ? "error" : "warning";
           const priority = derivePageHealthPriority(issue.severity);
-          await api.ensureTestRunFinding({
+          healthFindingItems.push({
             testRunId: testRun.id,
             testInteractionRunId: testInteractionRun.id,
             type: findingType,
@@ -699,13 +720,19 @@ export async function executeTestInteraction(
             description: issue.description,
             path: findingPath,
           });
-          events.onFindingCreated({
+          healthFindingEvents.push({
             type: findingType,
             priority,
             title: findingTitle,
             description: issue.description,
           });
           await analyzer?.markReportedFindingByKey(healthKey);
+        }
+        if (healthFindingItems.length > 0) {
+          await api.ensureTestRunFindingBatch(healthFindingItems);
+        }
+        for (const evt of healthFindingEvents) {
+          events.onFindingCreated(evt);
         }
       } catch (healthError) {
         logExecutor("page-health:error", {
