@@ -1004,6 +1004,14 @@ export class ApiClient {
     return this.put(`/test-surface-runs/${id}/complete`, payload);
   }
 
+  completeTestSurfaceRunBatch(
+    ids: number[],
+    payload: { status?: string }
+  ): Promise<void> {
+    if (ids.length === 0) return Promise.resolve();
+    return this.put("/test-surface-runs/complete-batch", { ids, ...payload });
+  }
+
   // ===========================================================================
   // Test Surface Bundle Runs
   // ===========================================================================

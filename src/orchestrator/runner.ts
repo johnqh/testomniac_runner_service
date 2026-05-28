@@ -381,21 +381,24 @@ export async function runTestRun(
           );
         }
         // All open surface runs have zero pending interactions — complete them
-        for (const surfaceRun of openSurfaceRuns) {
-          const hasPending = pendingInteractionRunsBySurface.some(
-            entry =>
-              entry.surfaceRun.id === surfaceRun.id &&
-              entry.allPendingRuns.length > 0
-          );
-          if (!hasPending) {
-            logRunner("surface-runs:auto-completing", {
-              surfaceRunId: surfaceRun.id,
-              reason: "no pending interaction runs",
-            });
-            await api.completeTestSurfaceRun(surfaceRun.id, {
-              status: "completed",
-            });
-          }
+        const completableIds = openSurfaceRuns
+          .filter(
+            surfaceRun =>
+              !pendingInteractionRunsBySurface.some(
+                entry =>
+                  entry.surfaceRun.id === surfaceRun.id &&
+                  entry.allPendingRuns.length > 0
+              )
+          )
+          .map(sr => sr.id);
+        if (completableIds.length > 0) {
+          logRunner("surface-runs:auto-completing-batch", {
+            count: completableIds.length,
+            reason: "no pending interaction runs",
+          });
+          await api.completeTestSurfaceRunBatch(completableIds, {
+            status: "completed",
+          });
         }
         continue;
       }
@@ -585,10 +588,11 @@ export async function runTestRun(
     const remainingSurfaceRuns = await api.getOpenTestSurfaceRuns(
       testRun.testSurfaceBundleRunId
     );
-    for (const surfaceRun of remainingSurfaceRuns) {
-      await api.completeTestSurfaceRun(surfaceRun.id, {
-        status: "completed",
-      });
+    if (remainingSurfaceRuns.length > 0) {
+      await api.completeTestSurfaceRunBatch(
+        remainingSurfaceRuns.map(sr => sr.id),
+        { status: "completed" }
+      );
     }
 
     // All surfaces done — mark bundle run and test run completed
