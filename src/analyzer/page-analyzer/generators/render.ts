@@ -8,9 +8,10 @@ export async function generateRenderTestInteractions(
     context;
   const surfaceTitle = `Render: ${context.currentPath}`;
 
-  const surface = await api.ensureTestSurface(
+  const { surface, surfaceRun } = await api.ensureTestSurfaceWithRun({
     runnerId,
-    {
+    testEnvironmentId,
+    testSurface: {
       title: surfaceTitle,
       description: `Render validation for ${context.currentPath}`,
       startingPageStateId: context.currentPageStateId,
@@ -20,19 +21,14 @@ export async function generateRenderTestInteractions(
       surface_tags: ["render"],
       uid,
     },
-    testEnvironmentId
-  );
+    testSurfaceBundleId: bundleRun.testSurfaceBundleId,
+    testSurfaceBundleRunId: bundleRun.id,
+  });
+  analyzer.invalidateSurfacesCache();
   context.events.onTestSurfaceCreated({
     surfaceId: surface.id,
     title: surface.title,
   });
-
-  await api.ensureBundleSurfaceLink(bundleRun.testSurfaceBundleId, surface.id);
-  const surfaceRun = await analyzer.ensureSurfaceRun(
-    api,
-    surface.id,
-    bundleRun.id
-  );
 
   const testInteraction = analyzer.buildRenderTestInteraction(
     context.currentPath,

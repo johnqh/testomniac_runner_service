@@ -16,9 +16,10 @@ export async function generateSemanticJourneyTestInteractions(
   }
 
   const { api, runnerId, testEnvironmentId, bundleRun } = context;
-  const surface = await api.ensureTestSurface(
+  const { surface, surfaceRun } = await api.ensureTestSurfaceWithRun({
     runnerId,
-    {
+    testEnvironmentId,
+    testSurface: {
       title: surfaceTitle,
       description: `Semantic multi-step journeys from ${context.currentPath}`,
       startingPageStateId: context.currentPageStateId,
@@ -28,19 +29,14 @@ export async function generateSemanticJourneyTestInteractions(
       surface_tags: ["e2e", "semantic-journey"],
       uid: context.uid,
     },
-    testEnvironmentId
-  );
+    testSurfaceBundleId: bundleRun.testSurfaceBundleId,
+    testSurfaceBundleRunId: bundleRun.id,
+  });
+  analyzer.invalidateSurfacesCache();
   context.events.onTestSurfaceCreated({
     surfaceId: surface.id,
     title: surface.title,
   });
-
-  await api.ensureBundleSurfaceLink(bundleRun.testSurfaceBundleId, surface.id);
-  const surfaceRun = await analyzer.ensureSurfaceRun(
-    api,
-    surface.id,
-    bundleRun.id
-  );
 
   const batchItems: BatchTestInteractionItem[] = journeys.map(
     (journey: any) => ({

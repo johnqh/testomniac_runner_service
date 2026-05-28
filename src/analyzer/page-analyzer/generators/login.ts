@@ -24,9 +24,10 @@ export async function generateLoginTestInteractions(
   const { api, runnerId, testEnvironmentId, sizeClass, uid, bundleRun } =
     context;
 
-  const surface = await api.ensureTestSurface(
+  const { surface, surfaceRun } = await api.ensureTestSurfaceWithRun({
     runnerId,
-    {
+    testEnvironmentId,
+    testSurface: {
       title: surfaceTitle,
       description: `Login flow tests for ${context.currentPath}`,
       startingPageStateId: context.currentPageStateId,
@@ -36,19 +37,14 @@ export async function generateLoginTestInteractions(
       surface_tags: ["login", "auth"],
       uid,
     },
-    testEnvironmentId
-  );
+    testSurfaceBundleId: bundleRun.testSurfaceBundleId,
+    testSurfaceBundleRunId: bundleRun.id,
+  });
+  analyzer.invalidateSurfacesCache();
   context.events.onTestSurfaceCreated({
     surfaceId: surface.id,
     title: surface.title,
   });
-
-  await api.ensureBundleSurfaceLink(bundleRun.testSurfaceBundleId, surface.id);
-  const surfaceRun = await analyzer.ensureSurfaceRun(
-    api,
-    surface.id,
-    bundleRun.id
-  );
 
   const desiredKeys: string[] = [];
   let previousInteractionId: number | undefined;

@@ -789,6 +789,19 @@ export class ApiClient {
     return this.post("/test-surfaces", body);
   }
 
+  ensureTestSurfaceWithRun(params: {
+    runnerId: number;
+    testEnvironmentId?: number;
+    testSurface: TestSurface;
+    testSurfaceBundleId: number;
+    testSurfaceBundleRunId: number;
+  }): Promise<{
+    surface: TestSurfaceResponse;
+    surfaceRun: TestSurfaceRunResponse;
+  }> {
+    return this.post("/test-surfaces/ensure-with-run", params);
+  }
+
   ensureTestInteraction(
     runnerId: number,
     testSurfaceId: number,
@@ -821,6 +834,14 @@ export class ApiClient {
 
   retireTestInteractions(testInteractionIds: number[]): Promise<void> {
     return this.put("/test-interactions/retire", { testInteractionIds });
+  }
+
+  reconcileTestInteractions(params: {
+    testSurfaceId: number;
+    desiredKeys: string[];
+    dependencyTestInteractionId?: number;
+  }): Promise<{ retiredIds: number[] }> {
+    return this.post("/test-interactions/reconcile", params);
   }
 
   ensureBundleSurfaceLink(

@@ -37,9 +37,10 @@ export async function generateVariantTestInteractions(
   }
 
   const { api, runnerId, testEnvironmentId, bundleRun } = context;
-  const surface = await api.ensureTestSurface(
+  const { surface, surfaceRun } = await api.ensureTestSurfaceWithRun({
     runnerId,
-    {
+    testEnvironmentId,
+    testSurface: {
       title: surfaceTitle,
       description: `Variant and option state checks for ${context.currentPath}`,
       startingPageStateId: context.currentPageStateId,
@@ -49,19 +50,14 @@ export async function generateVariantTestInteractions(
       surface_tags: ["variant", "option"],
       uid: context.uid,
     },
-    testEnvironmentId
-  );
+    testSurfaceBundleId: bundleRun.testSurfaceBundleId,
+    testSurfaceBundleRunId: bundleRun.id,
+  });
+  analyzer.invalidateSurfacesCache();
   context.events.onTestSurfaceCreated({
     surfaceId: surface.id,
     title: surface.title,
   });
-
-  await api.ensureBundleSurfaceLink(bundleRun.testSurfaceBundleId, surface.id);
-  const surfaceRun = await analyzer.ensureSurfaceRun(
-    api,
-    surface.id,
-    bundleRun.id
-  );
 
   const batchItems: BatchTestInteractionItem[] = [];
   for (const test of tests) {

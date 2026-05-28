@@ -4,6 +4,7 @@ import type {
   ActionableItem,
   SizeClass,
   TestSurfaceRunResponse,
+  TestSurfaceResponse,
   ActionableItemResponse,
   FormInfo,
   FormField,
@@ -109,9 +110,25 @@ function basePathOf(raw: string): string {
  */
 export class PageAnalyzer {
   private store: DedupStore;
+  private surfacesCache: TestSurfaceResponse[] | null = null;
 
   constructor(dedupStore?: DedupStore) {
     this.store = dedupStore ?? new InMemoryDedupStore();
+  }
+
+  private async getCachedSurfaces(
+    context: AnalyzerContext
+  ): Promise<TestSurfaceResponse[]> {
+    if (!this.surfacesCache) {
+      this.surfacesCache = await context.api.getTestSurfacesByRunner(
+        context.runnerId
+      );
+    }
+    return this.surfacesCache;
+  }
+
+  private invalidateSurfacesCache(): void {
+    this.surfacesCache = null;
   }
 
   /** Check whether generation already happened for a given path in this run. */
@@ -629,58 +646,39 @@ export class PageAnalyzer {
       dependencyTestInteractionId?: number;
     }
   ): Promise<void> {
-    const surface =
-      params.surfaceId != null
-        ? { id: params.surfaceId, title: params.surfaceTitle }
-        : await this.findExistingSurfaceByTitle(context, params.surfaceTitle);
-    if (!surface) {
-      logAnalyzer("reconcile:surface-missing", {
-        requestedSurfaceId: params.surfaceId ?? null,
-        requestedSurfaceTitle: params.surfaceTitle,
-        dependencyTestInteractionId: params.dependencyTestInteractionId ?? null,
-        desiredKeysCount: params.desiredKeys.length,
-      });
-      return;
+    let surfaceId: number | undefined;
+    if (params.surfaceId != null) {
+      surfaceId = params.surfaceId;
+    } else {
+      const surface = await this.findExistingSurfaceByTitle(
+        context,
+        params.surfaceTitle
+      );
+      if (!surface) {
+        logAnalyzer("reconcile:surface-missing", {
+          requestedSurfaceId: params.surfaceId ?? null,
+          requestedSurfaceTitle: params.surfaceTitle,
+          dependencyTestInteractionId:
+            params.dependencyTestInteractionId ?? null,
+          desiredKeysCount: params.desiredKeys.length,
+        });
+        return;
+      }
+      surfaceId = surface.id;
     }
 
-    const existing = await context.api.getTestInteractionsByTestSurface(
-      surface.id,
-      true
-    );
-    const desiredKeys = new Set(
-      params.desiredKeys.map(key => key.trim()).filter(Boolean)
-    );
-    const obsoleteIds = existing
-      .filter(testInteraction => {
-        const isGenerated = Boolean((testInteraction as any).isGenerated);
-        const isActive = (testInteraction as any).isActive !== false;
-        if (!isGenerated || !isActive) return false;
-        if (
-          (testInteraction.dependencyTestInteractionId ?? null) !==
-          (params.dependencyTestInteractionId ?? null)
-        ) {
-          return false;
-        }
-        const existingKey = this.getPersistedGeneratedKey(testInteraction);
-        return !existingKey || !desiredKeys.has(existingKey);
-      })
-      .map(testInteraction => testInteraction.id);
-
-    logAnalyzer("reconcile:evaluated", {
-      surfaceId: surface.id,
-      surfaceTitle: surface.title,
-      dependencyTestInteractionId: params.dependencyTestInteractionId ?? null,
-      desiredKeysCount: desiredKeys.size,
-      existingCount: existing.length,
-      obsoleteIds,
+    const result = await context.api.reconcileTestInteractions({
+      testSurfaceId: surfaceId,
+      desiredKeys: params.desiredKeys,
+      dependencyTestInteractionId: params.dependencyTestInteractionId,
     });
 
-    if (obsoleteIds.length === 0) return;
-    await context.api.retireTestInteractions(obsoleteIds);
-    logAnalyzer("reconcile:retired", {
-      surfaceId: surface.id,
-      surfaceTitle: surface.title,
-      obsoleteIds,
+    logAnalyzer("reconcile:completed", {
+      surfaceId,
+      surfaceTitle: params.surfaceTitle,
+      dependencyTestInteractionId: params.dependencyTestInteractionId ?? null,
+      desiredKeysCount: params.desiredKeys.length,
+      retiredIds: result.retiredIds,
     });
   }
 
@@ -688,9 +686,7 @@ export class PageAnalyzer {
     context: AnalyzerContext,
     title: string
   ): Promise<{ id: number; title: string } | null> {
-    const surfaces = await context.api.getTestSurfacesByRunner(
-      context.runnerId
-    );
+    const surfaces = await this.getCachedSurfaces(context);
     const surface = surfaces.find(candidate => candidate.title === title);
     return surface ? { id: surface.id, title: surface.title } : null;
   }

@@ -24,9 +24,10 @@ export async function generateContentTestInteractions(
     });
     return;
   }
-  const surface = await api.ensureTestSurface(
+  const { surface, surfaceRun } = await api.ensureTestSurfaceWithRun({
     runnerId,
-    {
+    testEnvironmentId,
+    testSurface: {
       title: surfaceTitle,
       description: `Tests for page content at ${context.currentPath}`,
       startingPageStateId: context.currentPageStateId,
@@ -36,19 +37,14 @@ export async function generateContentTestInteractions(
       surface_tags: ["page-content"],
       uid,
     },
-    testEnvironmentId
-  );
+    testSurfaceBundleId: bundleRun.testSurfaceBundleId,
+    testSurfaceBundleRunId: bundleRun.id,
+  });
+  analyzer.invalidateSurfacesCache();
   context.events.onTestSurfaceCreated({
     surfaceId: surface.id,
     title: surface.title,
   });
-
-  await api.ensureBundleSurfaceLink(bundleRun.testSurfaceBundleId, surface.id);
-  const surfaceRun = await analyzer.ensureSurfaceRun(
-    api,
-    surface.id,
-    bundleRun.id
-  );
 
   const desiredKeys: string[] = [];
   const batchItems: BatchTestInteractionItem[] = [];

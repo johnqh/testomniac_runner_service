@@ -15,9 +15,10 @@ export async function generateE2ETestInteractions(
 
   const { api, runnerId, testEnvironmentId, sizeClass, uid, bundleRun } =
     context;
-  const surface = await api.ensureTestSurface(
+  const { surface, surfaceRun } = await api.ensureTestSurfaceWithRun({
     runnerId,
-    {
+    testEnvironmentId,
+    testSurface: {
       title: surfaceTitle,
       description: `Dependency-derived journeys reaching ${context.currentPath}`,
       startingPageStateId: context.currentPageStateId,
@@ -27,19 +28,14 @@ export async function generateE2ETestInteractions(
       surface_tags: ["e2e"],
       uid,
     },
-    testEnvironmentId
-  );
+    testSurfaceBundleId: bundleRun.testSurfaceBundleId,
+    testSurfaceBundleRunId: bundleRun.id,
+  });
+  analyzer.invalidateSurfacesCache();
   context.events.onTestSurfaceCreated({
     surfaceId: surface.id,
     title: surface.title,
   });
-
-  await api.ensureBundleSurfaceLink(bundleRun.testSurfaceBundleId, surface.id);
-  const surfaceRun = await analyzer.ensureSurfaceRun(
-    api,
-    surface.id,
-    bundleRun.id
-  );
 
   const e2e = analyzer.buildE2ETestInteraction(
     context.currentPath,

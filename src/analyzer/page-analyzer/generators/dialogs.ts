@@ -49,9 +49,10 @@ export async function generateDialogLifecycleTestInteractions(
   );
 
   const { api, runnerId, testEnvironmentId, bundleRun } = context;
-  const surface = await api.ensureTestSurface(
+  const { surface, surfaceRun } = await api.ensureTestSurfaceWithRun({
     runnerId,
-    {
+    testEnvironmentId,
+    testSurface: {
       title: surfaceTitle,
       description: `Dialog lifecycle checks for ${context.currentPath}`,
       startingPageStateId: context.currentPageStateId,
@@ -61,19 +62,14 @@ export async function generateDialogLifecycleTestInteractions(
       surface_tags: ["dialog"],
       uid: context.uid,
     },
-    testEnvironmentId
-  );
+    testSurfaceBundleId: bundleRun.testSurfaceBundleId,
+    testSurfaceBundleRunId: bundleRun.id,
+  });
+  analyzer.invalidateSurfacesCache();
   context.events.onTestSurfaceCreated({
     surfaceId: surface.id,
     title: surface.title,
   });
-
-  await api.ensureBundleSurfaceLink(bundleRun.testSurfaceBundleId, surface.id);
-  const surfaceRun = await analyzer.ensureSurfaceRun(
-    api,
-    surface.id,
-    bundleRun.id
-  );
 
   const desiredKeys = tests.map((test: TestInteraction) =>
     analyzer.getGeneratedKey(test)
