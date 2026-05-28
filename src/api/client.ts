@@ -847,10 +847,7 @@ export class ApiClient {
       testEnvironmentId,
       testSurface,
     };
-    const result = await this.post<TestSurfaceResponse>(
-      "/test-surfaces",
-      body
-    );
+    const result = await this.post<TestSurfaceResponse>("/test-surfaces", body);
     this.invalidateSurfacesCache();
     return result;
   }
@@ -913,9 +910,7 @@ export class ApiClient {
     return result;
   }
 
-  async retireTestInteractions(
-    testInteractionIds: number[]
-  ): Promise<void> {
+  async retireTestInteractions(testInteractionIds: number[]): Promise<void> {
     await this.put("/test-interactions/retire", { testInteractionIds });
     this.invalidateInteractionsCache();
   }
@@ -1088,9 +1083,7 @@ export class ApiClient {
     );
   }
 
-  getRunnerState(
-    bundleRunId: number
-  ): Promise<{
+  getRunnerState(bundleRunId: number): Promise<{
     openSurfaceRuns: TestSurfaceRunResponse[];
     pendingInteractionRuns: BatchTestInteractionRunsResponse;
   }> {

@@ -876,23 +876,6 @@ type PendingInteractionRunsBySurface = {
   allPendingRuns: TestInteractionRunResponse[];
 };
 
-async function loadPendingInteractionRuns(
-  api: ApiClient,
-  openSurfaceRuns: TestSurfaceRunResponse[]
-): Promise<PendingInteractionRunsBySurface[]> {
-  if (openSurfaceRuns.length === 0) return [];
-  const ids = openSurfaceRuns.map(sr => sr.id);
-  const batchResult = await api.getOpenTestInteractionRunsBatch(ids);
-  return openSurfaceRuns.map(surfaceRun => {
-    const allPendingRuns = batchResult[String(surfaceRun.id)] ?? [];
-    return {
-      surfaceRun,
-      eligibleRuns: allPendingRuns.filter(r => !r.blocked),
-      allPendingRuns,
-    };
-  });
-}
-
 function selectNextInteractionAcrossBundle(
   runnableSurfaceEntries: PendingInteractionRunsBySurface[],
   testSurfaces: TestSurfaceResponse[],
