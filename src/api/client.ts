@@ -1079,6 +1079,15 @@ export class ApiClient {
       `/test-surface-runs?bundleRunId=${bundleRunId}&status=pending`
     );
   }
+
+  getRunnerState(
+    bundleRunId: number
+  ): Promise<{
+    openSurfaceRuns: TestSurfaceRunResponse[];
+    pendingInteractionRuns: BatchTestInteractionRunsResponse;
+  }> {
+    return this.get(`/runner-state?bundleRunId=${bundleRunId}`);
+  }
 }
 
 // Singleton instance

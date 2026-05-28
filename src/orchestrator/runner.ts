@@ -311,9 +311,11 @@ export async function runTestRun(
     while (true) {
       await waitForCheckpoint("before_surface");
 
-      const openSurfaceRuns = await api.getOpenTestSurfaceRuns(
+      // Single consolidated call replaces getOpenTestSurfaceRuns + loadPendingInteractionRuns
+      const runnerState = await api.getRunnerState(
         testRun.testSurfaceBundleRunId
       );
+      const openSurfaceRuns = runnerState.openSurfaceRuns;
       logRunner("surface-runs:open", {
         bundleRunId: testRun.testSurfaceBundleRunId,
         count: openSurfaceRuns.length,
@@ -328,10 +330,16 @@ export async function runTestRun(
         config.runnerId
       );
 
-      const pendingInteractionRunsBySurface = await loadPendingInteractionRuns(
-        api,
-        openSurfaceRuns
-      );
+      const pendingInteractionRunsBySurface: PendingInteractionRunsBySurface[] =
+        openSurfaceRuns.map(surfaceRun => {
+          const allPendingRuns =
+            runnerState.pendingInteractionRuns[String(surfaceRun.id)] ?? [];
+          return {
+            surfaceRun,
+            eligibleRuns: allPendingRuns.filter(r => !r.blocked),
+            allPendingRuns,
+          };
+        });
 
       const runnableSurfaceEntries = pendingInteractionRunsBySurface.filter(
         entry => entry.eligibleRuns.length > 0
