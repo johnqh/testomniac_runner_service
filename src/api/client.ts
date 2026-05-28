@@ -566,7 +566,7 @@ export class ApiClient {
       return cached.data;
     }
     const data = await this.get<TestInteractionResponse[]>(
-      `/test-interactions?runnerId=${runnerId}`
+      `/test-interactions?runnerId=${runnerId}&slim=true`
     );
     this.interactionsCache.set(runnerId, {
       data,
