@@ -367,6 +367,14 @@ export class ApiClient {
     return this.get(`/page-states?pageId=${pageId}`);
   }
 
+  getPageStatesBatch(
+    pageIds: number[]
+  ): Promise<Record<string, PageStateResponse[]>> {
+    if (pageIds.length === 0) return Promise.resolve({});
+    const ids = pageIds.join(",");
+    return this.get(`/page-states?pageIds=${ids}`);
+  }
+
   createPageState(params: CreatePageStateRequest): Promise<PageStateResponse> {
     return this.post("/page-states", params);
   }

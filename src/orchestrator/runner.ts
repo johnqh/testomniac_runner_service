@@ -157,15 +157,17 @@ export async function runTestRun(
         : page.testEnvironmentId === testEnvironmentId
     );
 
-    await Promise.all(
-      relevantPages.map(async page => {
-        pageIdsFound.add(page.id);
-        const pageStates = await api.getPageStates(page.id);
-        for (const pageState of pageStates) {
+    const relevantPageIds = relevantPages.map(page => page.id);
+    for (const id of relevantPageIds) pageIdsFound.add(id);
+
+    if (relevantPageIds.length > 0) {
+      const batchResult = await api.getPageStatesBatch(relevantPageIds);
+      for (const states of Object.values(batchResult)) {
+        for (const pageState of states) {
           pageStateIdsFound.add(pageState.id);
         }
-      })
-    );
+      }
+    }
   }
 
   async function waitForCheckpoint(checkpoint: RunCheckpoint): Promise<void> {
