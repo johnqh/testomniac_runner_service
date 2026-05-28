@@ -65,6 +65,8 @@ import type {
   InsertTestSurfaceRequest,
   InsertTestInteractionRequest,
   BatchTestInteractionRunsResponse,
+  BatchTestInteractionItem,
+  BatchTestInteractionResult,
 } from "@sudobility/testomniac_types";
 
 type CompleteRunPayload = CompleteTestRunRequest;
@@ -572,6 +574,13 @@ export class ApiClient {
     return this.post("/test-run-findings/ensure", params);
   }
 
+  ensureTestRunFindingBatch(
+    items: EnsureTestRunFindingRequest[]
+  ): Promise<TestRunFindingResponse[]> {
+    if (items.length === 0) return Promise.resolve([]);
+    return this.post("/test-run-findings/ensure-batch", { items });
+  }
+
   // ===========================================================================
   // Expertise
   // ===========================================================================
@@ -650,6 +659,13 @@ export class ApiClient {
     params: FindOrCreateScaffoldRequest
   ): Promise<ScaffoldResponse> {
     return this.post("/scaffolds", params);
+  }
+
+  findOrCreateScaffoldBatch(
+    items: FindOrCreateScaffoldRequest[]
+  ): Promise<ScaffoldResponse[]> {
+    if (items.length === 0) return Promise.resolve([]);
+    return this.post("/scaffolds/batch", { items });
   }
 
   getScaffolds(runnerId: number): Promise<ScaffoldResponse[]> {
@@ -789,6 +805,18 @@ export class ApiClient {
       existingTestInteractionId,
     };
     return this.post("/test-interactions", body);
+  }
+
+  ensureTestInteractionBatch(
+    items: BatchTestInteractionItem[]
+  ): Promise<BatchTestInteractionResult[]> {
+    if (items.length === 0) return Promise.resolve([]);
+    return this.post("/test-interactions/batch", {
+      items: items.map(item => ({
+        ...item,
+        isGenerated: true,
+      })),
+    });
   }
 
   retireTestInteractions(testInteractionIds: number[]): Promise<void> {
