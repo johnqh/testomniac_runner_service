@@ -197,6 +197,17 @@ export class ApiClient {
     );
   }
 
+  completeTestInteractionRunBatch(
+    ids: number[],
+    payload: { status?: string; errorMessage?: string }
+  ): Promise<void> {
+    if (ids.length === 0) return Promise.resolve();
+    return this.put("/test-interaction-runs/complete-batch", {
+      ids,
+      ...payload,
+    });
+  }
+
   clearSupersededFindings(testInteractionRunId: number): Promise<void> {
     return this.request<void>(
       "DELETE",

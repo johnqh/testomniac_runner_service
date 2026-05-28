@@ -440,13 +440,10 @@ export async function runTestRun(
             scanMode: effectiveScanMode,
             count: skippableRuns.length,
           });
-          await Promise.all(
-            skippableRuns.map(({ run, reason }) =>
-              api.completeTestInteractionRun(run.id, {
-                status: "cancelled",
-                errorMessage: reason,
-              })
-            )
+          const reason = skippableRuns[0]?.reason ?? "Skipped by scan mode";
+          await api.completeTestInteractionRunBatch(
+            skippableRuns.map(({ run }) => run.id),
+            { status: "cancelled", errorMessage: reason }
           );
           // Re-fetch after batch cancel to get updated state
           continue;
