@@ -64,6 +64,7 @@ import type {
   TestSurfaceResponse,
   InsertTestSurfaceRequest,
   InsertTestInteractionRequest,
+  BatchTestInteractionRunsResponse,
 } from "@sudobility/testomniac_types";
 
 type CompleteRunPayload = CompleteTestRunRequest;
@@ -921,6 +922,15 @@ export class ApiClient {
   ): Promise<TestInteractionRunResponse[]> {
     return this.get(
       `/test-interaction-runs?testSurfaceRunId=${testSurfaceRunId}&status=pending&includeBlocked=${includeBlocked ? "true" : "false"}`
+    );
+  }
+
+  getOpenTestInteractionRunsBatch(
+    testSurfaceRunIds: number[]
+  ): Promise<BatchTestInteractionRunsResponse> {
+    const ids = testSurfaceRunIds.join(",");
+    return this.get(
+      `/test-interaction-runs?testSurfaceRunIds=${ids}&status=pending`
     );
   }
 
