@@ -1,4 +1,7 @@
-import type { TestInteraction } from "@sudobility/testomniac_types";
+import type {
+  BatchTestInteractionItem,
+  TestInteraction,
+} from "@sudobility/testomniac_types";
 import { matchesActionableItemSelector } from "../../../browser/replay-selector";
 import { computeActionableHash } from "../../../browser/page-utils";
 import type { AnalyzerContext } from "../types";
@@ -169,6 +172,7 @@ export async function generateHoverFollowUpCases(
     dependencyTestInteractionId: context.currentTestInteractionId,
   });
 
+  const batchItems: BatchTestInteractionItem[] = [];
   for (const item of revealedItems) {
     const nextHover = analyzer.buildHoverTestInteraction(
       item,
@@ -178,15 +182,15 @@ export async function generateHoverFollowUpCases(
       context.currentPageStateId,
       context.currentTestInteractionId
     );
-    const tc = await context.api.ensureTestInteraction(
-      context.runnerId,
-      context.currentTestSurfaceId,
-      nextHover,
-      context.testEnvironmentId
-    );
-    await context.api.createTestInteractionRun({
-      testInteractionId: tc.id,
-      testSurfaceRunId: context.currentSurfaceRunId ?? undefined,
+    batchItems.push({
+      runnerId: context.runnerId,
+      testSurfaceId: context.currentTestSurfaceId,
+      testInteraction: nextHover,
+      testEnvironmentId: context.testEnvironmentId,
+      testSurfaceRunId: context.currentSurfaceRunId ?? 0,
     });
+  }
+  if (batchItems.length > 0) {
+    await context.api.ensureTestInteractionBatch(batchItems);
   }
 }

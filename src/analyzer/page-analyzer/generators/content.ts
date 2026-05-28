@@ -1,3 +1,4 @@
+import type { BatchTestInteractionItem } from "@sudobility/testomniac_types";
 import { buildReplaySelectorFromActionableItem } from "../../../browser/replay-selector";
 import type { AnalyzerContext } from "../types";
 
@@ -50,6 +51,7 @@ export async function generateContentTestInteractions(
   );
 
   const desiredKeys: string[] = [];
+  const batchItems: BatchTestInteractionItem[] = [];
   for (const item of contentItems) {
     // Skip interactions for shared layout elements already tested under
     // a different URL variant of the same base path.
@@ -86,14 +88,11 @@ export async function generateContentTestInteractions(
             context.currentTestInteractionId
           );
     desiredKeys.push(analyzer.getGeneratedKey(testInteraction));
-    const tc = await api.ensureTestInteraction(
+    batchItems.push({
       runnerId,
-      surface.id,
+      testSurfaceId: surface.id,
       testInteraction,
-      testEnvironmentId
-    );
-    await api.createTestInteractionRun({
-      testInteractionId: tc.id,
+      testEnvironmentId,
       testSurfaceRunId: surfaceRun.id,
     });
     await analyzer.markGeneratedSelectorForBasePath(
@@ -101,6 +100,9 @@ export async function generateContentTestInteractions(
       actionType,
       replaySelector
     );
+  }
+  if (batchItems.length > 0) {
+    await api.ensureTestInteractionBatch(batchItems);
   }
 
   await analyzer.reconcileGeneratedSurfaceElements(context, {

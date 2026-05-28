@@ -1,4 +1,7 @@
-import type { TestInteraction } from "@sudobility/testomniac_types";
+import type {
+  BatchTestInteractionItem,
+  TestInteraction,
+} from "@sudobility/testomniac_types";
 import type { AnalyzerContext } from "../types";
 
 export async function generateDialogLifecycleTestInteractions(
@@ -75,17 +78,17 @@ export async function generateDialogLifecycleTestInteractions(
   const desiredKeys = tests.map((test: TestInteraction) =>
     analyzer.getGeneratedKey(test)
   );
-  for (const test of tests) {
-    const tc = await api.ensureTestInteraction(
+  const batchItems: BatchTestInteractionItem[] = tests.map(
+    (test: TestInteraction) => ({
       runnerId,
-      surface.id,
-      test,
-      testEnvironmentId
-    );
-    await api.createTestInteractionRun({
-      testInteractionId: tc.id,
+      testSurfaceId: surface.id,
+      testInteraction: test,
+      testEnvironmentId,
       testSurfaceRunId: surfaceRun.id,
-    });
+    })
+  );
+  if (batchItems.length > 0) {
+    await api.ensureTestInteractionBatch(batchItems);
   }
 
   await analyzer.reconcileGeneratedSurfaceElements(context, {

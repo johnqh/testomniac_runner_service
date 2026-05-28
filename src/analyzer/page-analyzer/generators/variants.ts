@@ -1,3 +1,4 @@
+import type { BatchTestInteractionItem } from "@sudobility/testomniac_types";
 import type { AnalyzerContext } from "../types";
 
 export async function generateVariantTestInteractions(
@@ -62,15 +63,13 @@ export async function generateVariantTestInteractions(
     bundleRun.id
   );
 
+  const batchItems: BatchTestInteractionItem[] = [];
   for (const test of tests) {
-    const tc = await api.ensureTestInteraction(
+    batchItems.push({
       runnerId,
-      surface.id,
-      test,
-      testEnvironmentId
-    );
-    await api.createTestInteractionRun({
-      testInteractionId: tc.id,
+      testSurfaceId: surface.id,
+      testInteraction: test,
+      testEnvironmentId,
       testSurfaceRunId: surfaceRun.id,
     });
 
@@ -83,6 +82,9 @@ export async function generateVariantTestInteractions(
         selector
       );
     }
+  }
+  if (batchItems.length > 0) {
+    await api.ensureTestInteractionBatch(batchItems);
   }
 
   await analyzer.reconcileGeneratedSurfaceElements(context, {

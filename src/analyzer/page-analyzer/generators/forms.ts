@@ -1,3 +1,4 @@
+import type { BatchTestInteractionItem } from "@sudobility/testomniac_types";
 import type { AnalyzerContext } from "../types";
 
 export async function generateFormTestInteractions(
@@ -42,6 +43,7 @@ export async function generateFormTestInteractions(
   );
 
   const desiredKeys: string[] = [];
+  const batchItems: BatchTestInteractionItem[] = [];
   for (let index = 0; index < context.forms.length; index++) {
     const form = context.forms[index];
     const formType = analyzer.identifyFormType(form, context.currentPath);
@@ -74,14 +76,11 @@ export async function generateFormTestInteractions(
 
       for (const searchTest of searchTests) {
         desiredKeys.push(analyzer.getGeneratedKey(searchTest));
-        const searchElement = await api.ensureTestInteraction(
+        batchItems.push({
           runnerId,
-          surface.id,
-          searchTest,
-          testEnvironmentId
-        );
-        await api.createTestInteractionRun({
-          testInteractionId: searchElement.id,
+          testSurfaceId: surface.id,
+          testInteraction: searchTest,
+          testEnvironmentId,
           testSurfaceRunId: surfaceRun.id,
         });
       }
@@ -99,14 +98,11 @@ export async function generateFormTestInteractions(
       validValues
     );
     desiredKeys.push(analyzer.getGeneratedKey(positive));
-    const positiveElement = await api.ensureTestInteraction(
+    batchItems.push({
       runnerId,
-      surface.id,
-      positive,
-      testEnvironmentId
-    );
-    await api.createTestInteractionRun({
-      testInteractionId: positiveElement.id,
+      testSurfaceId: surface.id,
+      testInteraction: positive,
+      testEnvironmentId,
       testSurfaceRunId: surfaceRun.id,
     });
 
@@ -125,14 +121,11 @@ export async function generateFormTestInteractions(
         validValues
       );
       desiredKeys.push(analyzer.getGeneratedKey(negative));
-      const negativeElement = await api.ensureTestInteraction(
+      batchItems.push({
         runnerId,
-        surface.id,
-        negative,
-        testEnvironmentId
-      );
-      await api.createTestInteractionRun({
-        testInteractionId: negativeElement.id,
+        testSurfaceId: surface.id,
+        testInteraction: negative,
+        testEnvironmentId,
         testSurfaceRunId: surfaceRun.id,
       });
 
@@ -148,14 +141,11 @@ export async function generateFormTestInteractions(
         validValues
       );
       desiredKeys.push(analyzer.getGeneratedKey(correction));
-      const correctionElement = await api.ensureTestInteraction(
+      batchItems.push({
         runnerId,
-        surface.id,
-        correction,
-        testEnvironmentId
-      );
-      await api.createTestInteractionRun({
-        testInteractionId: correctionElement.id,
+        testSurfaceId: surface.id,
+        testInteraction: correction,
+        testEnvironmentId,
         testSurfaceRunId: surfaceRun.id,
       });
     }
@@ -177,14 +167,11 @@ export async function generateFormTestInteractions(
 
       for (const passwordTest of passwordTests) {
         desiredKeys.push(analyzer.getGeneratedKey(passwordTest));
-        const passwordElement = await api.ensureTestInteraction(
+        batchItems.push({
           runnerId,
-          surface.id,
-          passwordTest,
-          testEnvironmentId
-        );
-        await api.createTestInteractionRun({
-          testInteractionId: passwordElement.id,
+          testSurfaceId: surface.id,
+          testInteraction: passwordTest,
+          testEnvironmentId,
           testSurfaceRunId: surfaceRun.id,
         });
       }
@@ -195,6 +182,9 @@ export async function generateFormTestInteractions(
       "form",
       formLabel
     );
+  }
+  if (batchItems.length > 0) {
+    await api.ensureTestInteractionBatch(batchItems);
   }
 
   await analyzer.reconcileGeneratedSurfaceElements(context, {

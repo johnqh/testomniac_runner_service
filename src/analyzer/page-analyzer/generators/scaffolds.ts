@@ -1,3 +1,4 @@
+import type { BatchTestInteractionItem } from "@sudobility/testomniac_types";
 import type { AnalyzerContext } from "../types";
 
 export async function generateScaffoldTestInteractions(
@@ -50,6 +51,7 @@ export async function generateScaffoldTestInteractions(
     );
 
     const desiredKeys: string[] = [];
+    const batchItems: BatchTestInteractionItem[] = [];
     for (const item of scaffoldItems) {
       const testInteraction = analyzer.shouldUseDirectControlInteraction(item)
         ? analyzer.buildControlInteractionTestInteraction(
@@ -69,16 +71,16 @@ export async function generateScaffoldTestInteractions(
             context.currentTestInteractionId
           );
       desiredKeys.push(analyzer.getGeneratedKey(testInteraction));
-      const tc = await api.ensureTestInteraction(
+      batchItems.push({
         runnerId,
-        surface.id,
+        testSurfaceId: surface.id,
         testInteraction,
-        testEnvironmentId
-      );
-      await api.createTestInteractionRun({
-        testInteractionId: tc.id,
+        testEnvironmentId,
         testSurfaceRunId: surfaceRun.id,
       });
+    }
+    if (batchItems.length > 0) {
+      await api.ensureTestInteractionBatch(batchItems);
     }
 
     desiredKeysBySurface.set(surfaceTitle, desiredKeys);

@@ -1,3 +1,4 @@
+import type { BatchTestInteractionItem } from "@sudobility/testomniac_types";
 import type { AnalyzerContext } from "../types";
 
 /**
@@ -112,26 +113,23 @@ export async function generateNavigationTestInteractions(
   );
   if (!navSurfaceRun) return;
 
+  const batchItems: BatchTestInteractionItem[] = [];
   for (const path of navPaths) {
     const navInteraction = analyzer.buildNavigationTestInteraction(
       path,
       sizeClass,
       uid
     );
-    const saved = await api.ensureTestInteraction(
+    batchItems.push({
       runnerId,
-      navSurfaceId,
-      navInteraction,
-      testEnvironmentId
-    );
-    try {
-      await api.createTestInteractionRun({
-        testInteractionId: saved.id,
-        testSurfaceRunId: navSurfaceRun.id,
-      });
-    } catch {
-      // Run may already exist
-    }
+      testSurfaceId: navSurfaceId,
+      testInteraction: navInteraction,
+      testEnvironmentId,
+      testSurfaceRunId: navSurfaceRun.id,
+    });
+  }
+  if (batchItems.length > 0) {
+    await api.ensureTestInteractionBatch(batchItems);
   }
 
   // Do NOT reconcile — other navigation interactions (from hover-click
