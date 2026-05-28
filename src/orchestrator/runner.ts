@@ -111,7 +111,7 @@ export async function runTestRun(
       if (statsDirty) {
         void flushStatsToApi();
       }
-    }, 2000);
+    }, 10000);
   }
 
   // Wrap event handler to track stats
