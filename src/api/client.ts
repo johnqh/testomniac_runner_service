@@ -82,10 +82,24 @@ function logApi(step: string, details?: Record<string, unknown>): void {
 export class ApiClient {
   private baseUrl: string;
   private apiKey: string;
+  private surfacesCache: Map<
+    number,
+    { data: TestSurfaceResponse[]; expiry: number }
+  > = new Map();
+  private interactionsCache: Map<
+    number,
+    { data: TestInteractionResponse[]; expiry: number }
+  > = new Map();
+  private static SURFACES_CACHE_TTL_MS = 5000;
+  private static INTERACTIONS_CACHE_TTL_MS = 5000;
 
   constructor(baseUrl: string, apiKey: string) {
     this.baseUrl = baseUrl;
     this.apiKey = apiKey;
+  }
+
+  invalidateSurfacesCache(): void {
+    this.surfacesCache.clear();
   }
 
   private async request<T>(
@@ -536,10 +550,25 @@ export class ApiClient {
     return this.post("/test-interactions", body);
   }
 
-  getTestInteractionsByRunner(
+  async getTestInteractionsByRunner(
     runnerId: number
   ): Promise<TestInteractionResponse[]> {
-    return this.get(`/test-interactions?runnerId=${runnerId}`);
+    const cached = this.interactionsCache.get(runnerId);
+    if (cached && Date.now() < cached.expiry) {
+      return cached.data;
+    }
+    const data = await this.get<TestInteractionResponse[]>(
+      `/test-interactions?runnerId=${runnerId}`
+    );
+    this.interactionsCache.set(runnerId, {
+      data,
+      expiry: Date.now() + ApiClient.INTERACTIONS_CACHE_TTL_MS,
+    });
+    return data;
+  }
+
+  invalidateInteractionsCache(): void {
+    this.interactionsCache.clear();
   }
 
   // ===========================================================================
@@ -620,8 +649,21 @@ export class ApiClient {
     return this.post("/test-surfaces", body);
   }
 
-  getTestSurfacesByRunner(runnerId: number): Promise<TestSurfaceResponse[]> {
-    return this.get(`/test-surfaces?runnerId=${runnerId}`);
+  async getTestSurfacesByRunner(
+    runnerId: number
+  ): Promise<TestSurfaceResponse[]> {
+    const cached = this.surfacesCache.get(runnerId);
+    if (cached && Date.now() < cached.expiry) {
+      return cached.data;
+    }
+    const data = await this.get<TestSurfaceResponse[]>(
+      `/test-surfaces?runnerId=${runnerId}`
+    );
+    this.surfacesCache.set(runnerId, {
+      data,
+      expiry: Date.now() + ApiClient.SURFACES_CACHE_TTL_MS,
+    });
+    return data;
   }
 
   getTestSurface(id: number): Promise<TestSurfaceResponse | null> {
@@ -776,7 +818,7 @@ export class ApiClient {
     return this.post("/test-surface-bundles", body);
   }
 
-  ensureTestSurface(
+  async ensureTestSurface(
     runnerId: number,
     testSurface: TestSurface,
     testEnvironmentId?: number
@@ -786,10 +828,15 @@ export class ApiClient {
       testEnvironmentId,
       testSurface,
     };
-    return this.post("/test-surfaces", body);
+    const result = await this.post<TestSurfaceResponse>(
+      "/test-surfaces",
+      body
+    );
+    this.invalidateSurfacesCache();
+    return result;
   }
 
-  ensureTestSurfaceWithRun(params: {
+  async ensureTestSurfaceWithRun(params: {
     runnerId: number;
     testEnvironmentId?: number;
     testSurface: TestSurface;
@@ -799,10 +846,15 @@ export class ApiClient {
     surface: TestSurfaceResponse;
     surfaceRun: TestSurfaceRunResponse;
   }> {
-    return this.post("/test-surfaces/ensure-with-run", params);
+    const result = await this.post<{
+      surface: TestSurfaceResponse;
+      surfaceRun: TestSurfaceRunResponse;
+    }>("/test-surfaces/ensure-with-run", params);
+    this.invalidateSurfacesCache();
+    return result;
   }
 
-  ensureTestInteraction(
+  async ensureTestInteraction(
     runnerId: number,
     testSurfaceId: number,
     testInteraction: TestInteraction,
@@ -817,31 +869,49 @@ export class ApiClient {
       isGenerated: true,
       existingTestInteractionId,
     };
-    return this.post("/test-interactions", body);
+    const result = await this.post<TestInteractionResponse>(
+      "/test-interactions",
+      body
+    );
+    this.invalidateInteractionsCache();
+    return result;
   }
 
-  ensureTestInteractionBatch(
+  async ensureTestInteractionBatch(
     items: BatchTestInteractionItem[]
   ): Promise<BatchTestInteractionResult[]> {
     if (items.length === 0) return Promise.resolve([]);
-    return this.post("/test-interactions/batch", {
-      items: items.map(item => ({
-        ...item,
-        isGenerated: true,
-      })),
-    });
+    const result = await this.post<BatchTestInteractionResult[]>(
+      "/test-interactions/batch",
+      {
+        items: items.map(item => ({
+          ...item,
+          isGenerated: true,
+        })),
+      }
+    );
+    this.invalidateInteractionsCache();
+    return result;
   }
 
-  retireTestInteractions(testInteractionIds: number[]): Promise<void> {
-    return this.put("/test-interactions/retire", { testInteractionIds });
+  async retireTestInteractions(
+    testInteractionIds: number[]
+  ): Promise<void> {
+    await this.put("/test-interactions/retire", { testInteractionIds });
+    this.invalidateInteractionsCache();
   }
 
-  reconcileTestInteractions(params: {
+  async reconcileTestInteractions(params: {
     testSurfaceId: number;
     desiredKeys: string[];
     dependencyTestInteractionId?: number;
   }): Promise<{ retiredIds: number[] }> {
-    return this.post("/test-interactions/reconcile", params);
+    const result = await this.post<{ retiredIds: number[] }>(
+      "/test-interactions/reconcile",
+      params
+    );
+    this.invalidateInteractionsCache();
+    return result;
   }
 
   ensureBundleSurfaceLink(
