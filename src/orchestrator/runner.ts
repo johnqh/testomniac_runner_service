@@ -869,13 +869,17 @@ async function loadPendingInteractionRuns(
   api: ApiClient,
   openSurfaceRuns: TestSurfaceRunResponse[]
 ): Promise<PendingInteractionRunsBySurface[]> {
-  return Promise.all(
-    openSurfaceRuns.map(async surfaceRun => ({
+  if (openSurfaceRuns.length === 0) return [];
+  const ids = openSurfaceRuns.map(sr => sr.id);
+  const batchResult = await api.getOpenTestInteractionRunsBatch(ids);
+  return openSurfaceRuns.map(surfaceRun => {
+    const allPendingRuns = batchResult[String(surfaceRun.id)] ?? [];
+    return {
       surfaceRun,
-      eligibleRuns: await api.getOpenTestInteractionRuns(surfaceRun.id),
-      allPendingRuns: await api.getOpenTestInteractionRuns(surfaceRun.id, true),
-    }))
-  );
+      eligibleRuns: allPendingRuns.filter(r => !r.blocked),
+      allPendingRuns,
+    };
+  });
 }
 
 function selectNextInteractionAcrossBundle(
