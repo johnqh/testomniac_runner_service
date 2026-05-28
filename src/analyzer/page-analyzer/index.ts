@@ -1155,14 +1155,20 @@ export class PageAnalyzer {
     context: AnalyzerContext
   ): Promise<Map<string, number>> {
     const scaffoldIdsBySelector = new Map<string, number>();
+    if (context.scaffolds.length === 0) return scaffoldIdsBySelector;
 
-    for (const scaffold of context.scaffolds) {
-      const result = await context.api.findOrCreateScaffold({
-        runnerId: context.runnerId,
-        type: scaffold.type,
-        html: scaffold.outerHtml,
-        hash: scaffold.hash,
-      });
+    const items = context.scaffolds.map(scaffold => ({
+      runnerId: context.runnerId,
+      type: scaffold.type,
+      html: scaffold.outerHtml,
+      hash: scaffold.hash,
+    }));
+
+    const results = await context.api.findOrCreateScaffoldBatch(items);
+
+    for (let i = 0; i < context.scaffolds.length; i++) {
+      const scaffold = context.scaffolds[i];
+      const result = results[i];
       scaffoldIdsBySelector.set(scaffold.selector, result.id);
 
       // Link page state screenshot to scaffold if it doesn't have one
