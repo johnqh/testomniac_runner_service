@@ -40,6 +40,26 @@ function summarizeInteraction(
   };
 }
 
+function describeInteractionStatus(
+  testInteraction: TestInteractionResponse,
+  baseUrl: string
+): string {
+  if (
+    testInteraction.testType === "navigation" &&
+    testInteraction.startingPath
+  ) {
+    const origin = baseUrl.startsWith("http")
+      ? new URL(baseUrl).origin
+      : "http://localhost";
+    const url = testInteraction.startingPath.startsWith("http")
+      ? testInteraction.startingPath
+      : new URL(testInteraction.startingPath, origin).toString();
+    return `Navigate to ${url}`;
+  }
+
+  return `Running interaction: ${testInteraction.title}`;
+}
+
 /**
  * Main entry point for the runner execution loop.
  *
@@ -60,6 +80,7 @@ export async function runTestRun(
   let findingsFound = 0;
   let totalPausedMs = 0;
   let activeDependencyBranch: number[] = [];
+  let latestStatusUpdate: string | undefined;
 
   // ---------------------------------------------------------------------------
   // Debounced stats emission — emits local event immediately but batches the
@@ -80,6 +101,7 @@ export async function runTestRun(
       testRunsCompleted,
       findingsFound,
       elapsedMs,
+      status_update: latestStatusUpdate,
     });
   }
 
@@ -94,10 +116,28 @@ export async function runTestRun(
         pagesFound,
         pageStatesFound,
         testRunsCompleted,
+        ...(latestStatusUpdate ? { status_update: latestStatusUpdate } : {}),
       });
     } catch (err) {
       logRunner("stats-update:failed", {
         testRunId: config.testRunId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  async function publishStatusUpdate(message: string): Promise<void> {
+    latestStatusUpdate = message;
+    events.onStatusUpdate?.({ testRunId: config.testRunId, message });
+    emitStatsLocal();
+    try {
+      await api.updateTestRunStats(config.testRunId, {
+        status_update: message,
+      });
+    } catch (err) {
+      logRunner("status-update:failed", {
+        testRunId: config.testRunId,
+        message,
         error: err instanceof Error ? err.message : String(err),
       });
     }
@@ -184,6 +224,7 @@ export async function runTestRun(
 
   try {
     await waitForCheckpoint("before_claim");
+    await publishStatusUpdate(`Claiming scan ${config.testRunId}`);
     logRunner("claim:attempting", {
       testRunId: config.testRunId,
       runnerInstanceId: config.runnerInstanceId,
@@ -229,6 +270,9 @@ export async function runTestRun(
       sizeClass: testRun.sizeClass,
       scanUrl: testRun.scanUrl ?? null,
     });
+    await publishStatusUpdate(
+      `Preparing scan for ${testRun.scanUrl ?? config.baseUrl}`
+    );
 
     // Set up login manager if credentials are configured
     let loginManager: LoginManager | null = null;
@@ -454,7 +498,7 @@ export async function runTestRun(
           const reason = skippableRuns[0]?.reason ?? "Skipped by scan mode";
           await api.completeTestInteractionRunBatch(
             skippableRuns.map(({ run }) => run.id),
-            { status: "cancelled", errorMessage: reason }
+            { status: "cancelled", errorMessage: reason, status_update: reason }
           );
           // Re-fetch after batch cancel to get updated state
           continue;
@@ -501,6 +545,12 @@ export async function runTestRun(
         activeDependencyBranch,
         selectedInteraction: summarizeInteraction(selectedInteraction),
       });
+      await publishStatusUpdate(
+        describeInteractionStatus(
+          selectedInteraction,
+          testRun.scanUrl ?? config.baseUrl
+        )
+      );
 
       const interactionTimeout = 60_000; // 60 seconds max per interaction
       try {
@@ -575,6 +625,7 @@ export async function runTestRun(
       bundleRunId: testRun.testSurfaceBundleRunId,
       completedInteractionRunCount: completedTestInteractionRunIds.size,
     });
+    await publishStatusUpdate("Finalizing scan results");
 
     await waitForCheckpoint("before_completion");
 
@@ -610,6 +661,7 @@ export async function runTestRun(
       pagesFound,
       pageStatesFound,
       testRunsCompleted,
+      status_update: "Scan completed",
     });
 
     const result: ScanResult = {
@@ -635,6 +687,7 @@ export async function runTestRun(
     // Post-scan: detect personas
     if (productId) {
       try {
+        await publishStatusUpdate("Detecting personas for this product");
         const detectedPersonas = await api.detectPersonas(productId);
         result.personas = detectedPersonas.map(p => ({
           id: p.id,
@@ -643,6 +696,13 @@ export async function runTestRun(
         }));
         if (result.personas.length > 0) {
           wrappedEvents.onPersonasDetected?.(result.personas);
+          await publishStatusUpdate(
+            `Detected ${result.personas.length} persona${result.personas.length === 1 ? "" : "s"}`
+          );
+        } else {
+          await publishStatusUpdate(
+            "Persona detection completed with no personas"
+          );
         }
       } catch (err) {
         wrappedEvents.onError({
@@ -668,6 +728,7 @@ export async function runTestRun(
       await api.completeTestRun(config.testRunId, {
         status: "failed",
         totalDurationMs: Date.now() - startTime,
+        status_update: `Scan failed: ${message}`,
       });
     } catch (completionErr) {
       logRunner("complete-failed-run:error", {

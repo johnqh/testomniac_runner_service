@@ -129,6 +129,56 @@ function prepareActionForReplay(
   };
 }
 
+function describeStepStatus(
+  step: StoredStep,
+  action: StoredStep["action"]
+): string {
+  const rawDescription = (step.description || action.description || "").trim();
+  const target = describeActionTarget(action.path);
+
+  switch (action.actionType) {
+    case "goto":
+      return `Navigate to ${action.path ?? target ?? "the target page"}`;
+    case "hover":
+      return `Hover on ${(target ?? rawDescription) || "the target element"}`;
+    case "click":
+    case "dblclick":
+      return `Click ${(target ?? rawDescription) || "the target element"}`;
+    case "fill":
+    case "type":
+      return `Enter text in ${(target ?? rawDescription) || "the target field"}`;
+    case "select":
+    case "selectOption":
+      return `Select ${action.value ?? "an option"} in ${(target ?? rawDescription) || "the target field"}`;
+    case "press":
+      return `Press ${action.value ?? "a key"}`;
+    case "screenshot":
+      return "Capture screenshot";
+    case "waitForTimeout":
+    case "waitForLoadState":
+      return rawDescription || "Wait for the page to settle";
+    default:
+      return rawDescription || `Run ${action.actionType} action`;
+  }
+}
+
+function describeActionTarget(path?: string): string | null {
+  if (!path) return null;
+  const replay = parseReplaySelector(path);
+  const parts = [
+    replay?.role,
+    replay?.accessibleName,
+    replay?.textContent,
+    replay?.href,
+    replay?.testId,
+    replay?.id,
+  ]
+    .filter((part): part is string => Boolean(part?.trim()))
+    .map(part => part.trim());
+  if (parts.length > 0) return parts.slice(0, 2).join(" ");
+  return path.length > 80 ? `${path.slice(0, 77)}...` : path;
+}
+
 /**
  * Execute a single test element: run actions, decompose page, evaluate expertises,
  * set outcomes, create findings, and optionally discover new test elements.
@@ -153,6 +203,19 @@ export async function executeTestInteraction(
   const consoleLogs: string[] = [];
   const networkLogs: NetworkLogEntry[] = [];
   let currentPhase = "initialization";
+
+  async function publishStatusUpdate(message: string): Promise<void> {
+    events.onStatusUpdate?.({ testRunId: testRun.id, message });
+    try {
+      await api.updateTestRunStats(testRun.id, { status_update: message });
+    } catch (err) {
+      logExecutor("status-update:failed", {
+        testRunId: testRun.id,
+        message,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   // Listen for console and network events
   adapter.on("console", (...args: unknown[]) => {
@@ -200,6 +263,7 @@ export async function executeTestInteraction(
       );
     }
     let testInteraction = loadedTestInteraction;
+    await publishStatusUpdate(`Running interaction: ${testInteraction.title}`);
     logExecutor("interaction:loaded", {
       testRunId: testRun.id,
       testInteractionRunId: testInteractionRun.id,
@@ -259,6 +323,7 @@ export async function executeTestInteraction(
         absoluteUrl,
         baseUrl,
       });
+      await publishStatusUpdate(`Navigate to ${absoluteUrl}`);
       await adapter.goto(absoluteUrl, { waitUntil: "networkidle0" });
     }
 
@@ -339,6 +404,7 @@ export async function executeTestInteraction(
       const startedAtMs = Date.now();
       const beforeSnapshot = previousSnapshot;
       currentPhase = `executing-step:${replayAction.actionType}`;
+      await publishStatusUpdate(describeStepStatus(step, replayAction));
       logExecutor("interaction:step-start", {
         testInteractionRunId: testInteractionRun.id,
         testInteractionId: testInteraction.id,
@@ -762,12 +828,14 @@ export async function executeTestInteraction(
         : "completed";
 
     currentPhase = "healing-superseded-findings";
+    await publishStatusUpdate(`Recording results for ${testInteraction.title}`);
     await api.clearSupersededFindings(testInteractionRun.id);
 
     // Complete test element run
     const durationMs = Date.now() - startTime;
     await api.completeTestInteractionRun(testInteractionRun.id, {
       status,
+      status_update: `Completed interaction: ${testInteraction.title}`,
       durationMs,
       expectedOutcome: expectedOutcome || undefined,
       observedOutcome: observedOutcome || undefined,
@@ -925,6 +993,7 @@ export async function executeTestInteraction(
 
     await api.completeTestInteractionRun(testInteractionRun.id, {
       status: isReplayError ? "skipped" : "failed",
+      status_update: `${isReplayError ? "Skipped" : "Failed"} interaction: ${testInteractionRun.testInteractionId}`,
       durationMs,
       errorMessage,
       consoleLog: consoleLogs.join("\n") || undefined,

@@ -69,7 +69,10 @@ import type {
   BatchTestInteractionResult,
 } from "@sudobility/testomniac_types";
 
-type CompleteRunPayload = CompleteTestRunRequest;
+type StatusUpdatePayload = {
+  status_update?: string;
+};
+type CompleteRunPayload = CompleteTestRunRequest & StatusUpdatePayload;
 type InsertTestInteractionRequestCompat = InsertTestInteractionRequest & {
   isGenerated?: boolean;
   existingTestInteractionId?: number;
@@ -161,7 +164,7 @@ export class ApiClient {
 
   updateTestRunStats(
     testRunId: number,
-    stats: UpdateTestRunStatsRequest
+    stats: UpdateTestRunStatsRequest & StatusUpdatePayload
   ): Promise<void> {
     return this.put(`/test-runs/${testRunId}/stats`, stats);
   }
@@ -189,7 +192,7 @@ export class ApiClient {
 
   completeTestInteractionRun(
     testInteractionRunId: number,
-    payload: CompleteTestInteractionRunRequest
+    payload: CompleteTestInteractionRunRequest & StatusUpdatePayload
   ): Promise<void> {
     return this.put(
       `/test-interaction-runs/${testInteractionRunId}/complete`,
@@ -199,7 +202,7 @@ export class ApiClient {
 
   completeTestInteractionRunBatch(
     ids: number[],
-    payload: { status?: string; errorMessage?: string }
+    payload: { status?: string; errorMessage?: string; status_update?: string }
   ): Promise<void> {
     if (ids.length === 0) return Promise.resolve();
     return this.put("/test-interaction-runs/complete-batch", {
@@ -460,8 +463,12 @@ export class ApiClient {
     return this.get(`/personas?productId=${productId}`);
   }
 
-  detectPersonas(productId: number): Promise<PersonaResponse[]> {
-    return this.post("/personas/detect", { productId });
+  async detectPersonas(productId: number): Promise<PersonaResponse[]> {
+    const result = await this.post<
+      | PersonaResponse[]
+      | { personas: PersonaResponse[]; status_update?: string }
+    >("/personas/detect", { productId });
+    return Array.isArray(result) ? result : result.personas;
   }
 
   createUseCase(

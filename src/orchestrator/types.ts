@@ -56,7 +56,9 @@ export interface ScanEventHandler {
     testRunsCompleted: number;
     findingsFound: number;
     elapsedMs: number;
+    status_update?: string;
   }): void;
+  onStatusUpdate?(update: { message: string; testRunId?: number }): void;
   onScreenshotCaptured(data: { dataUrl: string; pageUrl: string }): void;
   onScanComplete(summary: {
     totalPages: number;

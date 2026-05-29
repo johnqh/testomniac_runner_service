@@ -56,6 +56,9 @@ export async function runSequenceRun(
     sequenceRunId: config.sequenceRunId,
     interactionCount: orderedLinks.length,
   });
+  events.onStatusUpdate?.({
+    message: `Starting sequence run ${config.sequenceRunId}`,
+  });
 
   // Create a test run to track this sequence execution
   const testRun = await api.createTestRun({
@@ -88,6 +91,11 @@ export async function runSequenceRun(
       continue;
     }
 
+    events.onStatusUpdate?.({
+      testRunId: testRun.id,
+      message: `Running sequence step ${link.stepOrder}: ${testInteraction.title}`,
+    });
+
     // Create a test interaction run for this step
     const testInteractionRun = await api.createTestInteractionRun({
       testInteractionId: link.testInteractionId,
@@ -118,8 +126,16 @@ export async function runSequenceRun(
 
   // Complete the test run and sequence run
   const status = failed > 0 ? "failed" : "completed";
-  await api.completeTestRun(testRun.id, { status });
+  const statusMessage =
+    status === "completed"
+      ? `Sequence run ${config.sequenceRunId} completed`
+      : `Sequence run ${config.sequenceRunId} failed`;
+  await api.completeTestRun(testRun.id, {
+    status,
+    status_update: statusMessage,
+  });
   await api.completeSequenceRun(config.sequenceRunId, { status });
+  events.onStatusUpdate?.({ testRunId: testRun.id, message: statusMessage });
 
   const result: SequenceRunResult = {
     sequenceRunId: config.sequenceRunId,
