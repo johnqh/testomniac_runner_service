@@ -210,20 +210,38 @@ export async function runTestRun(
     }
   }
 
-  async function waitForCheckpoint(checkpoint: RunCheckpoint): Promise<void> {
+  async function waitForCheckpoint(
+    checkpoint: RunCheckpoint
+  ): Promise<boolean> {
     if (config.signal?.aborted) {
-      throw createAbortError();
+      return false;
     }
     const checkpointStart = Date.now();
     await config.waitForCheckpoint?.(checkpoint);
     totalPausedMs += Date.now() - checkpointStart;
     if (config.signal?.aborted) {
-      throw createAbortError();
+      return false;
     }
+    return true;
   }
 
   try {
-    await waitForCheckpoint("before_claim");
+    const shouldContinue = await waitForCheckpoint("before_claim");
+    if (!shouldContinue) {
+      await api.completeTestRun(config.testRunId, {
+        status: "stopped",
+        totalDurationMs: Date.now() - startTime,
+        status_update: "Scan stopped by user",
+      });
+      return {
+        testRunId: config.testRunId,
+        pagesFound: 0,
+        pageStatesFound: 0,
+        testRunsCompleted: 0,
+        findingsFound: 0,
+        durationMs: Date.now() - startTime,
+      };
+    }
     await publishStatusUpdate(`Claiming scan ${config.testRunId}`);
     logRunner("claim:attempting", {
       testRunId: config.testRunId,
@@ -353,7 +371,7 @@ export async function runTestRun(
 
     // Execution loop: select the next executable interaction across the bundle.
     while (true) {
-      await waitForCheckpoint("before_surface");
+      if (!(await waitForCheckpoint("before_surface"))) break;
 
       // Single consolidated call replaces getOpenTestSurfaceRuns + loadPendingInteractionRuns
       const runnerState = await api.getRunnerState(
@@ -505,7 +523,7 @@ export async function runTestRun(
         }
       }
 
-      await waitForCheckpoint("before_test_interaction");
+      if (!(await waitForCheckpoint("before_test_interaction"))) break;
 
       // Check for session expiry and re-login if needed
       if (loginManager?.isLoggedIn()) {
@@ -617,17 +635,90 @@ export async function runTestRun(
         nextActiveDependencyBranch: activeDependencyBranch,
       });
 
-      await waitForCheckpoint("after_test_interaction");
+      if (!(await waitForCheckpoint("after_test_interaction"))) break;
     }
+
+    const stopped = config.signal?.aborted === true;
 
     logRunner("loop:exited", {
       testRunId: config.testRunId,
       bundleRunId: testRun.testSurfaceBundleRunId,
       completedInteractionRunCount: completedTestInteractionRunIds.size,
+      stopped,
     });
+
+    if (stopped) {
+      await publishStatusUpdate(
+        "Scan stopped by user — cancelling remaining work"
+      );
+
+      // Cancel remaining pending interaction runs
+      const remainingState = await api.getRunnerState(
+        testRun.testSurfaceBundleRunId
+      );
+      const pendingRunIds = Object.values(remainingState.pendingInteractionRuns)
+        .flat()
+        .map(r => r.id);
+      if (pendingRunIds.length > 0) {
+        await api.completeTestInteractionRunBatch(pendingRunIds, {
+          status: "cancelled",
+          errorMessage: "Scan stopped by user",
+          status_update: "Cancelled: scan stopped by user",
+        });
+      }
+
+      // Complete remaining open surface runs
+      const remainingSurfaceRuns = await api.getOpenTestSurfaceRuns(
+        testRun.testSurfaceBundleRunId
+      );
+      if (remainingSurfaceRuns.length > 0) {
+        await api.completeTestSurfaceRunBatch(
+          remainingSurfaceRuns.map(sr => sr.id),
+          { status: "stopped" }
+        );
+      }
+
+      // Complete bundle run and test run
+      await api.completeTestSurfaceBundleRun(testRun.testSurfaceBundleRunId, {
+        status: "stopped",
+      });
+
+      const durationMs = Date.now() - startTime;
+      await api.completeTestRun(config.testRunId, {
+        status: "stopped",
+        totalDurationMs: durationMs,
+        pagesFound: pageIdsFound.size,
+        pageStatesFound: pageStateIdsFound.size,
+        testRunsCompleted: completedTestInteractionRunIds.size,
+        status_update: "Scan stopped by user",
+      });
+
+      const result: ScanResult = {
+        testRunId: config.testRunId,
+        pagesFound: pageIdsFound.size,
+        pageStatesFound: pageStateIdsFound.size,
+        testRunsCompleted: completedTestInteractionRunIds.size,
+        findingsFound,
+        durationMs,
+      };
+
+      wrappedEvents.onScanComplete({
+        totalPages: pageIdsFound.size,
+        totalFindings: findingsFound,
+        durationMs,
+      });
+
+      wrappedEvents.onTestRunCompleted({
+        testRunId: config.testRunId,
+        passed: findingsFound === 0,
+      });
+
+      return result;
+    }
+
     await publishStatusUpdate("Finalizing scan results");
 
-    await waitForCheckpoint("before_completion");
+    await waitForCheckpoint("before_completion"); // ignore result — already finalizing
 
     // Flush any pending debounced stats before completing
     if (statsFlushTimer != null) {
@@ -1049,10 +1140,4 @@ function buildDependencyChainIds(
   }
 
   return chain;
-}
-
-function createAbortError(): Error {
-  const error = new Error("Run aborted");
-  error.name = "AbortError";
-  return error;
 }

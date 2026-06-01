@@ -124,6 +124,28 @@ export async function runSequenceRun(
     }
   }
 
+  // Handle graceful stop
+  const stopped = config.signal?.aborted === true;
+
+  if (stopped) {
+    await api.completeTestRun(testRun.id, {
+      status: "stopped",
+      status_update: "Sequence stopped by user",
+    });
+    await api.completeSequenceRun(config.sequenceRunId, { status: "stopped" });
+    events.onStatusUpdate?.({
+      testRunId: testRun.id,
+      message: `Sequence run ${config.sequenceRunId} stopped by user`,
+    });
+
+    return {
+      sequenceRunId: config.sequenceRunId,
+      interactionsCompleted: completed,
+      interactionsFailed: failed,
+      durationMs: Date.now() - startTime,
+    };
+  }
+
   // Complete the test run and sequence run
   const status = failed > 0 ? "failed" : "completed";
   const statusMessage =
