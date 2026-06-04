@@ -150,6 +150,39 @@ export class ApiClient {
     return this.request<T>("PATCH", path, body);
   }
 
+  /**
+   * Like request(), but targets user-facing endpoints at /api/v1
+   * instead of scanner-facing endpoints at /api/v1/scanner.
+   */
+  private async requestUserApi<T>(
+    method: string,
+    path: string,
+    body?: unknown
+  ): Promise<T> {
+    const url = `${this.baseUrl}/api/v1${path}`;
+    const res = await fetch(url, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Scanner-Key": this.apiKey,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      cache: "no-store" as RequestCache,
+    });
+
+    const json = (await res.json()) as BaseResponse<T>;
+    if (!json.success) {
+      logApi("requestUserApi:failed", {
+        method,
+        path,
+        status: res.status,
+        error: json.error,
+      });
+      throw new Error(`API error [${method} ${path}]: ${json.error}`);
+    }
+    return json.data as T;
+  }
+
   // ===========================================================================
   // Test Runs
   // ===========================================================================
@@ -464,10 +497,10 @@ export class ApiClient {
   }
 
   async detectPersonas(productId: number): Promise<PersonaResponse[]> {
-    const result = await this.post<
+    const result = await this.requestUserApi<
       | PersonaResponse[]
       | { personas: PersonaResponse[]; status_update?: string }
-    >("/personas/detect", { productId });
+    >("POST", "/personas/detect", { productId });
     return Array.isArray(result) ? result : result.personas;
   }
 
