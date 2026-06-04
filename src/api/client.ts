@@ -110,7 +110,7 @@ export class ApiClient {
     path: string,
     body?: unknown
   ): Promise<T> {
-    const url = `${this.baseUrl}/api/v1/scanner${path}`;
+    const url = `${this.baseUrl}/api/v1${path}`;
     const res = await fetch(url, {
       method,
       headers: {
@@ -148,39 +148,6 @@ export class ApiClient {
 
   private patch<T>(path: string, body?: unknown): Promise<T> {
     return this.request<T>("PATCH", path, body);
-  }
-
-  /**
-   * Like request(), but targets user-facing endpoints at /api/v1
-   * instead of scanner-facing endpoints at /api/v1/scanner.
-   */
-  private async requestUserApi<T>(
-    method: string,
-    path: string,
-    body?: unknown
-  ): Promise<T> {
-    const url = `${this.baseUrl}/api/v1${path}`;
-    const res = await fetch(url, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        "X-Scanner-Key": this.apiKey,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      cache: "no-store" as RequestCache,
-    });
-
-    const json = (await res.json()) as BaseResponse<T>;
-    if (!json.success) {
-      logApi("requestUserApi:failed", {
-        method,
-        path,
-        status: res.status,
-        error: json.error,
-      });
-      throw new Error(`API error [${method} ${path}]: ${json.error}`);
-    }
-    return json.data as T;
   }
 
   // ===========================================================================
@@ -497,10 +464,10 @@ export class ApiClient {
   }
 
   async detectPersonas(productId: number): Promise<PersonaResponse[]> {
-    const result = await this.requestUserApi<
+    const result = await this.post<
       | PersonaResponse[]
       | { personas: PersonaResponse[]; status_update?: string }
-    >("POST", "/personas/detect", { productId });
+    >("/personas/detect", { productId });
     return Array.isArray(result) ? result : result.personas;
   }
 
@@ -514,7 +481,7 @@ export class ApiClient {
   }
 
   getUseCasesByPersona(personaId: number): Promise<UseCaseResponse[]> {
-    return this.get(`/use-cases?personaId=${personaId}`);
+    return this.get(`/personas/${personaId}/use-cases`);
   }
 
   createInputValue(
@@ -533,7 +500,7 @@ export class ApiClient {
   }
 
   getInputValuesByUseCase(useCaseId: number): Promise<InputValueResponse[]> {
-    return this.get(`/input-values?useCaseId=${useCaseId}`);
+    return this.get(`/personas/use-cases/${useCaseId}/input-values`);
   }
 
   // ===========================================================================
@@ -545,7 +512,7 @@ export class ApiClient {
     testScenarioId: number;
     testEnvironmentId: number;
   } | null> {
-    return this.get(`/test-scenario-sequences/${id}`);
+    return this.get(`/test-scenarios/sequences/${id}`);
   }
 
   getSequenceTestInteractions(sequenceId: number): Promise<
@@ -557,7 +524,7 @@ export class ApiClient {
     }>
   > {
     return this.get(
-      `/test-scenario-sequence-test-interactions?testScenarioSequenceId=${sequenceId}`
+      `/test-scenarios/sequences/${sequenceId}/test-interactions`
     );
   }
 
@@ -566,11 +533,11 @@ export class ApiClient {
     testScenarioSequenceId: number;
     status: string;
   } | null> {
-    return this.get(`/test-scenario-sequence-runs/${id}`);
+    return this.get(`/test-scenarios/sequence-runs/${id}`);
   }
 
   completeSequenceRun(id: number, payload: { status?: string }): Promise<void> {
-    return this.put(`/test-scenario-sequence-runs/${id}/complete`, payload);
+    return this.put(`/test-scenarios/sequence-runs/${id}/complete`, payload);
   }
 
   // ===========================================================================
