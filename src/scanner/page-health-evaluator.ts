@@ -814,13 +814,24 @@ export async function evaluatePageHealth(
     // 24. Visible error messages — validation or system errors exposed in DOM
     // =========================================================================
     const errorPatterns = [
+      // E-commerce / validation errors
       /\b(?:maximum|minimum)\s+(?:purchase|order)\s+amount\s+of\s+0\b/i,
       /\b(?:maximum|minimum)\s+quantity\s+(?:exceeded|is\s+0)\b/i,
+      // Technical errors
       /\binternal\s+server\s+error\b/i,
       /\b(?:fatal|uncaught)\s+(?:error|exception)\b/i,
       /\bstack\s*trace\b/i,
       /\bsyntax\s*error\b.*\bline\s+\d+/i,
       /\bundefined\s+is\s+not\s+(?:a\s+function|an?\s+object)\b/i,
+      // Generic user-facing error messages
+      /\bsomething\s+(?:went|goes|gone)\s+wrong\b/i,
+      /\boops[!,.]?\s/i,
+      /\bunexpected\s+error\b/i,
+      /\ban?\s+error\s+(?:has\s+)?occurred\b/i,
+      /\bpage\s+not\s+found\b/i,
+      /\b(?:please\s+)?try\s+again\s+later\b/i,
+      /\bserver\s+error\b/i,
+      /\b(?:access|permission)\s+denied\b/i,
     ];
     // Check visible text first
     for (const pattern of errorPatterns) {
@@ -847,6 +858,9 @@ export async function evaluatePageHealth(
         /\b(?:fatal|uncaught)\s+(?:error|exception)\b/i,
         /\bstack\s*trace\b/i,
         /\bundefined\s+is\s+not\s+(?:a\s+function|an?\s+object)\b/i,
+        /\bsomething\s+(?:went|goes|gone)\s+wrong\b/i,
+        /\ban?\s+error\s+(?:has\s+)?occurred\b/i,
+        /\bserver\s+error\b/i,
       ];
       for (const pattern of hiddenErrorPatterns) {
         if (pageText.match(pattern)) continue; // already reported above
@@ -865,8 +879,32 @@ export async function evaluatePageHealth(
     }
 
     // =========================================================================
-    // 25. Empty product page — product detail URL with no product content
+    // 24b. Error UI elements — role="alert", .error, .alert-danger, etc.
     // =========================================================================
+    const errorSelectors = [
+      '[role="alert"]',
+      ".error-message",
+      ".alert-danger",
+      ".alert-error",
+      ".toast-error",
+    ];
+    for (const sel of errorSelectors) {
+      const el = document.querySelector(sel);
+      if (el instanceof HTMLElement) {
+        const text = (el.innerText || "").trim();
+        if (text.length > 0 && text.length < 500) {
+          found.push({
+            type: "error_message_visible",
+            severity: "error",
+            priority: 2,
+            title: "Error UI element on page",
+            description: `Element matching "${sel}" contains: "${text.slice(0, 200)}"`,
+          });
+          break;
+        }
+      }
+    }
+
     // =========================================================================
     // 25. Empty product page — page has product-page indicators but no
     //     actual product content (title, price, or image)
