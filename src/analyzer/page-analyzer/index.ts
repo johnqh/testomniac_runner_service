@@ -1132,17 +1132,7 @@ export class PageAnalyzer {
       }
     }
 
-    // Update scaffold screenshot if missing (best-effort, parallel)
-    if (context.screenshotPath && context.scaffolds.length > 0) {
-      for (const scaffold of context.scaffolds) {
-        const scaffoldId = result.scaffoldIdsBySelector[scaffold.selector];
-        if (scaffoldId) {
-          context.api
-            .updateScaffoldScreenshot(scaffoldId, context.screenshotPath)
-            .catch(() => {});
-        }
-      }
-    }
+    // Scaffold screenshots are now updated server-side in ensure-page-state
 
     context.events.onPageStateCreated({
       pageStateId: result.pageStateId,
