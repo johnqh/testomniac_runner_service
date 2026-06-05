@@ -1112,6 +1112,10 @@ export class PageAnalyzer {
         selector: scaffold.selector,
       })),
       scaffoldSelectorByItemSelector: context.scaffoldSelectorByItemSelector,
+      forms: this.normalizeForms(context.forms).map(form => ({
+        form,
+        formType: this.identifyFormType(form, context.currentPath),
+      })),
     });
 
     // Part A: server resolved the page — update context
@@ -1139,7 +1143,7 @@ export class PageAnalyzer {
       pageId: result.pageId ?? context.pageId,
     });
 
-    await this.ensureStoredForms(result.pageStateId, context);
+    // Forms are now passed in the combined endpoint request above
 
     return result.pageStateId;
   }

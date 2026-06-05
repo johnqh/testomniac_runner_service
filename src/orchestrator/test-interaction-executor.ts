@@ -204,17 +204,9 @@ export async function executeTestInteraction(
   const networkLogs: NetworkLogEntry[] = [];
   let currentPhase = "initialization";
 
-  async function publishStatusUpdate(message: string): Promise<void> {
+  function publishStatusUpdate(message: string): void {
+    // Only emit locally — the runner's debounced flush handles the API call
     events.onStatusUpdate?.({ testRunId: testRun.id, message });
-    try {
-      await api.updateTestRunStats(testRun.id, { status_update: message });
-    } catch (err) {
-      logExecutor("status-update:failed", {
-        testRunId: testRun.id,
-        message,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
   }
 
   // Listen for console and network events
@@ -263,7 +255,7 @@ export async function executeTestInteraction(
       );
     }
     let testInteraction = loadedTestInteraction;
-    await publishStatusUpdate(`Running interaction: ${testInteraction.title}`);
+    publishStatusUpdate(`Running interaction: ${testInteraction.title}`);
     logExecutor("interaction:loaded", {
       testRunId: testRun.id,
       testInteractionRunId: testInteractionRun.id,
@@ -323,7 +315,7 @@ export async function executeTestInteraction(
         absoluteUrl,
         baseUrl,
       });
-      await publishStatusUpdate(`Navigate to ${absoluteUrl}`);
+      publishStatusUpdate(`Navigate to ${absoluteUrl}`);
       await adapter.goto(absoluteUrl, { waitUntil: "networkidle0" });
     }
 
@@ -404,7 +396,7 @@ export async function executeTestInteraction(
       const startedAtMs = Date.now();
       const beforeSnapshot = previousSnapshot;
       currentPhase = `executing-step:${replayAction.actionType}`;
-      await publishStatusUpdate(describeStepStatus(step, replayAction));
+      publishStatusUpdate(describeStepStatus(step, replayAction));
       logExecutor("interaction:step-start", {
         testInteractionRunId: testInteractionRun.id,
         testInteractionId: testInteraction.id,
@@ -827,19 +819,18 @@ export async function executeTestInteraction(
         ? "completed"
         : "completed";
 
-    currentPhase = "healing-superseded-findings";
-    await publishStatusUpdate(`Recording results for ${testInteraction.title}`);
-    await api.clearSupersededFindings(testInteractionRun.id);
+    currentPhase = "completing-interaction-run";
+    publishStatusUpdate(`Recording results for ${testInteraction.title}`);
 
-    // Complete test element run
+    // Combined endpoint: clear superseded findings + complete in one call
     const durationMs = Date.now() - startTime;
-    await api.completeTestInteractionRun(testInteractionRun.id, {
+    await api.completeInteractionRunCombined({
+      testInteractionRunId: testInteractionRun.id,
       status,
-      status_update: `Completed interaction: ${testInteraction.title}`,
       durationMs,
+      status_update: `Completed interaction: ${testInteraction.title}`,
       expectedOutcome: expectedOutcome || undefined,
       observedOutcome: observedOutcome || undefined,
-      // Attach logs if there were issues
       ...(hasErrors || hasWarnings
         ? {
             consoleLog: consoleLogs.join("\n") || undefined,

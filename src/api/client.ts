@@ -75,6 +75,7 @@ import type {
   GenerateAllSurfaceInteractionsResponse,
   DetectPersonasAndScenariosRequest,
   DetectPersonasAndScenariosResponse,
+  CompleteInteractionRunCombinedRequest,
 } from "@sudobility/testomniac_types";
 
 type StatusUpdatePayload = {
@@ -1143,6 +1144,12 @@ export class ApiClient {
     params: DetectPersonasAndScenariosRequest
   ): Promise<DetectPersonasAndScenariosResponse> {
     return this.post("/combined/detect-personas-and-scenarios", params);
+  }
+
+  completeInteractionRunCombined(
+    params: CompleteInteractionRunCombinedRequest
+  ): Promise<void> {
+    return this.post("/combined/complete-interaction-run", params);
   }
 }
 

@@ -126,21 +126,12 @@ export async function runTestRun(
     }
   }
 
-  async function publishStatusUpdate(message: string): Promise<void> {
+  function publishStatusUpdate(message: string): void {
     latestStatusUpdate = message;
     events.onStatusUpdate?.({ testRunId: config.testRunId, message });
     emitStatsLocal();
-    try {
-      await api.updateTestRunStats(config.testRunId, {
-        status_update: message,
-      });
-    } catch (err) {
-      logRunner("status-update:failed", {
-        testRunId: config.testRunId,
-        message,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
+    // Status updates are cosmetic — they get picked up by the next
+    // natural stats flush. Don't schedule a flush just for a status change.
   }
 
   function scheduleStatsFlush() {
@@ -161,7 +152,7 @@ export async function runTestRun(
       pageIdsFound.add(page.pageId);
       events.onPageFound(page);
       emitStatsLocal();
-      scheduleStatsFlush();
+      // Don't flush here — onPageStateCreated fires right after and will flush
     },
     onPageStateCreated(state) {
       pageStateIdsFound.add(state.pageStateId);
@@ -182,7 +173,8 @@ export async function runTestRun(
       findingsFound++;
       events.onFindingCreated(finding);
       emitStatsLocal();
-      scheduleStatsFlush();
+      // Don't schedule flush for findings — they're batched and the count
+      // gets reported on the next natural stats flush from page/interaction events
     },
   };
 
@@ -242,7 +234,7 @@ export async function runTestRun(
         durationMs: Date.now() - startTime,
       };
     }
-    await publishStatusUpdate(`Claiming scan ${config.testRunId}`);
+    publishStatusUpdate(`Claiming scan ${config.testRunId}`);
     logRunner("claim:attempting", {
       testRunId: config.testRunId,
       runnerInstanceId: config.runnerInstanceId,
@@ -288,7 +280,7 @@ export async function runTestRun(
       sizeClass: testRun.sizeClass,
       scanUrl: testRun.scanUrl ?? null,
     });
-    await publishStatusUpdate(
+    publishStatusUpdate(
       `Preparing scan for ${testRun.scanUrl ?? config.baseUrl}`
     );
 
@@ -563,7 +555,7 @@ export async function runTestRun(
         activeDependencyBranch,
         selectedInteraction: summarizeInteraction(selectedInteraction),
       });
-      await publishStatusUpdate(
+      publishStatusUpdate(
         describeInteractionStatus(
           selectedInteraction,
           testRun.scanUrl ?? config.baseUrl
@@ -648,9 +640,7 @@ export async function runTestRun(
     });
 
     if (stopped) {
-      await publishStatusUpdate(
-        "Scan stopped by user — cancelling remaining work"
-      );
+      publishStatusUpdate("Scan stopped by user — cancelling remaining work");
 
       // Cancel remaining pending interaction runs
       const remainingState = await api.getRunnerState(
@@ -716,7 +706,7 @@ export async function runTestRun(
       return result;
     }
 
-    await publishStatusUpdate("Finalizing scan results");
+    publishStatusUpdate("Finalizing scan results");
 
     await waitForCheckpoint("before_completion"); // ignore result — already finalizing
 
@@ -778,7 +768,7 @@ export async function runTestRun(
     // Post-scan: detect personas
     if (productId) {
       try {
-        await publishStatusUpdate("Detecting personas for this product");
+        publishStatusUpdate("Detecting personas for this product");
         const detectedPersonas = await api.detectPersonas(productId);
         result.personas = detectedPersonas.map(p => ({
           id: p.id,
@@ -787,13 +777,11 @@ export async function runTestRun(
         }));
         if (result.personas.length > 0) {
           wrappedEvents.onPersonasDetected?.(result.personas);
-          await publishStatusUpdate(
+          publishStatusUpdate(
             `Detected ${result.personas.length} persona${result.personas.length === 1 ? "" : "s"}`
           );
         } else {
-          await publishStatusUpdate(
-            "Persona detection completed with no personas"
-          );
+          publishStatusUpdate("Persona detection completed with no personas");
         }
       } catch (err) {
         wrappedEvents.onError({
