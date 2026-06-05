@@ -1,45 +1,25 @@
-import type { BatchTestInteractionItem } from "@sudobility/testomniac_types";
+import type {
+  GeneratorOutput,
+  GenerateSurfaceInteractionItem,
+} from "@sudobility/testomniac_types";
 import type { AnalyzerContext } from "../types";
 
 export async function generateFormTestInteractions(
   analyzer: any,
   context: AnalyzerContext
-): Promise<void> {
+): Promise<GeneratorOutput> {
   const surfaceTitle = `Forms: ${context.currentPath}`;
   if (context.forms.length === 0) {
-    await analyzer.reconcileGeneratedSurfaceElements(context, {
-      surfaceTitle,
-      desiredKeys: [],
-    });
-    return;
+    return {
+      creates: [],
+      reconciles: [{ surfaceTitle, desiredKeys: [] }],
+    };
   }
 
-  const { api, runnerId, testEnvironmentId, sizeClass, uid, bundleRun } =
-    context;
-  const { surface, surfaceRun } = await api.ensureTestSurfaceWithRun({
-    runnerId,
-    testEnvironmentId,
-    testSurface: {
-      title: surfaceTitle,
-      description: `Form workflows for ${context.currentPath}`,
-      startingPageStateId: context.currentPageStateId,
-      startingPath: context.currentPath,
-      sizeClass,
-      priority: 2,
-      surface_tags: ["form"],
-      uid,
-    },
-    testSurfaceBundleId: bundleRun.testSurfaceBundleId,
-    testSurfaceBundleRunId: bundleRun.id,
-  });
-  analyzer.invalidateSurfacesCache();
-  context.events.onTestSurfaceCreated({
-    surfaceId: surface.id,
-    title: surface.title,
-  });
+  const { runnerId, testEnvironmentId, sizeClass, uid } = context;
 
   const desiredKeys: string[] = [];
-  const batchItems: BatchTestInteractionItem[] = [];
+  const batchItems: GenerateSurfaceInteractionItem[] = [];
   for (let index = 0; index < context.forms.length; index++) {
     const form = context.forms[index];
     const formType = analyzer.identifyFormType(form, context.currentPath);
@@ -74,10 +54,9 @@ export async function generateFormTestInteractions(
         desiredKeys.push(analyzer.getGeneratedKey(searchTest));
         batchItems.push({
           runnerId,
-          testSurfaceId: surface.id,
+          testSurfaceId: 0, // filled by server
           testInteraction: searchTest,
           testEnvironmentId,
-          testSurfaceRunId: surfaceRun.id,
         });
       }
       continue;
@@ -96,10 +75,9 @@ export async function generateFormTestInteractions(
     desiredKeys.push(analyzer.getGeneratedKey(positive));
     batchItems.push({
       runnerId,
-      testSurfaceId: surface.id,
+      testSurfaceId: 0, // filled by server
       testInteraction: positive,
       testEnvironmentId,
-      testSurfaceRunId: surfaceRun.id,
     });
 
     for (const field of form.fields.filter((field: any) =>
@@ -119,10 +97,9 @@ export async function generateFormTestInteractions(
       desiredKeys.push(analyzer.getGeneratedKey(negative));
       batchItems.push({
         runnerId,
-        testSurfaceId: surface.id,
+        testSurfaceId: 0,
         testInteraction: negative,
         testEnvironmentId,
-        testSurfaceRunId: surfaceRun.id,
       });
 
       const correction = analyzer.buildFormCorrectionTestInteraction(
@@ -139,10 +116,9 @@ export async function generateFormTestInteractions(
       desiredKeys.push(analyzer.getGeneratedKey(correction));
       batchItems.push({
         runnerId,
-        testSurfaceId: surface.id,
+        testSurfaceId: 0,
         testInteraction: correction,
         testEnvironmentId,
-        testSurfaceRunId: surfaceRun.id,
       });
     }
 
@@ -165,10 +141,9 @@ export async function generateFormTestInteractions(
         desiredKeys.push(analyzer.getGeneratedKey(passwordTest));
         batchItems.push({
           runnerId,
-          testSurfaceId: surface.id,
+          testSurfaceId: 0,
           testInteraction: passwordTest,
           testEnvironmentId,
-          testSurfaceRunId: surfaceRun.id,
         });
       }
     }
@@ -179,13 +154,24 @@ export async function generateFormTestInteractions(
       formLabel
     );
   }
-  if (batchItems.length > 0) {
-    await api.ensureTestInteractionBatch(batchItems);
-  }
 
-  await analyzer.reconcileGeneratedSurfaceElements(context, {
-    surfaceId: surface.id,
-    surfaceTitle,
-    desiredKeys,
-  });
+  return {
+    creates: [
+      {
+        testSurface: {
+          title: surfaceTitle,
+          description: `Form workflows for ${context.currentPath}`,
+          startingPageStateId: context.currentPageStateId,
+          startingPath: context.currentPath,
+          sizeClass,
+          priority: 2,
+          surface_tags: ["form"],
+          uid,
+        },
+        interactions: batchItems,
+        desiredKeys,
+      },
+    ],
+    reconciles: [],
+  };
 }

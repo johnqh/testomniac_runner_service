@@ -1,10 +1,13 @@
-import type { BatchTestInteractionItem } from "@sudobility/testomniac_types";
+import type {
+  GeneratorOutput,
+  GenerateSurfaceInteractionItem,
+} from "@sudobility/testomniac_types";
 import type { AnalyzerContext } from "../types";
 
 export async function generateVariantTestInteractions(
   analyzer: any,
   context: AnalyzerContext
-): Promise<void> {
+): Promise<GeneratorOutput> {
   const allTests = analyzer.buildVariantTestInteractions(context);
 
   // Filter out interactions whose replay selector was already generated
@@ -29,44 +32,21 @@ export async function generateVariantTestInteractions(
 
   const surfaceTitle = `Variants: ${context.currentPath}`;
   if (tests.length === 0) {
-    await analyzer.reconcileGeneratedSurfaceElements(context, {
-      surfaceTitle,
-      desiredKeys: [],
-    });
-    return;
+    return {
+      creates: [],
+      reconciles: [{ surfaceTitle, desiredKeys: [] }],
+    };
   }
 
-  const { api, runnerId, testEnvironmentId, bundleRun } = context;
-  const { surface, surfaceRun } = await api.ensureTestSurfaceWithRun({
-    runnerId,
-    testEnvironmentId,
-    testSurface: {
-      title: surfaceTitle,
-      description: `Variant and option state checks for ${context.currentPath}`,
-      startingPageStateId: context.currentPageStateId,
-      startingPath: context.currentPath,
-      sizeClass: context.sizeClass,
-      priority: 2,
-      surface_tags: ["variant", "option"],
-      uid: context.uid,
-    },
-    testSurfaceBundleId: bundleRun.testSurfaceBundleId,
-    testSurfaceBundleRunId: bundleRun.id,
-  });
-  analyzer.invalidateSurfacesCache();
-  context.events.onTestSurfaceCreated({
-    surfaceId: surface.id,
-    title: surface.title,
-  });
+  const { runnerId, testEnvironmentId } = context;
 
-  const batchItems: BatchTestInteractionItem[] = [];
+  const batchItems: GenerateSurfaceInteractionItem[] = [];
   for (const test of tests) {
     batchItems.push({
       runnerId,
-      testSurfaceId: surface.id,
+      testSurfaceId: 0,
       testInteraction: test,
       testEnvironmentId,
-      testSurfaceRunId: surfaceRun.id,
     });
 
     const selector = test.steps?.[0]?.action?.path;
@@ -79,13 +59,24 @@ export async function generateVariantTestInteractions(
       );
     }
   }
-  if (batchItems.length > 0) {
-    await api.ensureTestInteractionBatch(batchItems);
-  }
 
-  await analyzer.reconcileGeneratedSurfaceElements(context, {
-    surfaceId: surface.id,
-    surfaceTitle,
-    desiredKeys: tests.map((test: any) => analyzer.getGeneratedKey(test)),
-  });
+  return {
+    creates: [
+      {
+        testSurface: {
+          title: surfaceTitle,
+          description: `Variant and option state checks for ${context.currentPath}`,
+          startingPageStateId: context.currentPageStateId,
+          startingPath: context.currentPath,
+          sizeClass: context.sizeClass,
+          priority: 2,
+          surface_tags: ["variant", "option"],
+          uid: context.uid,
+        },
+        interactions: batchItems,
+        desiredKeys: tests.map((test: any) => analyzer.getGeneratedKey(test)),
+      },
+    ],
+    reconciles: [],
+  };
 }

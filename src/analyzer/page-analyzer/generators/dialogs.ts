@@ -1,5 +1,6 @@
 import type {
-  BatchTestInteractionItem,
+  GeneratorOutput,
+  GenerateSurfaceInteractionItem,
   TestInteraction,
 } from "@sudobility/testomniac_types";
 import type { AnalyzerContext } from "../types";
@@ -7,14 +8,13 @@ import type { AnalyzerContext } from "../types";
 export async function generateDialogLifecycleTestInteractions(
   analyzer: any,
   context: AnalyzerContext
-): Promise<void> {
+): Promise<GeneratorOutput> {
   const surfaceTitle = `Dialogs: ${context.currentPath}`;
   if (!analyzer.pageHasOpenDialog(context.html)) {
-    await analyzer.reconcileGeneratedSurfaceElements(context, {
-      surfaceTitle,
-      desiredKeys: [],
-    });
-    return;
+    return {
+      creates: [],
+      reconciles: [{ surfaceTitle, desiredKeys: [] }],
+    };
   }
 
   const closeCandidates = analyzer.selectRepresentativeItems(
@@ -48,48 +48,37 @@ export async function generateDialogLifecycleTestInteractions(
     )
   );
 
-  const { api, runnerId, testEnvironmentId, bundleRun } = context;
-  const { surface, surfaceRun } = await api.ensureTestSurfaceWithRun({
-    runnerId,
-    testEnvironmentId,
-    testSurface: {
-      title: surfaceTitle,
-      description: `Dialog lifecycle checks for ${context.currentPath}`,
-      startingPageStateId: context.currentPageStateId,
-      startingPath: context.currentPath,
-      sizeClass: context.sizeClass,
-      priority: 4,
-      surface_tags: ["dialog"],
-      uid: context.uid,
-    },
-    testSurfaceBundleId: bundleRun.testSurfaceBundleId,
-    testSurfaceBundleRunId: bundleRun.id,
-  });
-  analyzer.invalidateSurfacesCache();
-  context.events.onTestSurfaceCreated({
-    surfaceId: surface.id,
-    title: surface.title,
-  });
+  const { runnerId, testEnvironmentId } = context;
 
   const desiredKeys = tests.map((test: TestInteraction) =>
     analyzer.getGeneratedKey(test)
   );
-  const batchItems: BatchTestInteractionItem[] = tests.map(
+  const batchItems: GenerateSurfaceInteractionItem[] = tests.map(
     (test: TestInteraction) => ({
       runnerId,
-      testSurfaceId: surface.id,
+      testSurfaceId: 0,
       testInteraction: test,
       testEnvironmentId,
-      testSurfaceRunId: surfaceRun.id,
     })
   );
-  if (batchItems.length > 0) {
-    await api.ensureTestInteractionBatch(batchItems);
-  }
 
-  await analyzer.reconcileGeneratedSurfaceElements(context, {
-    surfaceId: surface.id,
-    surfaceTitle,
-    desiredKeys,
-  });
+  return {
+    creates: [
+      {
+        testSurface: {
+          title: surfaceTitle,
+          description: `Dialog lifecycle checks for ${context.currentPath}`,
+          startingPageStateId: context.currentPageStateId,
+          startingPath: context.currentPath,
+          sizeClass: context.sizeClass,
+          priority: 4,
+          surface_tags: ["dialog"],
+          uid: context.uid,
+        },
+        interactions: batchItems,
+        desiredKeys,
+      },
+    ],
+    reconciles: [],
+  };
 }

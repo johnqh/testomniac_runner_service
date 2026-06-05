@@ -67,6 +67,12 @@ import type {
   BatchTestInteractionRunsResponse,
   BatchTestInteractionItem,
   BatchTestInteractionResult,
+  EnsurePageStateRequest,
+  EnsurePageStateResponse,
+  GenerateSurfaceInteractionsRequest,
+  GenerateSurfaceInteractionsResponse,
+  GenerateAllSurfaceInteractionsRequest,
+  GenerateAllSurfaceInteractionsResponse,
 } from "@sudobility/testomniac_types";
 
 type StatusUpdatePayload = {
@@ -1095,6 +1101,40 @@ export class ApiClient {
     pendingInteractionRuns: BatchTestInteractionRunsResponse;
   }> {
     return this.get(`/runner-state?bundleRunId=${bundleRunId}`);
+  }
+
+  // ===========================================================================
+  // Combined Endpoints
+  // ===========================================================================
+
+  async ensurePageStateCombined(
+    params: EnsurePageStateRequest
+  ): Promise<EnsurePageStateResponse> {
+    return this.post("/combined/ensure-page-state", params);
+  }
+
+  async generateSurfaceInteractions(
+    params: GenerateSurfaceInteractionsRequest
+  ): Promise<GenerateSurfaceInteractionsResponse> {
+    const result = await this.post<GenerateSurfaceInteractionsResponse>(
+      "/combined/generate-surface-interactions",
+      params
+    );
+    this.invalidateSurfacesCache();
+    this.invalidateInteractionsCache();
+    return result;
+  }
+
+  async generateAllSurfaceInteractions(
+    params: GenerateAllSurfaceInteractionsRequest
+  ): Promise<GenerateAllSurfaceInteractionsResponse> {
+    const result = await this.post<GenerateAllSurfaceInteractionsResponse>(
+      "/combined/generate-all-surface-interactions",
+      params
+    );
+    this.invalidateSurfacesCache();
+    this.invalidateInteractionsCache();
+    return result;
   }
 }
 

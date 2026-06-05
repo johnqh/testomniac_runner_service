@@ -9,6 +9,7 @@ import type {
   FormInfo,
   FormField,
   TestStep,
+  GeneratorOutput,
 } from "@sudobility/testomniac_types";
 import {
   PlaywrightAction,
@@ -610,11 +611,14 @@ export class PageAnalyzer {
       currentTestInteractionId: contextForFullPass.currentTestInteractionId,
       currentPageStateId: contextForFullPass.currentPageStateId,
     });
-    await generateRenderTestInteractions(this, contextForFullPass);
-    await generateFormTestInteractions(this, contextForFullPass);
+    // Collect all standard generator outputs (they return data, no API calls)
+    const outputs: GeneratorOutput[] = [];
+    outputs.push(
+      await generateRenderTestInteractions(this, contextForFullPass)
+    );
+    outputs.push(await generateFormTestInteractions(this, contextForFullPass));
 
-    // Login test generation: detect login forms in context and generate
-    // login-specific tests if the page appears to be a login page
+    // Login test generation: calls API directly (dependency chains)
     if (contextForFullPass.loginDetection?.isLoginPage) {
       await generateLoginTestInteractions(
         this,
@@ -624,16 +628,54 @@ export class PageAnalyzer {
       );
     }
 
-    await generateSemanticJourneyTestInteractions(this, contextForFullPass);
-    await generateE2ETestInteractions(this, contextForFullPass);
-    await generateDialogLifecycleTestInteractions(this, contextForFullPass);
-    await generateScaffoldTestInteractions(this, contextForFullPass);
-    await generateContentTestInteractions(this, contextForFullPass);
-    await generateKeyboardAndDisclosureTestInteractions(
-      this,
-      contextForFullPass
+    outputs.push(
+      await generateSemanticJourneyTestInteractions(this, contextForFullPass)
     );
-    await generateVariantTestInteractions(this, contextForFullPass);
+    outputs.push(await generateE2ETestInteractions(this, contextForFullPass));
+    outputs.push(
+      await generateDialogLifecycleTestInteractions(this, contextForFullPass)
+    );
+    outputs.push(
+      await generateScaffoldTestInteractions(this, contextForFullPass)
+    );
+    outputs.push(
+      await generateContentTestInteractions(this, contextForFullPass)
+    );
+    outputs.push(
+      await generateKeyboardAndDisclosureTestInteractions(
+        this,
+        contextForFullPass
+      )
+    );
+    outputs.push(
+      await generateVariantTestInteractions(this, contextForFullPass)
+    );
+
+    // Batch all collected generator outputs in one API call
+    const allCreates = outputs.flatMap(o => o.creates);
+    const allReconciles = outputs.flatMap(o => o.reconciles);
+    if (allCreates.length > 0 || allReconciles.length > 0) {
+      const batchResult =
+        await contextForFullPass.api.generateAllSurfaceInteractions({
+          runnerId: contextForFullPass.runnerId,
+          testEnvironmentId: contextForFullPass.testEnvironmentId,
+          sizeClass: contextForFullPass.sizeClass,
+          testSurfaceBundleId: contextForFullPass.bundleRun.testSurfaceBundleId,
+          testSurfaceBundleRunId: contextForFullPass.bundleRun.id,
+          surfaces: allCreates,
+          reconcileOnly: allReconciles,
+        });
+
+      // Emit events for all created surfaces
+      for (const item of batchResult.results) {
+        contextForFullPass.events.onTestSurfaceCreated({
+          surfaceId: item.surface.id,
+          title: item.surface.title,
+        });
+      }
+    }
+
+    // Navigation calls API directly (no surface creation, no reconcile)
     await generateNavigationTestInteractions(this, contextForFullPass);
   }
 
@@ -1014,20 +1056,19 @@ export class PageAnalyzer {
   private async ensureTargetPageState(
     context: AnalyzerContext
   ): Promise<number> {
-    const scaffoldIdsBySelector = await this.ensureScaffolds(context);
-
-    for (const item of context.actionableItems) {
-      if (!item.selector) continue;
-      const scaffoldSelector =
-        context.scaffoldSelectorByItemSelector[item.selector] ?? null;
-      if (!scaffoldSelector) continue;
-      const scaffoldId = scaffoldIdsBySelector.get(scaffoldSelector);
-      if (scaffoldId) {
-        item.scaffoldId = scaffoldId;
-      }
-    }
-
+    // Fast path: page state already known — just link scaffolds
     if (context.currentPageStateId > 0) {
+      const scaffoldIdsBySelector = await this.ensureScaffolds(context);
+      for (const item of context.actionableItems) {
+        if (!item.selector) continue;
+        const scaffoldSelector =
+          context.scaffoldSelectorByItemSelector[item.selector] ?? null;
+        if (!scaffoldSelector) continue;
+        const scaffoldId = scaffoldIdsBySelector.get(scaffoldSelector);
+        if (scaffoldId) {
+          item.scaffoldId = scaffoldId;
+        }
+      }
       if (scaffoldIdsBySelector.size > 0) {
         await context.api.linkPageStateScaffolds(
           context.currentPageStateId,
@@ -1042,109 +1083,75 @@ export class PageAnalyzer {
       return context.currentPageStateId;
     }
 
+    // Combined endpoint: scaffolds + match + create in one round-trip
     const hashes = await computeHashes(context.html, context.actionableItems);
-    const existing = await context.api.findMatchingPageState(
-      context.pageId,
-      hashes,
-      context.sizeClass
-    );
-    if (existing) {
-      if (scaffoldIdsBySelector.size > 0) {
-        await context.api.linkPageStateScaffolds(
-          existing.id,
-          Array.from(new Set(scaffoldIdsBySelector.values()))
-        );
-      }
-      context.events.onPageStateCreated({
-        pageStateId: existing.id,
-        pageId: context.pageId,
-      });
-      await this.ensureStoredForms(existing.id, context);
-      return existing.id;
-    }
 
-    // Fallback: match by content minus scaffolds (e.g., cookie banner
-    // presence/absence should not create a different page state)
+    let fixedBodyHash: string | undefined;
     if (context.scaffolds.length > 0) {
       const body = getBody(context.html);
       const { contentBody } = getContentBody(body, context.scaffolds);
-      const contentBodyHash = await sha256(normalizeHtml(contentBody));
-      const existingByContent =
-        await context.api.findMatchingPageStateByContentBody(
-          context.pageId,
-          contentBodyHash,
-          context.sizeClass
-        );
-      if (existingByContent) {
-        if (scaffoldIdsBySelector.size > 0) {
-          await context.api.linkPageStateScaffolds(
-            existingByContent.id,
-            Array.from(new Set(scaffoldIdsBySelector.values()))
-          );
-        }
-        context.events.onPageStateCreated({
-          pageStateId: existingByContent.id,
-          pageId: context.pageId,
-        });
-        await this.ensureStoredForms(existingByContent.id, context);
-        return existingByContent.id;
-      }
+      fixedBodyHash = await sha256(normalizeHtml(contentBody));
     }
 
-    const contentHash = createHash("sha256").update(context.html).digest("hex");
-    const contentElement = await context.api.findOrCreateHtmlElement(
-      context.html,
-      contentHash
-    );
-    await context.api.insertActionableItems(
-      contentElement.id,
-      context.actionableItems
-    );
-
-    const pageState = await context.api.createPageState({
-      pageId: context.pageId,
+    const result = await context.api.ensurePageStateCombined({
+      pageId: context.pageId > 0 ? context.pageId : undefined,
+      relativePath: context.pageId === 0 ? context.currentPath : undefined,
+      runnerId: context.runnerId,
+      testEnvironmentId: context.testEnvironmentId,
       sizeClass: context.sizeClass,
-      hashes,
-      contentText: htmlToMarkdown(context.html).slice(0, 5000),
-      contentHtmlElementId: contentElement.id,
       screenshotPath: context.screenshotPath,
+      html: context.html,
+      contentText: htmlToMarkdown(context.html).slice(0, 5000),
+      hashes,
+      fixedBodyHash,
+      actionableItems: context.actionableItems,
+      scaffolds: context.scaffolds.map(scaffold => ({
+        type: scaffold.type,
+        html: scaffold.outerHtml,
+        hash: scaffold.hash,
+        selector: scaffold.selector,
+      })),
+      scaffoldSelectorByItemSelector: context.scaffoldSelectorByItemSelector,
     });
 
-    // Store content-body hash (HTML minus scaffolds) for fallback matching
-    if (context.scaffolds.length > 0) {
-      const body = getBody(context.html);
-      const { contentBody } = getContentBody(body, context.scaffolds);
-      const contentBodyHash = await sha256(normalizeHtml(contentBody));
-      try {
-        await context.api.updatePageStateDecomposedHashes(pageState.id, {
-          fixedBodyHash: contentBodyHash,
-          scaffoldsHash: "",
-          patternsHash: "",
-        });
-      } catch (err) {
-        // Best effort — decomposed hashes are optional
-        logAnalyzer("decomposed-hashes:failed", {
-          pageStateId: pageState.id,
-          error: err instanceof Error ? err.message : String(err),
-        });
+    // Part A: server resolved the page — update context
+    if (result.pageId && context.pageId === 0) {
+      context.pageId = result.pageId;
+      context.pageRequiresLogin = result.requiresLogin;
+    }
+
+    // Map scaffold IDs back to in-memory actionable items for generators
+    for (const item of context.actionableItems) {
+      if (!item.selector) continue;
+      const scaffoldSelector =
+        context.scaffoldSelectorByItemSelector[item.selector] ?? null;
+      if (!scaffoldSelector) continue;
+      const scaffoldId = result.scaffoldIdsBySelector[scaffoldSelector];
+      if (scaffoldId) {
+        item.scaffoldId = scaffoldId;
+      }
+    }
+
+    // Update scaffold screenshot if missing (best-effort, parallel)
+    if (context.screenshotPath && context.scaffolds.length > 0) {
+      for (const scaffold of context.scaffolds) {
+        const scaffoldId = result.scaffoldIdsBySelector[scaffold.selector];
+        if (scaffoldId) {
+          context.api
+            .updateScaffoldScreenshot(scaffoldId, context.screenshotPath)
+            .catch(() => {});
+        }
       }
     }
 
     context.events.onPageStateCreated({
-      pageStateId: pageState.id,
-      pageId: context.pageId,
+      pageStateId: result.pageStateId,
+      pageId: result.pageId ?? context.pageId,
     });
 
-    if (scaffoldIdsBySelector.size > 0) {
-      await context.api.linkPageStateScaffolds(
-        pageState.id,
-        Array.from(new Set(scaffoldIdsBySelector.values()))
-      );
-    }
+    await this.ensureStoredForms(result.pageStateId, context);
 
-    await this.ensureStoredForms(pageState.id, context);
-
-    return pageState.id;
+    return result.pageStateId;
   }
 
   private async ensureScaffolds(

@@ -860,32 +860,15 @@ export async function executeTestInteraction(
       const url = new URL(currentUrl);
       const currentPath = `${url.pathname}${url.search}`;
 
-      const page = await api.findOrCreatePage(
-        testRun.runnerId,
-        currentPath,
-        testRun.testEnvironmentId ?? undefined
-      );
-      events.onPageFound({
-        relativePath: currentPath,
-        pageId: page.id,
-      });
+      // Page find-or-create is now handled by ensurePageStateCombined
+      // (Part A: folded into the combined endpoint)
 
-      // Detect if this is a login page
+      // Detect if this is a login page (browser-side, no pageId needed)
       const loginDetection = await detectLoginPage(
         adapter,
         currentPath,
         ensureArray(forms)
       );
-
-      // If login page detected, mark it in the DB
-      if (loginDetection.isLoginPage) {
-        await api.markIsLoginPage(page.id).catch(err =>
-          logExecutor("mark-login-page:failed", {
-            pageId: page.id,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        );
-      }
 
       // Capture and upload screenshot for page state
       let screenshotPath: string | undefined;
@@ -916,8 +899,8 @@ export async function executeTestInteraction(
         currentPageStateId: 0,
         beginningPageStateId: beginningPageStateId,
         currentPath,
-        pageId: page.id,
-        pageRequiresLogin: page.requiresLogin ?? false,
+        pageId: 0, // resolved by ensurePageStateCombined via relativePath
+        pageRequiresLogin: false,
         scaffolds,
         scaffoldSelectorByItemSelector,
         actionableItems: ensureArray(items),
@@ -950,6 +933,23 @@ export async function executeTestInteraction(
         parsedTestInteraction,
         analyzerCtx
       );
+
+      // Emit page-found event and mark login page after page is resolved
+      if (analyzerCtx.pageId > 0) {
+        events.onPageFound({
+          relativePath: currentPath,
+          pageId: analyzerCtx.pageId,
+        });
+        if (loginDetection.isLoginPage) {
+          api.markIsLoginPage(analyzerCtx.pageId).catch(err =>
+            logExecutor("mark-login-page:failed", {
+              pageId: analyzerCtx.pageId,
+              error: err instanceof Error ? err.message : String(err),
+            })
+          );
+        }
+      }
+
       logExecutor("interaction:follow-up-generation-complete", {
         testInteractionRunId: testInteractionRun.id,
         testInteractionId: testInteraction.id,

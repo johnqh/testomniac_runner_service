@@ -1,13 +1,15 @@
-import type { BatchTestInteractionItem } from "@sudobility/testomniac_types";
+import type {
+  GeneratorOutput,
+  GenerateSurfaceInteractionItem,
+} from "@sudobility/testomniac_types";
 import { buildReplaySelectorFromActionableItem } from "../../../browser/replay-selector";
 import type { AnalyzerContext } from "../types";
 
 export async function generateContentTestInteractions(
   analyzer: any,
   context: AnalyzerContext
-): Promise<void> {
-  const { api, runnerId, testEnvironmentId, sizeClass, uid, bundleRun } =
-    context;
+): Promise<GeneratorOutput> {
+  const { runnerId, testEnvironmentId, sizeClass, uid } = context;
 
   const contentItems = analyzer.selectRepresentativeItems(
     context.actionableItems.filter(
@@ -17,37 +19,19 @@ export async function generateContentTestInteractions(
   );
   const surfaceTitle = `Page: ${context.currentPath}`;
   if (contentItems.length === 0) {
-    await analyzer.reconcileGeneratedSurfaceElements(context, {
-      surfaceTitle,
-      desiredKeys: [],
-      dependencyTestInteractionId: context.currentTestInteractionId,
-    });
-    return;
+    return {
+      creates: [],
+      reconciles: [
+        {
+          surfaceTitle,
+          desiredKeys: [],
+          dependencyTestInteractionId: context.currentTestInteractionId,
+        },
+      ],
+    };
   }
-  const { surface, surfaceRun } = await api.ensureTestSurfaceWithRun({
-    runnerId,
-    testEnvironmentId,
-    testSurface: {
-      title: surfaceTitle,
-      description: `Tests for page content at ${context.currentPath}`,
-      startingPageStateId: context.currentPageStateId,
-      startingPath: context.currentPath,
-      sizeClass,
-      priority: 1,
-      surface_tags: ["page-content"],
-      uid,
-    },
-    testSurfaceBundleId: bundleRun.testSurfaceBundleId,
-    testSurfaceBundleRunId: bundleRun.id,
-  });
-  analyzer.invalidateSurfacesCache();
-  context.events.onTestSurfaceCreated({
-    surfaceId: surface.id,
-    title: surface.title,
-  });
-
   const desiredKeys: string[] = [];
-  const batchItems: BatchTestInteractionItem[] = [];
+  const batchItems: GenerateSurfaceInteractionItem[] = [];
   for (const item of contentItems) {
     // Skip interactions for shared layout elements already tested under
     // a different URL variant of the same base path.
@@ -86,10 +70,9 @@ export async function generateContentTestInteractions(
     desiredKeys.push(analyzer.getGeneratedKey(testInteraction));
     batchItems.push({
       runnerId,
-      testSurfaceId: surface.id,
+      testSurfaceId: 0,
       testInteraction,
       testEnvironmentId,
-      testSurfaceRunId: surfaceRun.id,
     });
     await analyzer.markGeneratedSelectorForBasePath(
       context.currentPath,
@@ -97,14 +80,25 @@ export async function generateContentTestInteractions(
       replaySelector
     );
   }
-  if (batchItems.length > 0) {
-    await api.ensureTestInteractionBatch(batchItems);
-  }
 
-  await analyzer.reconcileGeneratedSurfaceElements(context, {
-    surfaceId: surface.id,
-    surfaceTitle,
-    desiredKeys,
-    dependencyTestInteractionId: context.currentTestInteractionId,
-  });
+  return {
+    creates: [
+      {
+        testSurface: {
+          title: surfaceTitle,
+          description: `Tests for page content at ${context.currentPath}`,
+          startingPageStateId: context.currentPageStateId,
+          startingPath: context.currentPath,
+          sizeClass,
+          priority: 1,
+          surface_tags: ["page-content"],
+          uid,
+        },
+        interactions: batchItems,
+        desiredKeys,
+        dependencyTestInteractionId: context.currentTestInteractionId,
+      },
+    ],
+    reconciles: [],
+  };
 }

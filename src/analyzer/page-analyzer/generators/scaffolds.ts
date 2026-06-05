@@ -1,14 +1,19 @@
-import type { BatchTestInteractionItem } from "@sudobility/testomniac_types";
+import type {
+  GeneratorOutput,
+  GeneratorSurfaceOutput,
+  GeneratorReconcileOutput,
+  GenerateSurfaceInteractionItem,
+} from "@sudobility/testomniac_types";
 import type { AnalyzerContext } from "../types";
 
 export async function generateScaffoldTestInteractions(
   analyzer: any,
   context: AnalyzerContext
-): Promise<void> {
-  const { api, runnerId, testEnvironmentId, sizeClass, uid, bundleRun } =
-    context;
+): Promise<GeneratorOutput> {
+  const { api, runnerId, testEnvironmentId, sizeClass, uid } = context;
   const processedSurfaceTitles = new Set<string>();
-  const desiredKeysBySurface = new Map<string, string[]>();
+  const creates: GeneratorSurfaceOutput[] = [];
+  const reconciles: GeneratorReconcileOutput[] = [];
 
   for (const scaffold of context.scaffolds) {
     const scaffoldItems = analyzer.selectRepresentativeItems(
@@ -18,33 +23,17 @@ export async function generateScaffoldTestInteractions(
     const surfaceTitle = `Scaffold: ${scaffold.type}`;
     processedSurfaceTitles.add(surfaceTitle);
     if (scaffoldItems.length === 0) {
-      desiredKeysBySurface.set(surfaceTitle, []);
+      // Empty scaffold — reconcile-only with no desired keys
+      reconciles.push({
+        surfaceTitle,
+        desiredKeys: [],
+        dependencyTestInteractionId: context.currentTestInteractionId,
+      });
       continue;
     }
-    const { surface, surfaceRun } = await api.ensureTestSurfaceWithRun({
-      runnerId,
-      testEnvironmentId,
-      testSurface: {
-        title: surfaceTitle,
-        description: `Tests for ${scaffold.type} scaffold`,
-        startingPageStateId: context.currentPageStateId,
-        startingPath: context.currentPath,
-        sizeClass,
-        priority: 3,
-        surface_tags: ["scaffold", scaffold.type],
-        uid,
-      },
-      testSurfaceBundleId: bundleRun.testSurfaceBundleId,
-      testSurfaceBundleRunId: bundleRun.id,
-    });
-    analyzer.invalidateSurfacesCache();
-    context.events.onTestSurfaceCreated({
-      surfaceId: surface.id,
-      title: surface.title,
-    });
 
     const desiredKeys: string[] = [];
-    const batchItems: BatchTestInteractionItem[] = [];
+    const batchItems: GenerateSurfaceInteractionItem[] = [];
     for (const item of scaffoldItems) {
       const testInteraction = analyzer.shouldUseDirectControlInteraction(item)
         ? analyzer.buildControlInteractionTestInteraction(
@@ -66,45 +55,44 @@ export async function generateScaffoldTestInteractions(
       desiredKeys.push(analyzer.getGeneratedKey(testInteraction));
       batchItems.push({
         runnerId,
-        testSurfaceId: surface.id,
+        testSurfaceId: 0,
         testInteraction,
         testEnvironmentId,
-        testSurfaceRunId: surfaceRun.id,
       });
     }
-    if (batchItems.length > 0) {
-      await api.ensureTestInteractionBatch(batchItems);
-    }
 
-    desiredKeysBySurface.set(surfaceTitle, desiredKeys);
-    await analyzer.reconcileGeneratedSurfaceElements(context, {
-      surfaceId: surface.id,
-      surfaceTitle,
+    creates.push({
+      testSurface: {
+        title: surfaceTitle,
+        description: `Tests for ${scaffold.type} scaffold`,
+        startingPageStateId: context.currentPageStateId,
+        startingPath: context.currentPath,
+        sizeClass,
+        priority: 3,
+        surface_tags: ["scaffold", scaffold.type],
+        uid,
+      },
+      interactions: batchItems,
       desiredKeys,
       dependencyTestInteractionId: context.currentTestInteractionId,
     });
   }
 
+  // Find existing scaffold surfaces not present on the current page and
+  // add reconcile-only entries so their stale interactions get retired.
   const existingSurfaces = await api.getTestSurfacesByRunner(runnerId);
   for (const surface of existingSurfaces.filter((item: any) =>
     item.title.startsWith("Scaffold: ")
   )) {
     if (!processedSurfaceTitles.has(surface.title)) {
-      await analyzer.reconcileGeneratedSurfaceElements(context, {
-        surfaceId: surface.id,
+      reconciles.push({
         surfaceTitle: surface.title,
+        surfaceId: surface.id,
         desiredKeys: [],
         dependencyTestInteractionId: context.currentTestInteractionId,
       });
     }
   }
 
-  for (const [surfaceTitle, desiredKeys] of desiredKeysBySurface) {
-    if (desiredKeys.length > 0) continue;
-    await analyzer.reconcileGeneratedSurfaceElements(context, {
-      surfaceTitle,
-      desiredKeys,
-      dependencyTestInteractionId: context.currentTestInteractionId,
-    });
-  }
+  return { creates, reconciles };
 }
