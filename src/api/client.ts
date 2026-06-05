@@ -73,6 +73,8 @@ import type {
   GenerateSurfaceInteractionsResponse,
   GenerateAllSurfaceInteractionsRequest,
   GenerateAllSurfaceInteractionsResponse,
+  DetectPersonasAndScenariosRequest,
+  DetectPersonasAndScenariosResponse,
 } from "@sudobility/testomniac_types";
 
 type StatusUpdatePayload = {
@@ -1135,6 +1137,12 @@ export class ApiClient {
     this.invalidateSurfacesCache();
     this.invalidateInteractionsCache();
     return result;
+  }
+
+  detectPersonasAndScenarios(
+    params: DetectPersonasAndScenariosRequest
+  ): Promise<DetectPersonasAndScenariosResponse> {
+    return this.post("/combined/detect-personas-and-scenarios", params);
   }
 }
 
