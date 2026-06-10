@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ActionableItem } from "@sudobility/testomniac_types";
 import { PageAnalyzer } from ".";
-import type { DetectedScaffoldRegion } from "../../scanner/component-detector";
 
 function createItem(
   selector: string,
@@ -152,57 +151,7 @@ describe("PageAnalyzer repeated item selection", () => {
     ).toBe(true);
   });
 
-  it("limits scaffold surface items to the current scaffold selector", () => {
-    const analyzer = new PageAnalyzer() as any;
-    const headerScaffold: DetectedScaffoldRegion = {
-      type: "header",
-      selector: "#site-header",
-      outerHtml: "<header id='site-header'></header>",
-      hash: "header-hash",
-    };
-    const sidebarScaffold: DetectedScaffoldRegion = {
-      type: "sidebar",
-      selector: "#site-sidebar",
-      outerHtml: "<aside id='site-sidebar'></aside>",
-      hash: "sidebar-hash",
-    };
-    const headerItem = createItem("[data-tmnc-id='header-cart']", {
-      actionKind: "click",
-      textContent: "Cart",
-      attributes: {
-        _containerFingerprint: "header-cart",
-      },
-    });
-    const sidebarItem = createItem("[data-tmnc-id='sidebar-search']", {
-      actionKind: "fill",
-      textContent: "Search",
-      attributes: {
-        _containerFingerprint: "sidebar-search",
-      },
-    });
-
-    const context = {
-      actionableItems: [headerItem, sidebarItem],
-      scaffoldSelectorByItemSelector: {
-        [headerItem.selector as string]: headerScaffold.selector,
-        [sidebarItem.selector as string]: sidebarScaffold.selector,
-      },
-    };
-
-    const headerItems = analyzer.getScaffoldSurfaceItems(
-      context,
-      headerScaffold
-    );
-    const sidebarItems = analyzer.getScaffoldSurfaceItems(
-      context,
-      sidebarScaffold
-    );
-
-    expect(headerItems).toHaveLength(1);
-    expect(headerItems[0]?.selector).toBe(headerItem.selector);
-    expect(sidebarItems).toHaveLength(1);
-    expect(sidebarItems[0]?.selector).toBe(sidebarItem.selector);
-  });
+  // Tests for getScaffoldSurfaceItems removed — method moved to testomniac_api generators.
 
   it("caps per action style when many different containers share the same CTA", () => {
     const analyzer = new PageAnalyzer() as any;
@@ -229,56 +178,6 @@ describe("PageAnalyzer repeated item selection", () => {
         (item: ActionableItem) => item.textContent === "ADD TO CART"
       )
     ).toBe(true);
-  });
-
-  it("dedupes repeated items within a single scaffold after scoping to that scaffold", () => {
-    const analyzer = new PageAnalyzer() as any;
-    const sidebarScaffold: DetectedScaffoldRegion = {
-      type: "sidebar",
-      selector: "#site-sidebar",
-      outerHtml: "<aside id='site-sidebar'></aside>",
-      hash: "sidebar-hash",
-    };
-    const repeatedSidebarItems: ActionableItem[] = [
-      createItem("[data-tmnc-id='sidebar-item-1']", {
-        actionKind: "click",
-        accessibleName: "ADD TO CART",
-        textContent: "ADD TO CART",
-        attributes: {
-          _containerFingerprint: "sidebar-card|price|img|add to cart",
-        },
-      }),
-      createItem("[data-tmnc-id='sidebar-item-2']", {
-        actionKind: "click",
-        accessibleName: "ADD TO CART",
-        textContent: "ADD TO CART",
-        attributes: {
-          _containerFingerprint: "sidebar-card|price|img|add to cart",
-        },
-      }),
-      createItem("[data-tmnc-id='content-item']", {
-        actionKind: "click",
-        accessibleName: "ADD TO CART",
-        textContent: "ADD TO CART",
-        attributes: {
-          _containerFingerprint: "content-card|price|img|add to cart",
-        },
-      }),
-    ];
-    const context = {
-      actionableItems: repeatedSidebarItems,
-      scaffoldSelectorByItemSelector: {
-        "[data-tmnc-id='sidebar-item-1']": sidebarScaffold.selector,
-        "[data-tmnc-id='sidebar-item-2']": sidebarScaffold.selector,
-      },
-    };
-
-    const scoped = analyzer.getScaffoldSurfaceItems(context, sidebarScaffold);
-    const selected = analyzer.selectRepresentativeItems(scoped);
-
-    expect(scoped).toHaveLength(2);
-    expect(selected).toHaveLength(1);
-    expect(selected[0]?.selector).toBe("[data-tmnc-id='sidebar-item-1']");
   });
 
   it("caps items without container fingerprints by action style", () => {
