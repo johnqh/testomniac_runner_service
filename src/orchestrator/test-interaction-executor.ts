@@ -16,7 +16,7 @@ import type {
 } from "@sudobility/testomniac_types";
 import type { ScanEventHandler } from "./types";
 import type { Expertise, ExpertiseContext, Outcome } from "../expertise/types";
-import type { PageAnalyzer, AnalyzerContext } from "../analyzer";
+import type { PageAnalyzer } from "../analyzer";
 import { isWithinScopePath } from "../crawler/scope-checker";
 import { detectLoginPage } from "../scanner/login-detector";
 import { evaluatePageHealth } from "../scanner/page-health-evaluator";
@@ -860,7 +860,12 @@ export async function executeTestInteraction(
         screenshotPath,
         html: normalizeHtml(html),
         contentText: "",
-        hashes: { htmlHash: "", normalizedHtmlHash: "", textHash: "", actionableHash: "" },
+        hashes: {
+          htmlHash: "",
+          normalizedHtmlHash: "",
+          textHash: "",
+          actionableHash: "",
+        },
         actionableItems: ensureArray(items),
         scaffolds: scaffolds.map(s => ({
           type: s.type,

@@ -9,7 +9,6 @@ import type {
   FormInfo,
   FormField,
   TestStep,
-  GeneratorOutput,
 } from "@sudobility/testomniac_types";
 import {
   PlaywrightAction,
@@ -22,7 +21,6 @@ import {
 } from "../../browser/replay-selector";
 import {
   computeHashes,
-  computeActionableHash,
   sha256,
   normalizeHtml,
   htmlToMarkdown,
@@ -422,7 +420,6 @@ export class PageAnalyzer {
   ): Promise<void> {
     // No-op: generators moved to testomniac_api /combined/next endpoint
   }
-
 
   async reconcileGeneratedSurfaceElements(
     context: AnalyzerContext,
