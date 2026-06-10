@@ -78,15 +78,6 @@ export {
   type FillValuePlanner,
 } from "./planners/fill-value-planner";
 
-// AI (new)
-export { runAiAnalysis, type AnalyzerOptions } from "./ai/analyzer";
-export { generatePersonas, type PersonaResult } from "./ai/persona-generator";
-export { generateUseCases, type UseCaseResult } from "./ai/use-case-generator";
-export {
-  generateInputValues,
-  type InputValueResult,
-} from "./ai/input-generator";
-
 // Generation (new)
 export {
   generateTestInteractions,

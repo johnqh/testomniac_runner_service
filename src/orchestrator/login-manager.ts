@@ -10,21 +10,8 @@ import {
 import { extractForms } from "../extractors/form-extractor";
 import { executeSSOFlow } from "./sso-handler";
 
-// =============================================================================
-// Types
-// =============================================================================
-
-export interface LoginConfig {
-  /** Explicit login page URL (optional) */
-  loginUrl?: string;
-  /** Credentials for email/password login */
-  email?: string;
-  username?: string;
-  password?: string;
-  twoFactorCode?: string;
-  /** Auth provider type (email_password, google, etc.) */
-  authProvider?: string;
-}
+export type { LoginConfig } from "@sudobility/testomniac_types";
+import type { LoginConfig } from "@sudobility/testomniac_types";
 
 interface LoginState {
   isLoggedIn: boolean;

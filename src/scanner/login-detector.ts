@@ -4,43 +4,18 @@ function logModule(step: string, details?: Record<string, unknown>): void {
 
 import type { BrowserAdapter } from "../adapter";
 import type { FormInfo } from "../domain/types";
-
-// =============================================================================
-// Types
-// =============================================================================
-
-export type LoginSignal =
-  | "url_pattern"
-  | "password_field"
-  | "email_password_form"
-  | "sso_button"
-  | "login_heading";
-
-export type AuthProviderType =
-  | "google"
-  | "apple"
-  | "microsoft"
-  | "twitter"
-  | "facebook"
-  | "github"
-  | "linkedin"
-  | "okta"
-  | "saml"
-  | "unknown";
-
-export interface SSOButtonInfo {
-  provider: AuthProviderType;
-  selector: string;
-  label: string;
-}
-
-export interface LoginDetectionResult {
-  isLoginPage: boolean;
-  confidence: "high" | "medium" | "low";
-  signals: LoginSignal[];
-  loginForm: FormInfo | null;
-  ssoButtons: SSOButtonInfo[];
-}
+export type {
+  LoginSignal,
+  AuthProviderType,
+  SSOButtonInfo,
+  LoginDetectionResult,
+} from "@sudobility/testomniac_types";
+import type {
+  LoginSignal,
+  AuthProviderType,
+  SSOButtonInfo,
+  LoginDetectionResult,
+} from "@sudobility/testomniac_types";
 
 // =============================================================================
 // Constants
