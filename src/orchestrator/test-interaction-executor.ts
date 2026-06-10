@@ -727,9 +727,8 @@ export async function executeTestInteraction(
         }
       }
     }
-    if (findingItems.length > 0) {
-      await api.ensureTestRunFindingBatch(findingItems);
-    }
+    // Findings will be batched into the combinedNext call below
+    const allFindingItems = [...findingItems];
     for (const evt of pendingFindingEvents) {
       events.onFindingCreated(evt);
     }
@@ -786,9 +785,7 @@ export async function executeTestInteraction(
           });
           await analyzer?.markReportedFindingByKey(healthKey);
         }
-        if (healthFindingItems.length > 0) {
-          await api.ensureTestRunFindingBatch(healthFindingItems);
-        }
+        allFindingItems.push(...healthFindingItems);
         for (const evt of healthFindingEvents) {
           events.onFindingCreated(evt);
         }
@@ -822,21 +819,35 @@ export async function executeTestInteraction(
     currentPhase = "completing-interaction-run";
     publishStatusUpdate(`Recording results for ${testInteraction.title}`);
 
-    // Combined endpoint: clear superseded findings + complete in one call
+    // Combined endpoint: complete interaction + persist findings in one call
     const durationMs = Date.now() - startTime;
-    await api.completeInteractionRunCombined({
-      testInteractionRunId: testInteractionRun.id,
-      status,
-      durationMs,
-      status_update: `Completed interaction: ${testInteraction.title}`,
-      expectedOutcome: expectedOutcome || undefined,
-      observedOutcome: observedOutcome || undefined,
-      ...(hasErrors || hasWarnings
-        ? {
-            consoleLog: consoleLogs.join("\n") || undefined,
-            networkLog: JSON.stringify(networkLogs) || undefined,
-          }
-        : {}),
+    await api.combinedNext({
+      runnerId: testRun.runnerId,
+      testRunId: testRun.id,
+      bundleRunId: testRun.testSurfaceBundleRunId ?? 0,
+      testSurfaceBundleId: 0, // not needed for completion-only
+      sizeClass: testRun.sizeClass as any,
+      testEnvironmentId: testRun.testEnvironmentId ?? undefined,
+      completion: {
+        testInteractionRunId: testInteractionRun.id,
+        testInteractionId: testInteraction.id,
+        testSurfaceId: testInteraction.testSurfaceId,
+        surfaceRunId: testInteractionRun.testSurfaceRunId,
+        status,
+        durationMs,
+        expectedOutcome: expectedOutcome || undefined,
+        observedOutcome: observedOutcome || undefined,
+        screenshotPath: undefined,
+        consoleLog:
+          hasErrors || hasWarnings
+            ? consoleLogs.join("\n") || undefined
+            : undefined,
+        networkLog:
+          hasErrors || hasWarnings
+            ? JSON.stringify(networkLogs) || undefined
+            : undefined,
+      },
+      findings: allFindingItems.length > 0 ? allFindingItems : undefined,
     });
 
     events.onTestInteractionRunCompleted({
