@@ -76,6 +76,8 @@ import type {
   DetectPersonasAndScenariosRequest,
   DetectPersonasAndScenariosResponse,
   CompleteInteractionRunCombinedRequest,
+  CombinedNextRequest,
+  CombinedNextResponse,
 } from "@sudobility/testomniac_types";
 
 type StatusUpdatePayload = {
@@ -1150,6 +1152,10 @@ export class ApiClient {
     params: CompleteInteractionRunCombinedRequest
   ): Promise<void> {
     return this.post("/combined/complete-interaction-run", params);
+  }
+
+  combinedNext(params: CombinedNextRequest): Promise<CombinedNextResponse> {
+    return this.post("/combined/next", params);
   }
 }
 
