@@ -12,6 +12,7 @@ import type {
   TestRunResponse,
   TestSurfaceResponse,
   TestSurfaceBundleRunResponse,
+  CombinedNextPageStatePayload,
 } from "@sudobility/testomniac_types";
 import type { ScanEventHandler } from "./types";
 import type { Expertise, ExpertiseContext, Outcome } from "../expertise/types";
@@ -819,53 +820,17 @@ export async function executeTestInteraction(
     currentPhase = "completing-interaction-run";
     publishStatusUpdate(`Recording results for ${testInteraction.title}`);
 
-    // Combined endpoint: complete interaction + persist findings in one call
+    currentPhase = "completing-interaction-and-generating";
     const durationMs = Date.now() - startTime;
-    await api.combinedNext({
-      runnerId: testRun.runnerId,
-      testRunId: testRun.id,
-      bundleRunId: testRun.testSurfaceBundleRunId ?? 0,
-      testSurfaceBundleId: 0, // not needed for completion-only
-      sizeClass: testRun.sizeClass as any,
-      testEnvironmentId: testRun.testEnvironmentId ?? undefined,
-      completion: {
-        testInteractionRunId: testInteractionRun.id,
-        testInteractionId: testInteraction.id,
-        testSurfaceId: testInteraction.testSurfaceId,
-        surfaceRunId: testInteractionRun.testSurfaceRunId,
-        status,
-        durationMs,
-        expectedOutcome: expectedOutcome || undefined,
-        observedOutcome: observedOutcome || undefined,
-        screenshotPath: undefined,
-        consoleLog:
-          hasErrors || hasWarnings
-            ? consoleLogs.join("\n") || undefined
-            : undefined,
-        networkLog:
-          hasErrors || hasWarnings
-            ? JSON.stringify(networkLogs) || undefined
-            : undefined,
-      },
-      findings: allFindingItems.length > 0 ? allFindingItems : undefined,
-    });
 
-    events.onTestInteractionRunCompleted({
-      testInteractionRunId: testInteractionRun.id,
-      passed: !hasErrors,
-    });
-
-    // If discovery mode: generate new test elements
-    currentPhase = "discovering-follow-up-tests";
+    // Prepare pageState data for server-side generation (discovery mode only)
+    let pageStatePayload: CombinedNextPageStatePayload | undefined;
     if (analyzer && discoveryContext) {
       const currentUrl = await adapter.getUrl();
       const url = new URL(currentUrl);
       const currentPath = `${url.pathname}${url.search}`;
 
-      // Page find-or-create is now handled by ensurePageStateCombined
-      // (Part A: folded into the combined endpoint)
-
-      // Detect if this is a login page (browser-side, no pageId needed)
+      // Detect if this is a login page (browser-side)
       const loginDetection = await detectLoginPage(
         adapter,
         currentPath,
@@ -889,77 +854,87 @@ export async function executeTestInteraction(
         });
       }
 
-      const analyzerCtx: AnalyzerContext = {
-        runnerId: testRun.runnerId,
-        testEnvironmentId: testRun.testEnvironmentId ?? undefined,
-        sizeClass: testRun.sizeClass as "desktop" | "mobile",
-        uid: testRun.createdByUserId ?? undefined,
-        currentTestInteractionId: testInteraction.id,
-        currentTestSurfaceId: testInteraction.testSurfaceId,
-        currentSurfaceRunId: testInteractionRun.testSurfaceRunId,
+      pageStatePayload = {
+        pageId: 0,
+        relativePath: currentPath,
+        screenshotPath,
         html: normalizeHtml(html),
-        currentPageStateId: 0,
-        beginningPageStateId: beginningPageStateId,
-        currentPath,
-        pageId: 0, // resolved by ensurePageStateCombined via relativePath
-        pageRequiresLogin: false,
-        scaffolds,
-        scaffoldSelectorByItemSelector,
+        contentText: "",
+        hashes: { htmlHash: "", normalizedHtmlHash: "", textHash: "", actionableHash: "" },
         actionableItems: ensureArray(items),
-        forms: ensureArray(forms),
+        scaffolds: scaffolds.map(s => ({
+          type: s.type,
+          html: s.outerHtml,
+          hash: s.hash,
+          selector: s.selector,
+        })),
+        scaffoldSelectorByItemSelector,
+        forms: ensureArray(forms).map(f => ({ form: f })),
+        currentTestInteractionId: testInteraction.id,
+        beginningPageStateId,
         journeySteps: ensureArray(journeySteps) as any,
-        navigationSurface: discoveryContext.navigationSurface,
-        bundleRun: discoveryContext.bundleRun,
-        api,
-        events,
         siteOrigin: currentUrlParsed.origin,
         scanScopePath,
-        screenshotPath,
         loginDetection,
         loginConfig: loginManager ? loginManager.getConfig() : undefined,
       };
+    }
 
-      const parsedTestInteraction = {
-        title: testInteraction.title,
-        type: testInteraction.testType as any,
-        sizeClass: testInteraction.sizeClass as any,
-        surface_tags: testInteraction.surfaceTags,
-        priority: testInteraction.priority,
-        startingPageStateId: testInteraction.startingPageStateId ?? 0,
-        startingPath: testInteraction.startingPath ?? "",
-        steps: steps as any,
-        globalExpectations: globalExpectations as any,
-      };
-
-      await analyzer.generateTestInteractions(
-        parsedTestInteraction,
-        analyzerCtx
-      );
-
-      // Emit page-found event and mark login page after page is resolved
-      if (analyzerCtx.pageId > 0) {
-        events.onPageFound({
-          relativePath: currentPath,
-          pageId: analyzerCtx.pageId,
-        });
-        if (loginDetection.isLoginPage) {
-          api.markIsLoginPage(analyzerCtx.pageId).catch(err =>
-            logExecutor("mark-login-page:failed", {
-              pageId: analyzerCtx.pageId,
-              error: err instanceof Error ? err.message : String(err),
-            })
-          );
-        }
-      }
-
-      logExecutor("interaction:follow-up-generation-complete", {
+    // Single call: complete interaction + persist findings + page state + generators + get next
+    const combinedResult = await api.combinedNext({
+      runnerId: testRun.runnerId,
+      testRunId: testRun.id,
+      bundleRunId: testRun.testSurfaceBundleRunId ?? 0,
+      testSurfaceBundleId: discoveryContext?.bundleRun.testSurfaceBundleId ?? 0,
+      sizeClass: testRun.sizeClass as any,
+      testEnvironmentId: testRun.testEnvironmentId ?? undefined,
+      completion: {
         testInteractionRunId: testInteractionRun.id,
         testInteractionId: testInteraction.id,
-        currentPath,
-        currentPageStateId: analyzerCtx.currentPageStateId,
-        beginningPageStateId: analyzerCtx.beginningPageStateId,
+        testSurfaceId: testInteraction.testSurfaceId,
+        surfaceRunId: testInteractionRun.testSurfaceRunId,
+        status,
+        durationMs,
+        expectedOutcome: expectedOutcome || undefined,
+        observedOutcome: observedOutcome || undefined,
+        screenshotPath: pageStatePayload?.screenshotPath,
+        consoleLog:
+          hasErrors || hasWarnings
+            ? consoleLogs.join("\n") || undefined
+            : undefined,
+        networkLog:
+          hasErrors || hasWarnings
+            ? JSON.stringify(networkLogs) || undefined
+            : undefined,
+      },
+      pageState: pageStatePayload,
+      findings: allFindingItems.length > 0 ? allFindingItems : undefined,
+    });
+
+    events.onTestInteractionRunCompleted({
+      testInteractionRunId: testInteractionRun.id,
+      passed: !hasErrors,
+    });
+
+    // Emit events from the combined response
+    if (combinedResult.pageState && combinedResult.pageState.pageId > 0) {
+      events.onPageFound({
+        relativePath: pageStatePayload?.relativePath ?? "",
+        pageId: combinedResult.pageState.pageId,
       });
     }
+    for (const surface of combinedResult.generatedSurfaces) {
+      events.onTestSurfaceCreated(surface);
+    }
+
+    logExecutor("interaction:combined-next-complete", {
+      testInteractionRunId: testInteractionRun.id,
+      testInteractionId: testInteraction.id,
+      surfacesCreated: combinedResult.created.surfaces,
+      interactionsCreated: combinedResult.created.interactions,
+      findingsCreated: combinedResult.created.findings,
+      hasNext: combinedResult.next != null,
+    });
   } catch (error) {
     const durationMs = Date.now() - startTime;
     const detail =
