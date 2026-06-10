@@ -3,7 +3,6 @@ import type {
   Expectation,
   ActionableItem,
   SizeClass,
-  TestSurfaceResponse,
   ActionableItemResponse,
 } from "@sudobility/testomniac_types";
 import {
@@ -36,114 +35,22 @@ function logAnalyzer(step: string, details?: Record<string, unknown>): void {
 }
 
 /**
- * Normalize a URL path for dedup comparison:
- *  1. Remove query params with empty values (`foo=` or `foo`)
- *  2. Sort remaining params so order doesn't matter
+ * PageAnalyzer provides finding dedup, expectation generation, and
+ * hover-to-click transformation during discovery mode.
  *
- * `/store/?b=2&a=1` and `/store/?a=1&b=2` → same key.
- * `/store/?filternum=0&pagenum=1` keeps both (non-empty values).
- * `/store/?foo=&bar` drops both (empty values).
- */
-function normalizePathForDedup(raw: string): string {
-  const qIndex = raw.indexOf("?");
-  if (qIndex === -1) return raw;
-
-  const base = raw.slice(0, qIndex);
-  const search = raw.slice(qIndex + 1);
-  if (!search) return base;
-
-  const kept = search
-    .split("&")
-    .filter(pair => {
-      const eqIndex = pair.indexOf("=");
-      if (eqIndex === -1) return false; // bare key, no value
-      return pair.slice(eqIndex + 1).length > 0; // non-empty value
-    })
-    .sort();
-
-  return kept.length > 0 ? `${base}?${kept.join("&")}` : base;
-}
-
-/** Strip the query string entirely to get the base path. */
-function basePathOf(raw: string): string {
-  const qIndex = raw.indexOf("?");
-  return qIndex === -1 ? raw : raw.slice(0, qIndex);
-}
-
-/**
- * PageAnalyzer generates expectations and discovers new test elements
- * during discovery mode.
+ * Test generators have been moved server-side to testomniac_api.
  */
 export class PageAnalyzer {
   private store: DedupStore;
-  private surfacesCache: TestSurfaceResponse[] | null = null;
 
   constructor(dedupStore?: DedupStore) {
     this.store = dedupStore ?? new InMemoryDedupStore();
   }
 
-  private async getCachedSurfaces(
-    context: AnalyzerContext
-  ): Promise<TestSurfaceResponse[]> {
-    if (!this.surfacesCache) {
-      this.surfacesCache = await context.api.getTestSurfacesByRunner(
-        context.runnerId
-      );
-    }
-    return this.surfacesCache;
-  }
-
-  private invalidateSurfacesCache(): void {
-    this.surfacesCache = null;
-  }
-
-  /** Check whether generation already happened for a given path in this run. */
-  hasGeneratedForPath(path: string): Promise<boolean> {
-    return this.store.has("generatedPaths", normalizePathForDedup(path));
-  }
-
-  /**
-   * Check whether a (actionType, replaySelector) pair has already been
-   * generated for any URL variant of the same base path.
-   */
-  hasGeneratedSelectorForBasePath(
-    path: string,
-    actionType: string,
-    replaySelector: string
-  ): Promise<boolean> {
-    const key = `${basePathOf(path)}\0${actionType}\0${replaySelector}`;
-    return this.store.has("generatedSelectors", key);
-  }
-
-  /**
-   * Record that a (actionType, replaySelector) was generated under a base
-   * path so future URL variants can skip it.
-   */
-  markGeneratedSelectorForBasePath(
-    path: string,
-    actionType: string,
-    replaySelector: string
-  ): Promise<void> {
-    const key = `${basePathOf(path)}\0${actionType}\0${replaySelector}`;
-    return this.store.add("generatedSelectors", key);
-  }
-
-  /**
-   * Normalize finding text for dedup: strip leading count numbers that vary
-   * between evaluations.  Preserves URLs, status codes, and other content.
-   *
-   *   "[page-health] 5 broken image(s)" → "[page-health] broken image(s)"
-   *   "3 significant console warning(s)" → "significant console warning(s)"
-   *   "Page returned HTTP 404 for …"    → unchanged
-   */
   private static normalizeFindingText(text: string): string {
     return text.replace(/^(\[[^\]]+\]\s*)\d+\s+/, "$1").replace(/^\d+\s+/, "");
   }
 
-  /**
-   * Returns true if an equivalent page-scoped finding has already been
-   * recorded during this run.
-   */
   hasReportedPageFinding(
     _path: string,
     title: string,
@@ -153,9 +60,6 @@ export class PageAnalyzer {
     return this.store.has("reportedPageFindings", key);
   }
 
-  /**
-   * Mark a page-scoped finding as recorded so it is not duplicated.
-   */
   markPageFindingReported(
     _path: string,
     title: string,
@@ -165,19 +69,14 @@ export class PageAnalyzer {
     return this.store.add("reportedPageFindings", key);
   }
 
-  /** Check whether a finding with the given stable key has been reported. */
   hasReportedFindingByKey(key: string): Promise<boolean> {
     return this.store.has("reportedFindingKeys", key);
   }
 
-  /** Mark a stable finding key as reported. */
   markReportedFindingByKey(key: string): Promise<void> {
     return this.store.add("reportedFindingKeys", key);
   }
 
-  /**
-   * Check if a finding with this description has already been reported.
-   */
   hasReportedDescription(description: string): Promise<boolean> {
     return this.store.has(
       "reportedDescriptions",
@@ -185,20 +84,11 @@ export class PageAnalyzer {
     );
   }
 
-  /** Mark a finding description as reported. */
   markReportedDescription(description: string): Promise<void> {
     return this.store.add(
       "reportedDescriptions",
       PageAnalyzer.normalizeFindingText(description)
     );
-  }
-
-  /**
-   * Check whether full test generation already ran for a page state with the
-   * same visible actionable items (by hash).
-   */
-  hasGeneratedForActionableHash(hash: string): Promise<boolean> {
-    return this.store.has("generatedActionableHashes", hash);
   }
 
   /**
@@ -386,17 +276,6 @@ export class PageAnalyzer {
    * Generate new test elements for scaffolds and page content.
    * Called AFTER expertises evaluate and the target page state is established.
    */
-  /**
-   * @deprecated Generators now run server-side in testomniac_api.
-   * The executor calls api.combinedNext() which handles generation.
-   * This method is kept as a no-op for backward compatibility.
-   */
-  async generateTestInteractions(
-    _testInteraction: TestInteraction,
-    _context: AnalyzerContext
-  ): Promise<void> {
-    // No-op: generators moved to testomniac_api /combined/next endpoint
-  }
 
   private isMouseActionable(item: ActionableItem): boolean {
     return (
@@ -475,16 +354,6 @@ export class PageAnalyzer {
     );
   }
 
-  private isHoverBased(testInteraction: TestInteraction): boolean {
-    const steps = Array.isArray(testInteraction.steps)
-      ? testInteraction.steps
-      : [];
-    return (
-      steps.length > 0 &&
-      steps[0]?.action?.actionType === PlaywrightAction.Hover
-    );
-  }
-
   private getPrimarySelector(testInteraction: TestInteraction): string | null {
     const steps = Array.isArray(testInteraction.steps)
       ? testInteraction.steps
@@ -501,35 +370,6 @@ export class PageAnalyzer {
     const stableKey = "stableKey" in item ? item.stableKey : null;
     const selector = item.selector;
     return stableKey ?? selector ?? null;
-  }
-
-  withGeneratedKey(
-    testInteraction: GeneratedTestInteraction,
-    ...parts: Array<string | number | null | undefined>
-  ): GeneratedTestInteraction {
-    return {
-      ...testInteraction,
-      generatedKey: this.buildGeneratedKey(...parts),
-    };
-  }
-
-  getGeneratedKey(
-    testInteraction: Pick<GeneratedTestInteraction, "generatedKey" | "title">
-  ): string {
-    return (
-      testInteraction.generatedKey?.trim() || testInteraction.title
-    ).trim();
-  }
-
-  private getPersistedGeneratedKey(
-    testInteraction: Pick<TestInteraction, "title"> & {
-      generatedKey?: string | null;
-    }
-  ): string | null {
-    const generatedKey = testInteraction.generatedKey?.trim();
-    if (generatedKey) return generatedKey;
-    const title = testInteraction.title?.trim();
-    return title || null;
   }
 
   private buildGeneratedKey(

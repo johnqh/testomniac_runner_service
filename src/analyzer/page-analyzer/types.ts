@@ -27,7 +27,6 @@ export interface AnalyzerContext {
   pageId: number;
   pageRequiresLogin: boolean;
   scaffolds: DetectedScaffoldRegion[];
-  scaffoldSelectorByItemSelector: Record<string, string>;
   actionableItems: ActionableItem[];
   forms: FormInfo[];
   journeySteps: TestStep[];
