@@ -67,15 +67,8 @@ import type {
   BatchTestInteractionRunsResponse,
   BatchTestInteractionItem,
   BatchTestInteractionResult,
-  EnsurePageStateRequest,
-  EnsurePageStateResponse,
-  GenerateSurfaceInteractionsRequest,
-  GenerateSurfaceInteractionsResponse,
-  GenerateAllSurfaceInteractionsRequest,
-  GenerateAllSurfaceInteractionsResponse,
   DetectPersonasAndScenariosRequest,
   DetectPersonasAndScenariosResponse,
-  CompleteInteractionRunCombinedRequest,
   CombinedNextRequest,
   CombinedNextResponse,
 } from "@sudobility/testomniac_types";
@@ -1112,46 +1105,10 @@ export class ApiClient {
   // Combined Endpoints
   // ===========================================================================
 
-  async ensurePageStateCombined(
-    params: EnsurePageStateRequest
-  ): Promise<EnsurePageStateResponse> {
-    return this.post("/combined/ensure-page-state", params);
-  }
-
-  async generateSurfaceInteractions(
-    params: GenerateSurfaceInteractionsRequest
-  ): Promise<GenerateSurfaceInteractionsResponse> {
-    const result = await this.post<GenerateSurfaceInteractionsResponse>(
-      "/combined/generate-surface-interactions",
-      params
-    );
-    this.invalidateSurfacesCache();
-    this.invalidateInteractionsCache();
-    return result;
-  }
-
-  async generateAllSurfaceInteractions(
-    params: GenerateAllSurfaceInteractionsRequest
-  ): Promise<GenerateAllSurfaceInteractionsResponse> {
-    const result = await this.post<GenerateAllSurfaceInteractionsResponse>(
-      "/combined/generate-all-surface-interactions",
-      params
-    );
-    this.invalidateSurfacesCache();
-    this.invalidateInteractionsCache();
-    return result;
-  }
-
   detectPersonasAndScenarios(
     params: DetectPersonasAndScenariosRequest
   ): Promise<DetectPersonasAndScenariosResponse> {
     return this.post("/combined/detect-personas-and-scenarios", params);
-  }
-
-  completeInteractionRunCombined(
-    params: CompleteInteractionRunCombinedRequest
-  ): Promise<void> {
-    return this.post("/combined/complete-interaction-run", params);
   }
 
   combinedNext(params: CombinedNextRequest): Promise<CombinedNextResponse> {
