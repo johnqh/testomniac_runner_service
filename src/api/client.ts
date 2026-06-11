@@ -67,8 +67,6 @@ import type {
   BatchTestInteractionRunsResponse,
   BatchTestInteractionItem,
   BatchTestInteractionResult,
-  DetectPersonasAndScenariosRequest,
-  DetectPersonasAndScenariosResponse,
   CombinedNextRequest,
   CombinedNextResponse,
 } from "@sudobility/testomniac_types";
@@ -1104,12 +1102,6 @@ export class ApiClient {
   // ===========================================================================
   // Combined Endpoints
   // ===========================================================================
-
-  detectPersonasAndScenarios(
-    params: DetectPersonasAndScenariosRequest
-  ): Promise<DetectPersonasAndScenariosResponse> {
-    return this.post("/combined/detect-personas-and-scenarios", params);
-  }
 
   combinedNext(params: CombinedNextRequest): Promise<CombinedNextResponse> {
     return this.post("/combined/next", params);
