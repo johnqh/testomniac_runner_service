@@ -707,7 +707,7 @@ export async function runTestRun(
       if (productId) {
         try {
           publishStatusUpdate("Detecting personas and scenarios");
-          const endResult = await api.combinedEnd({ productId });
+          const endResult = await api.scanEnd({ productId });
           result.personas = endResult.personas.map((p: any) => ({
             id: p.id,
             title: p.title,
@@ -784,7 +784,7 @@ export async function runTestRun(
     if (productId) {
       try {
         publishStatusUpdate("Detecting personas and scenarios");
-        const endResult = await api.combinedEnd({ productId });
+        const endResult = await api.scanEnd({ productId });
         result.personas = endResult.personas.map((p: any) => ({
           id: p.id,
           title: p.title,

@@ -12,7 +12,7 @@ import type {
   TestRunResponse,
   TestSurfaceResponse,
   TestSurfaceBundleRunResponse,
-  CombinedNextPageStatePayload,
+  ScanNextPageStatePayload,
 } from "@sudobility/testomniac_types";
 import type { ScanEventHandler } from "./types";
 import type { Expertise, ExpertiseContext, Outcome } from "../expertise/types";
@@ -824,7 +824,7 @@ export async function executeTestInteraction(
     const durationMs = Date.now() - startTime;
 
     // Prepare pageState data for server-side generation (discovery mode only)
-    let pageStatePayload: CombinedNextPageStatePayload | undefined;
+    let pageStatePayload: ScanNextPageStatePayload | undefined;
     if (analyzer && discoveryContext) {
       const currentUrl = await adapter.getUrl();
       const url = new URL(currentUrl);
@@ -886,7 +886,7 @@ export async function executeTestInteraction(
     }
 
     // Single call: complete interaction + persist findings + page state + generators + get next
-    const combinedResult = await api.combinedNext({
+    const scanResult = await api.scanNext({
       runnerId: testRun.runnerId,
       testRunId: testRun.id,
       bundleRunId: testRun.testSurfaceBundleRunId ?? 0,
@@ -922,23 +922,23 @@ export async function executeTestInteraction(
     });
 
     // Emit events from the combined response
-    if (combinedResult.pageState && combinedResult.pageState.pageId > 0) {
+    if (scanResult.pageState && scanResult.pageState.pageId > 0) {
       events.onPageFound({
         relativePath: pageStatePayload?.relativePath ?? "",
-        pageId: combinedResult.pageState.pageId,
+        pageId: scanResult.pageState.pageId,
       });
     }
-    for (const surface of combinedResult.generatedSurfaces) {
+    for (const surface of scanResult.generatedSurfaces) {
       events.onTestSurfaceCreated(surface);
     }
 
     logExecutor("interaction:combined-next-complete", {
       testInteractionRunId: testInteractionRun.id,
       testInteractionId: testInteraction.id,
-      surfacesCreated: combinedResult.created.surfaces,
-      interactionsCreated: combinedResult.created.interactions,
-      findingsCreated: combinedResult.created.findings,
-      hasNext: combinedResult.next != null,
+      surfacesCreated: scanResult.created.surfaces,
+      interactionsCreated: scanResult.created.interactions,
+      findingsCreated: scanResult.created.findings,
+      hasNext: scanResult.next != null,
     });
   } catch (error) {
     const durationMs = Date.now() - startTime;

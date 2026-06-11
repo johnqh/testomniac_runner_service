@@ -67,11 +67,11 @@ import type {
   BatchTestInteractionRunsResponse,
   BatchTestInteractionItem,
   BatchTestInteractionResult,
-  CombinedStartRequest,
-  CombinedNextRequest,
-  CombinedNextResponse,
-  CombinedEndRequest,
-  CombinedEndResponse,
+  ScanBeginRequest,
+  ScanNextRequest,
+  ScanNextResponse,
+  ScanEndRequest,
+  ScanEndResponse,
 } from "@sudobility/testomniac_types";
 
 type StatusUpdatePayload = {
@@ -1098,16 +1098,16 @@ export class ApiClient {
   // Combined Endpoints
   // ===========================================================================
 
-  combinedStart(params: CombinedStartRequest): Promise<CombinedNextResponse> {
-    return this.post("/combined/start", params);
+  scanBegin(params: ScanBeginRequest): Promise<ScanNextResponse> {
+    return this.post("/scan/begin", params);
   }
 
-  combinedNext(params: CombinedNextRequest): Promise<CombinedNextResponse> {
-    return this.post("/combined/next", params);
+  scanNext(params: ScanNextRequest): Promise<ScanNextResponse> {
+    return this.post("/scan/next", params);
   }
 
-  combinedEnd(params: CombinedEndRequest): Promise<CombinedEndResponse> {
-    return this.post("/combined/end", params);
+  scanEnd(params: ScanEndRequest): Promise<ScanEndResponse> {
+    return this.post("/scan/end", params);
   }
 }
 
