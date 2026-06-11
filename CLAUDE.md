@@ -8,13 +8,29 @@ This package owns the active runtime architecture for:
 
 - executing persisted test surfaces, cases, and element runs
 - analyzing resulting browser states
-- generating discovery-time follow-up coverage
 - evaluating expertises and recording findings
 - abstracting over the browser through `BrowserAdapter`
 - abstracting over persistence through `ApiClient`
 
 The legacy `runScan()` orchestration path has been removed. `runTestRun()` is
 the runtime entry point.
+
+## Scan Lifecycle
+
+The executor now calls `api.scanNext()` instead of making multiple sequential
+API calls per interaction. Three client methods drive the scan:
+
+- `scanBegin()` — returns the first interaction (synthetic navigate to URL)
+- `scanNext()` — single call: completes interaction + persists page state + runs generators server-side + persists findings + returns next interaction
+- `scanEnd()` — triggers persona and scenario detection
+
+The following old client methods have been removed: `ensurePageStateCombined`,
+`generateSurfaceInteractions`, `generateAllSurfaceInteractions`,
+`completeInteractionRunCombined`, `detectPersonasAndScenarios`, `detectPersonas`.
+
+Test interaction generators now run server-side in `testomniac_api`'s
+`src/generators/` directory. The `src/analyzer/page-analyzer/generators/`
+directory has been deleted from this package.
 
 ## Core Model
 
@@ -42,8 +58,8 @@ Run records:
    ready.
 5. `executeTestElement()` navigates, recreates dependency setup when needed,
    executes actions, gathers runtime artifacts, and runs expertises.
-6. If the root run is a discovery run, `PageAnalyzer` creates or resolves the
-   target page state and generates follow-up cases and runs.
+6. The executor calls `api.scanNext()` which handles page state persistence,
+   generator execution (server-side), and finding persistence in a single call.
 7. The runner completes surface runs, bundle runs, and the root test run.
 
 ## Discovery Rules
@@ -64,7 +80,8 @@ Run records:
 - [`src/orchestrator/test-element-executor.ts`](src/orchestrator/test-element-executor.ts):
   single-case execution
 - [`src/analyzer/page-analyzer.ts`](src/analyzer/page-analyzer.ts):
-  discovery-time target-state and follow-up coverage logic
+  stripped-down (~573 lines) — finding dedup, expectation generation, hover-to-click only.
+  Generators have moved to `testomniac_api`.
 - [`src/expertise`](src/expertise): expertise system
 - [`src/extractors`](src/extractors): actionable-item extraction
 - [`src/scanner/component-detector.ts`](src/scanner/component-detector.ts):
@@ -154,24 +171,12 @@ Browser-side checks running via `adapter.evaluate()` during each test interactio
 | `broken_anchor` | `href="#id"` where `#id` doesn't exist on page |
 | `missing_noopener` | External `target="_blank"` links without `rel="noopener"` |
 
-## Test Interaction Generators
+## Test Interaction Generators (moved to testomniac_api)
 
-Discovery-time generators in `src/analyzer/page-analyzer/generators/`:
-
-| Generator | Surface | Test Types | Key Expectations |
-|-----------|---------|------------|-----------------|
-| `render.ts` | Render: {path} | render | page_loaded, no_network_errors, no_console_errors |
-| `forms.ts` | Forms: {path} | form, form_negative, form_correction, password, search | validation, submission, network requests, feedback |
-| `login.ts` | Login: {path} | form, interaction | error_visible (invalid/wrong creds), navigation_away (success), SSO clicks |
-| `semantic-journeys.ts` | Journeys: {path} | semantic-journey | commerce flows, auth flows, CRUD operations with count/cart/network checks |
-| `e2e.ts` | E2E: {path} | e2e | Dependency-chain multi-step journeys |
-| `dialogs.ts` | Dialogs: {path} | dialog | dialog_closed, focus_returned (button + Escape) |
-| `keyboard-disclosure.ts` | Keyboard: {path} | keyboard | expanded_state_changed, element_focused |
-| `variants.ts` | Variants: {path} | variant | selection, purchase (add to cart), guard (required validation) |
-| `content.ts` | Page: {path} | interaction | Click/hover/fill interactions on main page content |
-| `scaffolds.ts` | Scaffold: {type} | interaction | Click/hover within headers, footers, sidebars |
-| `navigation.ts` | Direct Navigations | navigation | Discovered same-origin link navigation |
-| `hover-follow-up.ts` | (parent surface) | interaction | Follow-up clicks after hover reveals new elements |
+The 12 discovery-time generators have been moved server-side to `testomniac_api`'s
+`src/generators/` directory. They now run as part of the `/scan/next` endpoint.
+The `src/analyzer/page-analyzer/generators/` directory has been deleted from
+this package. See `testomniac_api/CLAUDE.md` for the full generator list.
 
 ## Login Flow (`src/orchestrator/login-manager.ts`)
 
@@ -189,8 +194,14 @@ Discovery-time generators in `src/analyzer/page-analyzer/generators/`:
 ## AI Boundary
 
 `PageAnalyzer` is not the AI pipeline. Structural decomposition in the active
-runtime is deterministic. Separate AI helpers exist under `src/ai`, but they
-are not the discovery orchestrator.
+runtime is deterministic. The `src/ai/` directory has been deleted (dead code);
+AI-driven generation now happens server-side in `testomniac_api`.
+
+## Removed Code and Dependencies
+
+- `src/analyzer/page-analyzer/generators/` — 12 generators moved to `testomniac_api`
+- `src/ai/` — deleted (dead code)
+- Dependencies removed: `openai`, `react`, `zustand`
 
 ## Commands
 
