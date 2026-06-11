@@ -703,6 +703,21 @@ export async function runTestRun(
         passed: findingsFound === 0,
       });
 
+      // Post-scan: detect personas and scenarios even on stop
+      if (productId) {
+        try {
+          publishStatusUpdate("Detecting personas and scenarios");
+          const endResult = await api.combinedEnd({ productId });
+          result.personas = endResult.personas.map((p: any) => ({
+            id: p.id,
+            title: p.title,
+            description: p.description ?? "",
+          }));
+        } catch {
+          // Best effort on stop
+        }
+      }
+
       return result;
     }
 
@@ -765,27 +780,27 @@ export async function runTestRun(
       passed: findingsFound === 0,
     });
 
-    // Post-scan: detect personas
+    // Post-scan: detect personas and scenarios via /combined/end
     if (productId) {
       try {
-        publishStatusUpdate("Detecting personas for this product");
-        const detectedPersonas = await api.detectPersonas(productId);
-        result.personas = detectedPersonas.map(p => ({
+        publishStatusUpdate("Detecting personas and scenarios");
+        const endResult = await api.combinedEnd({ productId });
+        result.personas = endResult.personas.map((p: any) => ({
           id: p.id,
           title: p.title,
           description: p.description ?? "",
         }));
-        if (result.personas.length > 0) {
+        if (endResult.personasDetected > 0 || endResult.scenariosDetected > 0) {
           wrappedEvents.onPersonasDetected?.(result.personas);
           publishStatusUpdate(
-            `Detected ${result.personas.length} persona${result.personas.length === 1 ? "" : "s"}`
+            `Detected ${endResult.personasDetected} persona(s) and ${endResult.scenariosDetected} scenario(s)`
           );
         } else {
-          publishStatusUpdate("Persona detection completed with no personas");
+          publishStatusUpdate("Detection completed with no results");
         }
       } catch (err) {
         wrappedEvents.onError({
-          message: `Persona detection failed: ${err instanceof Error ? err.message : String(err)}`,
+          message: `Post-scan detection failed: ${err instanceof Error ? err.message : String(err)}`,
         });
       }
     }

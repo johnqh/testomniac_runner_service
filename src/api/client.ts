@@ -67,8 +67,11 @@ import type {
   BatchTestInteractionRunsResponse,
   BatchTestInteractionItem,
   BatchTestInteractionResult,
+  CombinedStartRequest,
   CombinedNextRequest,
   CombinedNextResponse,
+  CombinedEndRequest,
+  CombinedEndResponse,
 } from "@sudobility/testomniac_types";
 
 type StatusUpdatePayload = {
@@ -463,14 +466,6 @@ export class ApiClient {
 
   getPersonasByProduct(productId: number): Promise<PersonaResponse[]> {
     return this.get(`/personas?productId=${productId}`);
-  }
-
-  async detectPersonas(productId: number): Promise<PersonaResponse[]> {
-    const result = await this.post<
-      | PersonaResponse[]
-      | { personas: PersonaResponse[]; status_update?: string }
-    >("/personas/detect", { productId });
-    return Array.isArray(result) ? result : result.personas;
   }
 
   createUseCase(
@@ -1103,8 +1098,16 @@ export class ApiClient {
   // Combined Endpoints
   // ===========================================================================
 
+  combinedStart(params: CombinedStartRequest): Promise<CombinedNextResponse> {
+    return this.post("/combined/start", params);
+  }
+
   combinedNext(params: CombinedNextRequest): Promise<CombinedNextResponse> {
     return this.post("/combined/next", params);
+  }
+
+  combinedEnd(params: CombinedEndRequest): Promise<CombinedEndResponse> {
+    return this.post("/combined/end", params);
   }
 }
 
