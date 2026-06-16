@@ -19,7 +19,7 @@
         "vitest": "^4.0.15",
       },
       "peerDependencies": {
-        "@sudobility/testomniac_types": "^0.0.73",
+        "@sudobility/testomniac_types": "^0.0.74",
       },
     },
   },
