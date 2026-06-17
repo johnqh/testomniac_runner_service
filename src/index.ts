@@ -123,6 +123,11 @@ export type {
 } from "./orchestrator/types";
 export { LoginManager, type LoginConfig } from "./orchestrator/login-manager";
 export {
+  resolveVariables,
+  findVariablePaths,
+  UnresolvedVariableError,
+} from "./orchestrator/variable-resolver";
+export {
   evaluatePageHealth,
   type PageHealthIssue,
 } from "./scanner/page-health-evaluator";
