@@ -284,10 +284,26 @@ export async function runTestRun(
       `Preparing scan for ${testRun.scanUrl ?? config.baseUrl}`
     );
 
+    // Load the per-environment userData blob (single source for credentials +
+    // {path} variable interpolation). Prefer an explicit override on the
+    // config; otherwise fetch by the run's testEnvironmentId. Non-fatal.
+    let userData = config.userData;
+    if (!userData && testRun.testEnvironmentId != null) {
+      try {
+        userData =
+          (await api.getUserData(testRun.testEnvironmentId)) ?? undefined;
+      } catch (err) {
+        logRunner("user-data:fetch-failed", {
+          testEnvironmentId: testRun.testEnvironmentId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     // Set up login manager if a credential is configured in userData.
     // (config.credentials / entityCredentialId are deprecated and unread.)
     let loginManager: LoginManager | null = null;
-    const credential = config.userData?.credential;
+    const credential = userData?.credential;
     if (credential || config.loginUrl) {
       const loginConfig: LoginConfig = {
         loginUrl: config.loginUrl,
@@ -568,7 +584,7 @@ export async function runTestRun(
             config.scanScopePath,
             loginManager ?? undefined,
             testInteractions,
-            config.userData
+            userData
           ),
           new Promise<never>((_, reject) =>
             setTimeout(

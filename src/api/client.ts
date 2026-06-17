@@ -72,6 +72,7 @@ import type {
   ScanNextResponse,
   ScanEndRequest,
   ScanEndResponse,
+  UserData,
 } from "@sudobility/testomniac_types";
 
 type StatusUpdatePayload = {
@@ -165,6 +166,14 @@ export class ApiClient {
 
   getTestRun(testRunId: number): Promise<TestRunResponse | null> {
     return this.get(`/test-runs/${testRunId}`);
+  }
+
+  async getUserData(testEnvironmentId: number): Promise<UserData | null> {
+    const res = await this.get<{
+      testEnvironmentId: number;
+      data: UserData;
+    }>(`/test-environments/${testEnvironmentId}/user-data`);
+    return res?.data ?? null;
   }
 
   updateTestRunStats(
