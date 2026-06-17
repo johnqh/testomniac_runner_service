@@ -31,6 +31,7 @@ import {
 import { captureUiSnapshot, type UiSnapshot } from "../browser/ui-snapshot";
 import { detectScaffoldRegions } from "../scanner/component-detector";
 import { detectPatternsWithInstances } from "../scanner/pattern-detector";
+import { settleForRead } from "./settle-for-read";
 
 let _clickWaitMs = 500;
 
@@ -317,7 +318,7 @@ export async function executeTestInteraction(
         baseUrl,
       });
       publishStatusUpdate(`Navigate to ${absoluteUrl}`);
-      await adapter.goto(absoluteUrl, { waitUntil: "networkidle0" });
+      await adapter.goto(absoluteUrl, { waitUntil: "load" });
     }
 
     // Check if the current URL is within the scan scope boundary
@@ -512,6 +513,7 @@ export async function executeTestInteraction(
 
     // Decompose the page using local detectors
     currentPhase = "decomposing-page";
+    await settleForRead(adapter);
     const html = normalizeHtml(await adapter.content());
     const scaffolds = ensureArray(await detectScaffoldRegions(adapter));
     const patterns = ensureArray(await detectPatternsWithInstances(adapter));
@@ -1410,11 +1412,11 @@ async function executeAction(
       const url = path.startsWith("http")
         ? path
         : new URL(path, baseUrl).toString();
-      await adapter.goto(url, { waitUntil: "networkidle0" });
+      await adapter.goto(url, { waitUntil: "load" });
       break;
     }
     case "reload":
-      await adapter.goto(await adapter.getUrl(), { waitUntil: "networkidle0" });
+      await adapter.goto(await adapter.getUrl(), { waitUntil: "load" });
       break;
     case "goBack":
       await adapter.pressKey("Alt+Left");
@@ -1425,7 +1427,7 @@ async function executeAction(
     case "waitForLoadState":
       try {
         await adapter.waitForNavigation({
-          waitUntil: "networkidle0",
+          waitUntil: "load",
           timeout: 5000,
         });
       } catch {
@@ -1449,16 +1451,14 @@ async function executeAction(
           break;
         }
         await adapter.click(action.path);
-        if (_clickWaitMs > 0)
-          await new Promise(r => setTimeout(r, _clickWaitMs));
+        await settleForRead(adapter);
         await adapter.waitForNavigation({ timeout: 5000 });
       }
       break;
     case "dblclick":
       if (action.path) {
         await adapter.click(action.path);
-        if (_clickWaitMs > 0)
-          await new Promise(r => setTimeout(r, _clickWaitMs));
+        await settleForRead(adapter);
         await adapter.waitForNavigation({ timeout: 5000 });
       }
       break;
@@ -1505,6 +1505,7 @@ async function executeAction(
 async function captureExecutionSnapshot(
   adapter: BrowserAdapter
 ): Promise<ExecutionSnapshot> {
+  await settleForRead(adapter);
   const html = normalizeHtml(await adapter.content());
   const url = normalizeString(await adapter.getUrl());
   const uiSnapshot = await captureUiSnapshot(adapter);

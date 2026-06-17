@@ -99,4 +99,17 @@ export interface BrowserAdapter {
 
   /** Return the current tab identifier. */
   getCurrentTabId?(): number;
+
+  /**
+   * Resolve once the network has been quiet (no non-persistent in-flight
+   * requests) for the idle window, or once the hard cap elapses. Optional:
+   * adapters that cannot observe network activity simply omit it.
+   */
+  waitForNetworkIdle?(opts?: {
+    idleMs?: number;
+    floorMs?: number;
+    staleMs?: number;
+    timeout?: number;
+    pollMs?: number;
+  }): Promise<void>;
 }

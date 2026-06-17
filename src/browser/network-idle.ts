@@ -79,7 +79,7 @@ export async function waitForNetworkIdle(
   };
   const now = deps.now ?? (() => Date.now());
   const sleep =
-    deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+    deps.sleep ?? ((ms: number) => new Promise<void>(r => setTimeout(r, ms)));
 
   const startedAt = now();
   let lastBusyAt = startedAt;

@@ -66,7 +66,11 @@ describe("waitForNetworkIdle", () => {
   it("returns at ~floorMs when no requests ever open", async () => {
     const clock = makeClock();
     const tracker = new NetworkIdleTracker(clock.now);
-    await waitForNetworkIdle(tracker, {}, { now: clock.now, sleep: clock.sleep });
+    await waitForNetworkIdle(
+      tracker,
+      {},
+      { now: clock.now, sleep: clock.sleep }
+    );
     // floorMs=50 dominates; first poll boundary at or after 50ms
     expect(clock.now()).toBeGreaterThanOrEqual(NETWORK_IDLE_DEFAULTS.floorMs);
     expect(clock.now()).toBeLessThan(NETWORK_IDLE_DEFAULTS.timeout);
@@ -77,7 +81,11 @@ describe("waitForNetworkIdle", () => {
     const tracker = new NetworkIdleTracker(clock.now);
     tracker.start("a", "xhr"); // open at t=0
     clock.at(200, () => tracker.end("a")); // closes at t=200
-    await waitForNetworkIdle(tracker, {}, { now: clock.now, sleep: clock.sleep });
+    await waitForNetworkIdle(
+      tracker,
+      {},
+      { now: clock.now, sleep: clock.sleep }
+    );
     // Must not return before the request closed at 200
     expect(clock.now()).toBeGreaterThanOrEqual(200);
     // Returns shortly after (within a couple poll intervals + idle window)
