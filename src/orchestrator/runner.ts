@@ -284,41 +284,27 @@ export async function runTestRun(
       `Preparing scan for ${testRun.scanUrl ?? config.baseUrl}`
     );
 
-    // Set up login manager if credentials are configured
+    // Set up login manager if a credential is configured in userData.
+    // (config.credentials / entityCredentialId are deprecated and unread.)
     let loginManager: LoginManager | null = null;
-    if (config.credentials || config.entityCredentialId) {
-      let loginConfig: LoginConfig;
-      if (config.credentials) {
-        loginConfig = {
-          loginUrl: config.loginUrl,
-          email: config.credentials.email,
-          username: config.credentials.username,
-          password: config.credentials.password,
-          twoFactorCode: config.credentials.twoFactorCode,
-          authProvider: config.credentials.authProvider,
-        };
-      } else if (config.entityCredentialId) {
-        const cred = await api.getEntityCredential(config.entityCredentialId);
-        loginConfig = {
-          loginUrl: config.loginUrl ?? cred.loginUrl ?? undefined,
-          email: cred.email ?? undefined,
-          username: cred.username ?? undefined,
-          password: cred.password ?? undefined,
-          twoFactorCode: cred.twoFactorCode ?? undefined,
-          authProvider: cred.authProvider,
-        };
-      } else {
-        loginConfig = {};
-      }
+    const credential = config.userData?.credential;
+    if (credential || config.loginUrl) {
+      const loginConfig: LoginConfig = {
+        loginUrl: config.loginUrl,
+        email: credential?.email,
+        username: credential?.username,
+        password: credential?.password,
+        twoFactorCode: credential?.twoFactorCode,
+      };
       loginManager = new LoginManager(adapter, loginConfig, config.baseUrl);
       logRunner("login-manager:created", {
         hasLoginUrl: !!loginConfig.loginUrl,
-        authProvider: loginConfig.authProvider,
+        hasCredential: !!credential,
       });
     }
 
     // Perform initial login if configured
-    if (loginManager && (config.loginUrl || config.credentials?.authProvider)) {
+    if (loginManager && (config.loginUrl || credential)) {
       const loginSuccess = await loginManager.performInitialLogin();
       logRunner("initial-login:result", { success: loginSuccess });
     }

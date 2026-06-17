@@ -9,9 +9,68 @@ import {
 } from "../scanner/login-detector";
 import { extractForms } from "../extractors/form-extractor";
 import { executeSSOFlow } from "./sso-handler";
+import { resolveVariables } from "./variable-resolver";
 
 export type { LoginConfig } from "@sudobility/testomniac_types";
 import type { LoginConfig } from "@sudobility/testomniac_types";
+
+export interface LoginStep {
+  action: "type" | "hover" | "click" | "pressKey";
+  selector?: string;
+  value?: string;
+  key?: string;
+}
+
+/**
+ * Build variable-driven login steps from a detected login form. Values use
+ * {credential.*} placeholders resolved at execution time — no secrets here.
+ * Consolidates the email/password field detection into one place.
+ */
+export function buildLoginSteps(
+  form: {
+    fields: Array<{
+      type?: string;
+      name?: string;
+      placeholder?: string;
+      selector?: string;
+    }>;
+  },
+  submitSelector: string | undefined
+): LoginStep[] {
+  const emailField = form.fields.find(
+    f =>
+      f.type === "email" ||
+      f.name?.toLowerCase().includes("email") ||
+      f.name?.toLowerCase().includes("user") ||
+      f.name?.toLowerCase().includes("login") ||
+      f.placeholder?.toLowerCase().includes("email") ||
+      f.placeholder?.toLowerCase().includes("username")
+  );
+  const passwordField = form.fields.find(f => f.type === "password");
+
+  const steps: LoginStep[] = [];
+  if (emailField?.selector) {
+    steps.push({
+      action: "type",
+      selector: emailField.selector,
+      value: "{credential.email}",
+    });
+  }
+  if (passwordField?.selector) {
+    steps.push({
+      action: "type",
+      selector: passwordField.selector,
+      value: "{credential.password}",
+    });
+  }
+  if (submitSelector) {
+    steps.push({ action: "hover", selector: submitSelector });
+    steps.push({ action: "click", selector: submitSelector });
+  } else {
+    steps.push({ action: "pressKey", key: "Enter" });
+  }
+  return steps;
+}
 
 interface LoginState {
   isLoggedIn: boolean;
@@ -165,42 +224,40 @@ export class LoginManager {
       return false;
     }
 
-    logLogin("email-password:start", { fieldCount: form.fields.length });
     this.state.loginAttempts++;
 
+    // Source credential values into a userData shape so the {credential.*}
+    // placeholders in the generated steps resolve identically to the
+    // server-generated login interaction.
+    const userData = {
+      credential: {
+        email: this.config.email ?? this.config.username,
+        username: this.config.username,
+        password: this.config.password,
+        twoFactorCode: this.config.twoFactorCode,
+      },
+    };
+
+    const submitSelector =
+      form.fields.find(f => f.type === "submit")?.selector ??
+      form.submitSelector;
+    const steps = buildLoginSteps(form, submitSelector);
+    logLogin("email-password:start", { stepCount: steps.length });
+
     try {
-      // Find and fill email/username field
-      const emailField = form.fields.find(
-        f =>
-          f.type === "email" ||
-          f.name?.toLowerCase().includes("email") ||
-          f.name?.toLowerCase().includes("user") ||
-          f.name?.toLowerCase().includes("login") ||
-          f.placeholder?.toLowerCase().includes("email") ||
-          f.placeholder?.toLowerCase().includes("username")
-      );
-
-      const emailValue = this.config.email ?? this.config.username;
-      if (emailField && emailValue && emailField.selector) {
-        await this.adapter.type(emailField.selector, emailValue);
-        logLogin("email-password:typed-email");
-      }
-
-      // Find and fill password field
-      const passwordField = form.fields.find(f => f.type === "password");
-      if (passwordField?.selector) {
-        await this.adapter.type(passwordField.selector, this.config.password);
-        logLogin("email-password:typed-password");
-      }
-
-      // Submit the form
-      const submitButton = form.fields.find(f => f.type === "submit");
-      if (submitButton?.selector) {
-        await this.adapter.click(submitButton.selector, { timeout: 5000 });
-      } else if (form.submitSelector) {
-        await this.adapter.click(form.submitSelector, { timeout: 5000 });
-      } else {
-        await this.adapter.pressKey("Enter");
+      for (const step of steps) {
+        if (step.action === "type" && step.selector && step.value) {
+          await this.adapter.type(
+            step.selector,
+            resolveVariables(step.value, userData)
+          );
+        } else if (step.action === "hover" && step.selector) {
+          await this.adapter.hover(step.selector);
+        } else if (step.action === "click" && step.selector) {
+          await this.adapter.click(step.selector, { timeout: 5000 });
+        } else if (step.action === "pressKey" && step.key) {
+          await this.adapter.pressKey(step.key);
+        }
       }
 
       // Wait for navigation after submit
