@@ -581,7 +581,8 @@ export async function runTestRun(
               : undefined,
             config.scanScopePath,
             loginManager ?? undefined,
-            testInteractions
+            testInteractions,
+            config.userData
           ),
           new Promise<never>((_, reject) =>
             setTimeout(

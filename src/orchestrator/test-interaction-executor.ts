@@ -13,6 +13,7 @@ import type {
   TestSurfaceResponse,
   TestSurfaceBundleRunResponse,
   ScanNextPageStatePayload,
+  UserData,
 } from "@sudobility/testomniac_types";
 import type { ScanEventHandler } from "./types";
 import type { Expertise, ExpertiseContext, Outcome } from "../expertise/types";
@@ -32,6 +33,7 @@ import { captureUiSnapshot, type UiSnapshot } from "../browser/ui-snapshot";
 import { detectScaffoldRegions } from "../scanner/component-detector";
 import { detectPatternsWithInstances } from "../scanner/pattern-detector";
 import { settleForRead } from "./settle-for-read";
+import { interpolateAction } from "./interpolate-action";
 
 let _clickWaitMs = 500;
 
@@ -199,7 +201,8 @@ export async function executeTestInteraction(
   },
   scanScopePath?: string,
   loginManager?: import("./login-manager").LoginManager,
-  cachedTestInteractions?: TestInteractionResponse[]
+  cachedTestInteractions?: TestInteractionResponse[],
+  userData?: UserData
 ): Promise<void> {
   const startTime = Date.now();
   const consoleLogs: string[] = [];
@@ -367,7 +370,11 @@ export async function executeTestInteraction(
           }),
         });
         try {
-          await executeAction(adapter, replayAction, testRun);
+          await executeAction(
+            adapter,
+            interpolateAction(replayAction, userData),
+            testRun
+          );
           if (adapter.closeOtherTabs) {
             await adapter.closeOtherTabs();
           }
@@ -409,7 +416,11 @@ export async function executeTestInteraction(
         beforeUrl: beforeSnapshot.url,
       });
       try {
-        await executeAction(adapter, replayAction, testRun);
+        await executeAction(
+          adapter,
+          interpolateAction(replayAction, userData),
+          testRun
+        );
         // Close any new tabs/windows opened by the action (e.g. target="_blank")
         if (adapter.closeOtherTabs) {
           await adapter.closeOtherTabs();

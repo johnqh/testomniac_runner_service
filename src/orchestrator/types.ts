@@ -1,4 +1,4 @@
-import type { Credentials } from "@sudobility/testomniac_types";
+import type { Credentials, UserData } from "@sudobility/testomniac_types";
 import type { SizeClass } from "../domain/types";
 
 export interface RunConfig {
@@ -18,6 +18,8 @@ export interface RunConfig {
   loginUrl?: string;
   entityCredentialId?: number;
   credentials?: Credentials;
+  /** Per-environment data blob; source for {path} variable interpolation. */
+  userData?: UserData;
   quickScan?: boolean;
   /** Scan depth: 'full' runs everything, 'partial' skips hover
    *  interactions, 'minimum' runs only direct navigation. */
