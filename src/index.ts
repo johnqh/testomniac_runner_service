@@ -43,6 +43,13 @@ export {
   computeHashes,
 } from "./browser/page-utils";
 export { buildDomSnapshot } from "./browser/dom-snapshot";
+export {
+  NetworkIdleTracker,
+  waitForNetworkIdle,
+  NETWORK_IDLE_DEFAULTS,
+  type NetworkIdleOptions,
+  type NetworkIdleDeps,
+} from "./browser/network-idle";
 
 // Detectors (existing + new)
 export * from "./detectors";
