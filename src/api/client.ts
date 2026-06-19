@@ -513,6 +513,20 @@ export class ApiClient {
   // Test Scenario Sequences
   // ===========================================================================
 
+  getTestScenario(id: number): Promise<TestScenarioResponse | null> {
+    return this.get(`/test-scenarios/${id}`);
+  }
+
+  getTestScenarioSequencesByScenario(scenarioId: number): Promise<
+    Array<{
+      id: number;
+      testScenarioId: number;
+      testEnvironmentId: number;
+    }>
+  > {
+    return this.get(`/test-scenarios/${scenarioId}/sequences`);
+  }
+
   getTestScenarioSequence(id: number): Promise<{
     id: number;
     testScenarioId: number;
@@ -617,6 +631,12 @@ export class ApiClient {
     testInteractionId: number
   ): Promise<TestActionResponse[]> {
     return this.get(`/test-actions?testInteractionId=${testInteractionId}`);
+  }
+
+  getTestInteractionActions(
+    testInteractionId: number
+  ): Promise<TestActionResponse[]> {
+    return this.get(`/test-interactions/${testInteractionId}/actions`);
   }
 
   // ===========================================================================
