@@ -1387,11 +1387,8 @@ async function maybeRefreshInteractionActions(params: {
     return null;
   }
 
-  const allTestInteractions = await params.api.getTestInteractionsByRunner(
-    params.testRun.runnerId
-  );
-  const reloaded = allTestInteractions.find(
-    candidate => candidate.id === params.testInteraction.id
+  const reloaded = await params.api.getTestInteraction(
+    params.testInteraction.id
   );
   if (!reloaded) {
     return null;

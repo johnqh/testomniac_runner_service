@@ -617,6 +617,19 @@ export class ApiClient {
     this.interactionsCache.clear();
   }
 
+  /**
+   * Load a single interaction by id (full row, incl. stepsJson). Used by the
+   * executor instead of bulk-downloading the runner's entire interaction set
+   * just to read one row. Returns null if the interaction does not exist.
+   */
+  async getTestInteraction(
+    testInteractionId: number
+  ): Promise<TestInteractionResponse | null> {
+    return this.get<TestInteractionResponse | null>(
+      `/test-interactions/${testInteractionId}`
+    );
+  }
+
   // ===========================================================================
   // Test Actions (persisted)
   // ===========================================================================
