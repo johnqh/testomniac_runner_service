@@ -382,8 +382,12 @@ export async function runTestRun(
       }
 
       const testSurfaces = await api.getTestSurfacesByRunner(config.runnerId);
+      // Scoped to this bundle run: the API returns only the scan's working set
+      // (+ dependency closure + navigation interactions), not the runner's
+      // entire interaction history.
       const testInteractions = await api.getTestInteractionsByRunner(
-        config.runnerId
+        config.runnerId,
+        testRun.testSurfaceBundleRunId ?? undefined
       );
 
       const pendingInteractionRunsBySurface: PendingInteractionRunsBySurface[] =

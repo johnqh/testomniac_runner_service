@@ -96,7 +96,7 @@ export class ApiClient {
     { data: TestSurfaceResponse[]; expiry: number }
   > = new Map();
   private interactionsCache: Map<
-    number,
+    string,
     { data: TestInteractionResponse[]; expiry: number }
   > = new Map();
   private static SURFACES_CACHE_TTL_MS = 5000;
@@ -596,17 +596,26 @@ export class ApiClient {
     return this.post("/test-interactions", body);
   }
 
+  /**
+   * Fetch the runner's interactions. When `bundleRunId` is given, the API
+   * returns only the scan's working set (interactions with runs in that bundle
+   * run, closed under dependency chains, plus all navigation interactions) —
+   * a few dozen rows instead of the runner's entire (often >10k) set.
+   */
   async getTestInteractionsByRunner(
-    runnerId: number
+    runnerId: number,
+    bundleRunId?: number
   ): Promise<TestInteractionResponse[]> {
-    const cached = this.interactionsCache.get(runnerId);
+    const cacheKey = `${runnerId}:${bundleRunId ?? ""}`;
+    const cached = this.interactionsCache.get(cacheKey);
     if (cached && Date.now() < cached.expiry) {
       return cached.data;
     }
-    const data = await this.get<TestInteractionResponse[]>(
-      `/test-interactions?runnerId=${runnerId}&slim=true`
-    );
-    this.interactionsCache.set(runnerId, {
+    const url = bundleRunId
+      ? `/test-interactions?runnerId=${runnerId}&bundleRunId=${bundleRunId}&slim=true`
+      : `/test-interactions?runnerId=${runnerId}&slim=true`;
+    const data = await this.get<TestInteractionResponse[]>(url);
+    this.interactionsCache.set(cacheKey, {
       data,
       expiry: Date.now() + ApiClient.INTERACTIONS_CACHE_TTL_MS,
     });
