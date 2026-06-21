@@ -13,6 +13,7 @@ import type {
   TestSurfaceResponse,
   TestSurfaceBundleRunResponse,
   ScanNextPageStatePayload,
+  ScanNextResponse,
   UserData,
 } from "@sudobility/testomniac_types";
 import type { ScanEventHandler } from "./types";
@@ -202,8 +203,17 @@ export async function executeTestInteraction(
   scanScopePath?: string,
   loginManager?: import("./login-manager").LoginManager,
   cachedTestInteractions?: TestInteractionResponse[],
-  userData?: UserData
-): Promise<void> {
+  userData?: UserData,
+  /**
+   * When the loop is driven by /scan/next, the selected interaction and its
+   * full dependency chain are handed in directly, so we skip fetching the
+   * runner's interaction set just to resolve one row.
+   */
+  prefetched?: {
+    interaction: TestInteractionResponse;
+    chain: TestInteractionResponse[];
+  }
+): Promise<ScanNextResponse | null> {
   const startTime = Date.now();
   const consoleLogs: string[] = [];
   const networkLogs: NetworkLogEntry[] = [];
@@ -242,24 +252,37 @@ export async function executeTestInteraction(
 
   try {
     currentPhase = "loading-test-interactions";
-    const allTestInteractions =
-      cachedTestInteractions ??
-      (await api.getTestInteractionsByRunner(testRun.runnerId));
-    const testInteractionById = new Map(
-      allTestInteractions.map(testInteraction => [
-        testInteraction.id,
+    let testInteraction: TestInteractionResponse;
+    let dependencyChain: Array<{
+      id: number;
+      dependencyTestInteractionId: number | null;
+      stepsJson: unknown;
+    }>;
+    if (prefetched) {
+      // Fast path: interaction + chain delivered by /scan/next.
+      testInteraction = prefetched.interaction;
+      dependencyChain = prefetched.chain;
+    } else {
+      const allTestInteractions =
+        cachedTestInteractions ??
+        (await api.getTestInteractionsByRunner(testRun.runnerId));
+      const testInteractionById = new Map(
+        allTestInteractions.map(ti => [ti.id, ti])
+      );
+      const loadedTestInteraction = testInteractionById.get(
+        testInteractionRun.testInteractionId
+      );
+      if (!loadedTestInteraction) {
+        throw new Error(
+          `Test case ${testInteractionRun.testInteractionId} not found`
+        );
+      }
+      testInteraction = loadedTestInteraction;
+      dependencyChain = buildDependencyChain(
         testInteraction,
-      ])
-    );
-    const loadedTestInteraction = testInteractionById.get(
-      testInteractionRun.testInteractionId
-    );
-    if (!loadedTestInteraction) {
-      throw new Error(
-        `Test case ${testInteractionRun.testInteractionId} not found`
+        testInteractionById
       );
     }
-    let testInteraction = loadedTestInteraction;
     publishStatusUpdate(`Running interaction: ${testInteraction.title}`);
     logExecutor("interaction:loaded", {
       testRunId: testRun.id,
@@ -277,10 +300,6 @@ export async function executeTestInteraction(
 
     // Parse steps from JSON
     let steps = parseStoredSteps(testInteraction.stepsJson);
-    const dependencyChain = buildDependencyChain(
-      testInteraction,
-      testInteractionById
-    );
     const setupCases = dependencyChain.slice(0, -1);
     const journeySteps = dependencyChain.flatMap(item =>
       parseStoredSteps(item.stepsJson)
@@ -344,7 +363,7 @@ export async function executeTestInteraction(
           testInteractionRunId: testInteractionRun.id,
           passed: true,
         });
-        return;
+        return null;
       }
     }
 
@@ -970,6 +989,8 @@ export async function executeTestInteraction(
       findingsCreated: scanResult.created.findings,
       hasNext: scanResult.next != null,
     });
+
+    return scanResult;
   } catch (error) {
     const durationMs = Date.now() - startTime;
     const detail =
@@ -1048,6 +1069,10 @@ export async function executeTestInteraction(
       testInteractionRunId: testInteractionRun.id,
       passed: isReplayError ? true : false,
     });
+
+    // No scan result on the error path — the loop falls back to a full state
+    // read to choose the next interaction.
+    return null;
   }
 }
 

@@ -6,6 +6,7 @@ import type {
   TestInteractionRunResponse,
   TestSurfaceResponse,
   TestSurfaceRunResponse,
+  ScanNextResponse,
 } from "@sudobility/testomniac_types";
 import type {
   RunCheckpoint,
@@ -363,9 +364,106 @@ export async function runTestRun(
       ? await api.getTestSurfaceBundleRun(testRun.testSurfaceBundleRunId)
       : null;
 
+    const INTERACTION_TIMEOUT_MS = 60_000; // 60 seconds max per interaction
+
+    // Execute one interaction with a hard timeout. On timeout/uncaught error the
+    // run is marked skipped and null is returned. `prefetched` (from /scan/next)
+    // lets the executor skip re-fetching the interaction set.
+    const executeOne = (
+      run: TestInteractionRunResponse,
+      prefetched:
+        | {
+            interaction: TestInteractionResponse;
+            chain: TestInteractionResponse[];
+          }
+        | undefined,
+      cached: TestInteractionResponse[] | undefined
+    ): Promise<ScanNextResponse | null> =>
+      Promise.race([
+        executeTestInteraction(
+          adapter,
+          run,
+          testRun,
+          expertises,
+          analyzer,
+          api,
+          wrappedEvents,
+          navigationSurface && bundleRun
+            ? { navigationSurface, bundleRun }
+            : undefined,
+          config.scanScopePath,
+          loginManager ?? undefined,
+          cached,
+          userData,
+          prefetched
+        ),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  `Test interaction ${run.id} timed out after ${INTERACTION_TIMEOUT_MS}ms`
+                )
+              ),
+            INTERACTION_TIMEOUT_MS
+          )
+        ),
+      ]).catch(async timeoutErr => {
+        const msg =
+          timeoutErr instanceof Error ? timeoutErr.message : String(timeoutErr);
+        logRunner("interaction-runs:timeout", { runId: run.id, message: msg });
+        try {
+          await api.completeTestInteractionRun(run.id, {
+            status: "skipped",
+            errorMessage: msg,
+          });
+        } catch {
+          // already completed by the executor's own error handler
+        }
+        wrappedEvents.onTestInteractionRunCompleted({
+          testInteractionRunId: run.id,
+          passed: true,
+        });
+        return null;
+      });
+
+    // When /scan/next returns the next interaction, execute it directly without
+    // re-reading bundle state. Falls back to the full slow path when null.
+    let pendingNext: ScanNextResponse["next"] | null = null;
+
     // Execution loop: select the next executable interaction across the bundle.
     while (true) {
       if (!(await waitForCheckpoint("before_surface"))) break;
+
+      if (pendingNext) {
+        if (!(await waitForCheckpoint("before_test_interaction"))) break;
+        // Keep the session fresh during long next-driven stretches.
+        if (loginManager?.isLoggedIn()) {
+          const expired = await loginManager.detectSessionExpiry();
+          if (expired) {
+            logRunner("session:expired, re-logging in");
+            await loginManager.reLogin();
+          }
+        }
+        const next = pendingNext;
+        pendingNext = null;
+        logRunner("interaction-runs:next-driven", {
+          runId: next.interactionRunId,
+          surfaceRunId: next.surfaceRunId,
+          testInteractionId: next.testInteraction.id,
+        });
+        const result = await executeOne(
+          buildRunFromNext(next),
+          {
+            interaction: next.testInteraction,
+            chain: next.dependencyChain ?? [next.testInteraction],
+          },
+          undefined
+        );
+        pendingNext = result?.next ?? null;
+        if (!(await waitForCheckpoint("after_test_interaction"))) break;
+        continue;
+      }
 
       // Single consolidated call replaces getOpenTestSurfaceRuns + loadPendingInteractionRuns
       const runnerState = await api.getRunnerState(
@@ -568,62 +666,12 @@ export async function runTestRun(
         )
       );
 
-      const interactionTimeout = 60_000; // 60 seconds max per interaction
-      try {
-        await Promise.race([
-          executeTestInteraction(
-            adapter,
-            selected.testInteractionRun,
-            testRun,
-            expertises,
-            analyzer,
-            api,
-            wrappedEvents,
-            navigationSurface && bundleRun
-              ? {
-                  navigationSurface,
-                  bundleRun,
-                }
-              : undefined,
-            config.scanScopePath,
-            loginManager ?? undefined,
-            testInteractions,
-            userData
-          ),
-          new Promise<never>((_, reject) =>
-            setTimeout(
-              () =>
-                reject(
-                  new Error(
-                    `Test interaction ${selected.testInteractionRun.id} timed out after ${interactionTimeout}ms`
-                  )
-                ),
-              interactionTimeout
-            )
-          ),
-        ]);
-      } catch (timeoutErr) {
-        const msg =
-          timeoutErr instanceof Error ? timeoutErr.message : String(timeoutErr);
-        logRunner("interaction-runs:timeout", {
-          runId: selected.testInteractionRun.id,
-          surfaceRunId: selected.surfaceRun.id,
-          message: msg,
-        });
-        // Mark as skipped so the runner moves on
-        try {
-          await api.completeTestInteractionRun(selected.testInteractionRun.id, {
-            status: "skipped",
-            errorMessage: msg,
-          });
-        } catch {
-          // already completed by the executor's own error handler
-        }
-        wrappedEvents.onTestInteractionRunCompleted({
-          testInteractionRunId: selected.testInteractionRun.id,
-          passed: true,
-        });
-      }
+      const slowResult = await executeOne(
+        selected.testInteractionRun,
+        undefined,
+        testInteractions
+      );
+      pendingNext = slowResult?.next ?? null;
       activeDependencyBranch = buildDependencyChainIds(
         selected.testInteractionRun.testInteractionId,
         testInteractions
@@ -1122,6 +1170,33 @@ function selectNextInteractionAcrossBundle(
       []
     ),
   };
+}
+
+/**
+ * Build a minimal TestInteractionRunResponse from a /scan/next `next` payload,
+ * enough for executeTestInteraction (which only reads id, testInteractionId,
+ * and testSurfaceRunId off the run).
+ */
+function buildRunFromNext(
+  next: NonNullable<ScanNextResponse["next"]>
+): TestInteractionRunResponse {
+  return {
+    id: next.interactionRunId,
+    testInteractionId: next.testInteraction.id,
+    testSurfaceRunId: next.surfaceRunId,
+    status: "pending",
+    durationMs: null,
+    errorMessage: null,
+    screenshotPath: null,
+    consoleLog: null,
+    networkLog: null,
+    startedAt: null,
+    completedAt: null,
+    createdAt: null,
+    expectedOutcome: null,
+    observedOutcome: null,
+    testEnvironmentId: null,
+  } as TestInteractionRunResponse;
 }
 
 function buildDependencyChainIds(
