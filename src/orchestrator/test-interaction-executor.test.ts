@@ -1,5 +1,69 @@
-import { describe, expect, it } from "vitest";
-import { buildExpectationEvaluationGroups } from "./test-interaction-executor";
+import { describe, expect, it, vi } from "vitest";
+import {
+  buildExpectationEvaluationGroups,
+  emitLiveScreenshot,
+  interactionNeedsStepSnapshots,
+  readPageHtml,
+} from "./test-interaction-executor";
+
+describe("emitLiveScreenshot", () => {
+  it("reuses pre-captured bytes instead of calling adapter.screenshot", async () => {
+    const screenshot = vi.fn();
+    const adapter = { screenshot, url: () => "http://x" } as any;
+    const events = { onScreenshotCaptured: vi.fn() } as any;
+    const bytes = new Uint8Array([1, 2, 3]);
+
+    await emitLiveScreenshot(adapter, events, "http://x", bytes);
+
+    expect(screenshot).not.toHaveBeenCalled();
+    expect(events.onScreenshotCaptured).toHaveBeenCalledWith(
+      expect.objectContaining({ pageUrl: "http://x" })
+    );
+  });
+
+  it("captures itself when no bytes are provided", async () => {
+    const screenshot = vi.fn().mockResolvedValue(new Uint8Array([4, 5, 6]));
+    const adapter = { screenshot, url: () => "http://x" } as any;
+    const events = { onScreenshotCaptured: vi.fn() } as any;
+
+    await emitLiveScreenshot(adapter, events, "http://x");
+
+    expect(screenshot).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("interactionNeedsStepSnapshots", () => {
+  it("is false when no step has expectations", () => {
+    expect(interactionNeedsStepSnapshots([{ expectations: [] }, {}])).toBe(
+      false
+    );
+  });
+  it("is true when any step has an expectation", () => {
+    expect(
+      interactionNeedsStepSnapshots([
+        { expectations: [] },
+        { expectations: [{ x: 1 }] },
+      ])
+    ).toBe(true);
+  });
+});
+
+describe("readPageHtml", () => {
+  it("uses capturePageSnapshot when the adapter implements it", async () => {
+    const adapter = {
+      capturePageSnapshot: async () => ({
+        html: "<batched>",
+        bodyTextLength: 5,
+      }),
+      content: async () => "<fallback>",
+    } as any;
+    expect(await readPageHtml(adapter)).toBe("<batched>");
+  });
+  it("falls back to content() when capturePageSnapshot is absent", async () => {
+    const adapter = { content: async () => "<fallback>" } as any;
+    expect(await readPageHtml(adapter)).toBe("<fallback>");
+  });
+});
 
 describe("buildExpectationEvaluationGroups", () => {
   it("uses per-step snapshots for step expectations and final snapshots for generated expectations", () => {

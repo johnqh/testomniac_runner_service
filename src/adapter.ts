@@ -49,6 +49,13 @@ export interface BrowserAdapter {
   /** Get the full page HTML */
   content(): Promise<string>;
 
+  /**
+   * Optional single-round-trip page read. Adapters where injection round
+   * trips dominate (e.g. the Chrome extension) may batch html + body text in
+   * one call. Omit it and the executor falls back to content().
+   */
+  capturePageSnapshot?(): Promise<{ html: string; bodyTextLength: number }>;
+
   /** Get the current URL */
   url(): string;
 

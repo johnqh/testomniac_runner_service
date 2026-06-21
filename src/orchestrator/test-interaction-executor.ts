@@ -396,6 +396,10 @@ export async function executeTestInteraction(
     const initialSnapshot = await captureExecutionSnapshot(adapter);
     const stepExecutions: StepExecution[] = [];
     let previousSnapshot = initialSnapshot;
+    // Skip per-step before/after snapshots when no step has an expectation
+    // (recomputed after a mid-loop action refresh). The final decomposition
+    // snapshot is still captured unconditionally below.
+    let needsStepSnapshots = interactionNeedsStepSnapshots(steps);
 
     currentPhase = "executing-steps";
     // Execute test actions
@@ -425,7 +429,9 @@ export async function executeTestInteraction(
         if (adapter.closeOtherTabs) {
           await adapter.closeOtherTabs();
         }
-        const afterSnapshot = await captureExecutionSnapshot(adapter);
+        const afterSnapshot = needsStepSnapshots
+          ? await captureExecutionSnapshot(adapter)
+          : previousSnapshot;
         previousSnapshot = afterSnapshot;
         stepExecutions.push({
           step: {
@@ -459,6 +465,7 @@ export async function executeTestInteraction(
         if (refreshed) {
           testInteraction = refreshed.testInteraction;
           steps = refreshed.steps;
+          needsStepSnapshots = interactionNeedsStepSnapshots(steps);
           logExecutor("interaction:steps-reloaded", {
             testInteractionRunId: testInteractionRun.id,
             testInteractionId: testInteraction.id,
@@ -467,10 +474,9 @@ export async function executeTestInteraction(
           });
         }
       } catch (error) {
-        const afterSnapshot = await captureExecutionSnapshotSafe(
-          adapter,
-          beforeSnapshot
-        );
+        const afterSnapshot = needsStepSnapshots
+          ? await captureExecutionSnapshotSafe(adapter, beforeSnapshot)
+          : beforeSnapshot;
         previousSnapshot = afterSnapshot;
         stepExecutions.push({
           step: {
@@ -512,6 +518,7 @@ export async function executeTestInteraction(
         if (refreshed) {
           testInteraction = refreshed.testInteraction;
           steps = refreshed.steps;
+          needsStepSnapshots = interactionNeedsStepSnapshots(steps);
           logExecutor("interaction:steps-reloaded", {
             testInteractionRunId: testInteractionRun.id,
             testInteractionId: testInteraction.id,
@@ -525,7 +532,7 @@ export async function executeTestInteraction(
     // Decompose the page using local detectors
     currentPhase = "decomposing-page";
     await settleForRead(adapter);
-    const html = normalizeHtml(await adapter.content());
+    const html = normalizeHtml(await readPageHtml(adapter));
     const scaffolds = ensureArray(await detectScaffoldRegions(adapter));
     const patterns = ensureArray(await detectPatternsWithInstances(adapter));
     const items = ensureArray(await extractActionableItems(adapter));
@@ -562,7 +569,16 @@ export async function executeTestInteraction(
       }
     }
 
-    await emitLiveScreenshot(adapter, events, currentUrl);
+    // Capture this frame's screenshot ONCE and reuse it for both the live
+    // side-panel emit and the page-state upload below (same frame — no
+    // navigation happens between here and the upload).
+    let sharedScreenshot: Uint8Array | undefined;
+    try {
+      sharedScreenshot = await adapter.screenshot({ type: "png" });
+    } catch {
+      sharedScreenshot = undefined;
+    }
+    await emitLiveScreenshot(adapter, events, currentUrl, sharedScreenshot);
     const scaffoldSelectorByItemSelector = await mapItemsToScaffolds(
       adapter,
       scaffolds,
@@ -853,7 +869,8 @@ export async function executeTestInteraction(
       // Capture and upload screenshot for page state
       let screenshotPath: string | undefined;
       try {
-        const screenshotBytes = await adapter.screenshot({ type: "png" });
+        const screenshotBytes =
+          sharedScreenshot ?? (await adapter.screenshot({ type: "png" }));
         const safePath = currentPath.replace(/[^a-zA-Z0-9_/-]/g, "_");
         const filename = `screenshots/${testRun.runnerId}/${safePath.replace(/^\//, "") || "root"}-${Date.now()}.png`;
         const uploaded = await api.uploadScreenshot(screenshotBytes, filename);
@@ -1047,13 +1064,14 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-async function emitLiveScreenshot(
+export async function emitLiveScreenshot(
   adapter: BrowserAdapter,
   events: ScanEventHandler,
-  pageUrl: string
+  pageUrl: string,
+  preCaptured?: Uint8Array
 ): Promise<void> {
   try {
-    const bytes = await adapter.screenshot({ type: "png" });
+    const bytes = preCaptured ?? (await adapter.screenshot({ type: "png" }));
     const base64 = uint8ArrayToBase64(bytes);
     events.onScreenshotCaptured({
       dataUrl: `data:image/png;base64,${base64}`,
@@ -1510,11 +1528,34 @@ async function executeAction(
   }
 }
 
+/**
+ * Per-step before/after snapshots are only consumed by step-level expectation
+ * evaluation (buildExpectationEvaluationGroups). When no step carries an
+ * expectation (typical for navigation/render interactions), capturing them is
+ * wasted work — the final decomposition snapshot is captured independently.
+ */
+export function interactionNeedsStepSnapshots(
+  steps: Array<{ expectations?: unknown[] }>
+): boolean {
+  return steps.some(
+    s => Array.isArray(s.expectations) && s.expectations.length > 0
+  );
+}
+
+/** Read page HTML via the batched capturePageSnapshot seam when available. */
+export async function readPageHtml(adapter: BrowserAdapter): Promise<string> {
+  if (adapter.capturePageSnapshot) {
+    const snap = await adapter.capturePageSnapshot();
+    return snap.html;
+  }
+  return adapter.content();
+}
+
 async function captureExecutionSnapshot(
   adapter: BrowserAdapter
 ): Promise<ExecutionSnapshot> {
   await settleForRead(adapter);
-  const html = normalizeHtml(await adapter.content());
+  const html = normalizeHtml(await readPageHtml(adapter));
   const url = normalizeString(await adapter.getUrl());
   const uiSnapshot = await captureUiSnapshot(adapter);
   const controlStates = ensureArray(await captureControlStates(adapter));
