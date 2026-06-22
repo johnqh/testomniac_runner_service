@@ -35,7 +35,7 @@ import { detectScaffoldRegions } from "../scanner/component-detector";
 import { detectPatternsWithInstances } from "../scanner/pattern-detector";
 import { settleForRead } from "./settle-for-read";
 import { interpolateAction } from "./interpolate-action";
-import { computeHashes, htmlToMarkdown } from "../browser/page-utils";
+import { computeHashes } from "../browser/page-utils";
 
 let _clickWaitMs = 500;
 
@@ -935,7 +935,9 @@ export async function executeTestInteraction(
         relativePath: currentPath,
         screenshotPath,
         html: fullHtml,
-        contentText: htmlToMarkdown(fullHtml),
+        // contentText is omitted: it is the markdown projection of `html`, so
+        // shipping both duplicates the page content. The server derives it from
+        // `html` when persisting the page state.
         hashes: pageHashes,
         actionableItems: ensureArray(items),
         scaffolds: scaffolds.map(s => ({

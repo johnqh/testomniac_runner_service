@@ -554,7 +554,63 @@ export async function detectScaffoldRegions(
     hash: sha256(normalizeHtml(r.outerHtml)),
   }));
 
-  return regions;
+  return dedupeNestedScaffolds(regions);
+}
+
+// Priority for resolving overlapping scaffolds (earlier = kept). The two most
+// false-positive-prone heuristics — breadcrumb (often grabs the header
+// container that wraps the nav) and socialLinks (often grabs a footer list) —
+// rank last, so when they nest a structural scaffold the structural one wins.
+const SCAFFOLD_PRIORITY: HtmlComponentType[] = [
+  "topMenu",
+  "footer",
+  "leftMenu",
+  "rightSidebar",
+  "searchBar",
+  "userMenu",
+  "hamburgerMenu",
+  "cookieBanner",
+  "chatWidget",
+  "languageSwitcher",
+  "skipNav",
+  "announcementBar",
+  "backToTop",
+  "breadcrumb",
+  "socialLinks",
+];
+
+/**
+ * Drop scaffolds whose markup is nested inside another scaffold. The detector
+ * can emit both a region and its descendant (e.g. the header container AND the
+ * nav it wraps, or the footer AND a list inside it), which ships the same HTML
+ * two or three times — once in each scaffold and again in the page HTML.
+ *
+ * Nesting is detected by outerHtml substring containment (the inner element's
+ * exact serialization appears verbatim inside the outer's), and ties are broken
+ * by SCAFFOLD_PRIORITY then size, so the more canonical scaffold survives.
+ */
+function dedupeNestedScaffolds<
+  T extends { type: HtmlComponentType; outerHtml: string },
+>(regions: T[]): T[] {
+  const rank = (t: HtmlComponentType): number => {
+    const i = SCAFFOLD_PRIORITY.indexOf(t);
+    return i === -1 ? SCAFFOLD_PRIORITY.length : i;
+  };
+  const ordered = [...regions].sort(
+    (a, b) =>
+      rank(a.type) - rank(b.type) || b.outerHtml.length - a.outerHtml.length
+  );
+  const kept: T[] = [];
+  for (const r of ordered) {
+    const overlaps = kept.some(
+      k =>
+        k.outerHtml.includes(r.outerHtml) || r.outerHtml.includes(k.outerHtml)
+    );
+    if (!overlaps) kept.push(r);
+  }
+  const keptSet = new Set(kept);
+  // Preserve the original detection order for the survivors.
+  return regions.filter(r => keptSet.has(r));
 }
 
 export interface CandidateRegion {
