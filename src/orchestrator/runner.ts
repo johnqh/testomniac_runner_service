@@ -748,20 +748,8 @@ export async function runTestRun(
         passed: findingsFound === 0,
       });
 
-      // Post-scan: detect personas and scenarios even on stop
-      if (productId) {
-        try {
-          publishStatusUpdate("Detecting personas and scenarios");
-          const endResult = await api.scanEnd({ productId });
-          result.personas = endResult.personas.map((p: any) => ({
-            id: p.id,
-            title: p.title,
-            description: p.description ?? "",
-          }));
-        } catch {
-          // Best effort on stop
-        }
-      }
+      // Stop should only cancel and close run state. Persona/scenario detection
+      // can take over a minute, so leave it to normal scan completion.
 
       return result;
     }
