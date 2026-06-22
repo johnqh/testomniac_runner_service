@@ -35,6 +35,7 @@ import { detectScaffoldRegions } from "../scanner/component-detector";
 import { detectPatternsWithInstances } from "../scanner/pattern-detector";
 import { settleForRead } from "./settle-for-read";
 import { interpolateAction } from "./interpolate-action";
+import { computeHashes, htmlToMarkdown } from "../browser/page-utils";
 
 let _clickWaitMs = 500;
 
@@ -903,18 +904,19 @@ export async function executeTestInteraction(
         });
       }
 
+      // Real content hashes so the server can dedup the page state (and decide
+      // whether it needs the body) without ever rehashing — and without us
+      // shipping the HTML on every call. See the two-phase scanNext below.
+      const fullHtml = normalizeHtml(html);
+      const pageHashes = await computeHashes(fullHtml, ensureArray(items));
+
       pageStatePayload = {
         pageId: 0,
         relativePath: currentPath,
         screenshotPath,
-        html: normalizeHtml(html),
-        contentText: "",
-        hashes: {
-          htmlHash: "",
-          normalizedHtmlHash: "",
-          textHash: "",
-          actionableHash: "",
-        },
+        html: fullHtml,
+        contentText: htmlToMarkdown(fullHtml),
+        hashes: pageHashes,
         actionableItems: ensureArray(items),
         scaffolds: scaffolds.map(s => ({
           type: s.type,
@@ -935,7 +937,26 @@ export async function executeTestInteraction(
     }
 
     // Single call: complete interaction + persist findings + page state + generators + get next
-    const scanResult = await api.scanNext({
+    //
+    // PERFORMANCE — content-addressed page body. The full page HTML (and every
+    // scaffold body) is the bulk of this payload, but the server only needs it
+    // when it must CREATE or DECOMPOSE the page state. On revisits — the common
+    // case in a scan — the hashes alone resolve the existing state. So we send a
+    // hashes-only payload first; if the server replies `needHtml`, we resend the
+    // same request with the body attached. The body therefore crosses the wire
+    // once per unique page state instead of on every interaction.
+    const stripBody = (
+      ps: ScanNextPageStatePayload
+    ): ScanNextPageStatePayload => ({
+      ...ps,
+      html: undefined,
+      contentText: undefined,
+      scaffolds: ps.scaffolds.map(s => ({ ...s, html: undefined })),
+    });
+
+    const buildScanNextRequest = (
+      pageState: ScanNextPageStatePayload | undefined
+    ) => ({
       runnerId: testRun.runnerId,
       testRunId: testRun.id,
       bundleRunId: testRun.testSurfaceBundleRunId ?? 0,
@@ -961,9 +982,18 @@ export async function executeTestInteraction(
             ? JSON.stringify(networkLogs) || undefined
             : undefined,
       },
-      pageState: pageStatePayload,
+      pageState,
       findings: allFindingItems.length > 0 ? allFindingItems : undefined,
     });
+
+    let scanResult = await api.scanNext(
+      buildScanNextRequest(
+        pageStatePayload ? stripBody(pageStatePayload) : undefined
+      )
+    );
+    if (scanResult.needHtml && pageStatePayload) {
+      scanResult = await api.scanNext(buildScanNextRequest(pageStatePayload));
+    }
 
     events.onTestInteractionRunCompleted({
       testInteractionRunId: testInteractionRun.id,
