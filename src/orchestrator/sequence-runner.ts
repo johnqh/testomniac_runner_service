@@ -128,9 +128,11 @@ export async function runSequenceRun(
   const stopped = config.signal?.aborted === true;
 
   if (stopped) {
-    await api.completeTestRun(testRun.id, {
+    await api.scanEnd({
+      testRunId: testRun.id,
       status: "stopped",
       status_update: "Sequence stopped by user",
+      runDetection: false,
     });
     await api.completeSequenceRun(config.sequenceRunId, { status: "stopped" });
     events.onStatusUpdate?.({
@@ -152,9 +154,11 @@ export async function runSequenceRun(
     status === "completed"
       ? `Sequence run ${config.sequenceRunId} completed`
       : `Sequence run ${config.sequenceRunId} failed`;
-  await api.completeTestRun(testRun.id, {
+  await api.scanEnd({
+    testRunId: testRun.id,
     status,
     status_update: statusMessage,
+    runDetection: false,
   });
   await api.completeSequenceRun(config.sequenceRunId, { status });
   events.onStatusUpdate?.({ testRunId: testRun.id, message: statusMessage });
