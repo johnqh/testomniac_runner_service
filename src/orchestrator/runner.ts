@@ -748,8 +748,15 @@ export async function runTestRun(
         passed: findingsFound === 0,
       });
 
-      // Stop should only cancel and close run state. Persona/scenario detection
-      // can take over a minute, so leave it to normal scan completion.
+      if (productId) {
+        try {
+          await api.scanEnd({ productId, runDetection: false } as any);
+        } catch (err) {
+          wrappedEvents.onError({
+            message: `Scan end cleanup failed: ${err instanceof Error ? err.message : String(err)}`,
+          });
+        }
+      }
 
       return result;
     }
