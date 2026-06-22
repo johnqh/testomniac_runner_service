@@ -179,30 +179,6 @@ export async function runTestRun(
     },
   };
 
-  async function hydratePersistedDiscoveryStats(
-    runnerId: number,
-    testEnvironmentId?: number | null
-  ): Promise<void> {
-    const pages = await api.getPagesByRunner(runnerId);
-    const relevantPages = pages.filter(page =>
-      testEnvironmentId == null
-        ? true
-        : page.testEnvironmentId === testEnvironmentId
-    );
-
-    const relevantPageIds = relevantPages.map(page => page.id);
-    for (const id of relevantPageIds) pageIdsFound.add(id);
-
-    if (relevantPageIds.length > 0) {
-      const batchResult = await api.getPageStatesBatch(relevantPageIds);
-      for (const states of Object.values(batchResult)) {
-        for (const pageState of states) {
-          pageStateIdsFound.add(pageState.id);
-        }
-      }
-    }
-  }
-
   async function waitForCheckpoint(
     checkpoint: RunCheckpoint
   ): Promise<boolean> {
@@ -331,23 +307,6 @@ export async function runTestRun(
       ? new PageAnalyzer(options?.dedupStore)
       : null;
 
-    if (testRun.discovery) {
-      try {
-        await hydratePersistedDiscoveryStats(
-          config.runnerId,
-          testRun.testEnvironmentId
-        );
-        emitStatsLocal();
-        await flushStatsToApi();
-      } catch (err) {
-        logRunner("hydration:failed", {
-          runnerId: config.runnerId,
-          testEnvironmentId: testRun.testEnvironmentId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-
     // Get navigation surface for discovery context
     let navigationSurface = null;
     if (testRun.discovery) {
@@ -438,6 +397,29 @@ export async function runTestRun(
     // When /scan/next returns the next interaction, execute it directly without
     // re-reading bundle state. Falls back to the full slow path when null.
     let pendingNext: ScanNextResponse["next"] | null = null;
+
+    if (testRun.discovery && bundleRun) {
+      try {
+        const beginResult = await api.scanBegin({
+          runnerId: config.runnerId,
+          testRunId: testRun.id,
+          bundleRunId: testRun.testSurfaceBundleRunId,
+          testSurfaceBundleId: bundleRun.testSurfaceBundleId,
+          sizeClass: testRun.sizeClass as any,
+          testEnvironmentId: testRun.testEnvironmentId ?? undefined,
+          url: testRun.scanUrl ?? config.baseUrl,
+        });
+        pendingNext = beginResult.next;
+        logRunner("scan-begin:result", {
+          hasNext: pendingNext != null,
+          synthetic: pendingNext?.interactionRunId === 0,
+        });
+      } catch (err) {
+        logRunner("scan-begin:failed", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
 
     // Execution loop: select the next executable interaction across the bundle.
     while (true) {
