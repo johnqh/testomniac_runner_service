@@ -1132,32 +1132,46 @@ async function mapItemsToScaffolds(
       const rawItemSelectors = args[1] as string[];
       const assignments: Record<string, string> = {};
 
+      // Warn at most once per unique invalid selector. The inner loop runs
+      // (items x scaffolds) times, so an invalid selector previously logged
+      // hundreds of identical warnings into the persisted console log.
+      const warnedSelectors = new Set<string>();
+      const warnInvalid = (kind: string, selector: string, err: unknown) => {
+        if (warnedSelectors.has(selector)) return;
+        warnedSelectors.add(selector);
+        console.warn(
+          `[scaffold-mapping] invalid ${kind} selector:`,
+          selector,
+          String(err)
+        );
+      };
+
+      // Pre-filter scaffold selectors to the ones that are valid CSS so the
+      // hot inner loop never re-attempts (and re-throws on) a bad selector.
+      const validScaffoldSelectors: string[] = [];
+      for (const scaffoldSelector of rawScaffoldSelectors) {
+        try {
+          document.querySelector(scaffoldSelector);
+          validScaffoldSelectors.push(scaffoldSelector);
+        } catch (err) {
+          warnInvalid("scaffold", scaffoldSelector, err);
+        }
+      }
+
       for (const itemSelector of rawItemSelectors) {
         let itemEl: Element | null = null;
         try {
           itemEl = document.querySelector(itemSelector);
         } catch (err) {
-          console.warn(
-            "[scaffold-mapping] invalid item selector:",
-            itemSelector,
-            String(err)
-          );
+          warnInvalid("item", itemSelector, err);
           itemEl = null;
         }
         if (!itemEl) continue;
 
-        for (const scaffoldSelector of rawScaffoldSelectors) {
-          try {
-            if (itemEl.closest(scaffoldSelector)) {
-              assignments[itemSelector] = scaffoldSelector;
-              break;
-            }
-          } catch (err) {
-            console.warn(
-              "[scaffold-mapping] invalid scaffold selector:",
-              scaffoldSelector,
-              String(err)
-            );
+        for (const scaffoldSelector of validScaffoldSelectors) {
+          if (itemEl.closest(scaffoldSelector)) {
+            assignments[itemSelector] = scaffoldSelector;
+            break;
           }
         }
       }

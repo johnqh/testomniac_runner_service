@@ -542,7 +542,14 @@ export async function detectScaffoldRegions(
     }>
   ).map(r => ({
     type: r.type as HtmlComponentType,
-    selector: r.selector + " [" + r.method + "]",
+    // Emit the raw CSS selector. Previously this appended a provenance
+    // annotation (" [" + method + "]"), e.g. "header nav [selector]" or
+    // "#sq-masthead > div [heuristic:link-separators]". That made the string
+    // invalid CSS, so element.closest() threw for every scaffold during
+    // item->scaffold mapping: the mapping always came back empty AND the
+    // thrown-warning spam bloated the persisted console log. The detection
+    // method is debug-only and no consumer reads it, so it is dropped here.
+    selector: r.selector,
     outerHtml: r.outerHtml,
     hash: sha256(normalizeHtml(r.outerHtml)),
   }));
