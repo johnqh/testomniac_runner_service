@@ -167,8 +167,14 @@ describe("runTestRun graceful abort", () => {
 
     let completedStatus: string | undefined;
     const api = {
-      completeTestRun: async (_id: number, payload: { status: string }) => {
+      scanEnd: async (payload: { status: string }) => {
         completedStatus = payload.status;
+        return {
+          personas: [],
+          scenarios: [],
+          personasDetected: 0,
+          scenariosDetected: 0,
+        };
       },
     } as unknown as ApiClient;
 

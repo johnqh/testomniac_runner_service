@@ -82,6 +82,8 @@ export async function runTestRun(
   let totalPausedMs = 0;
   let activeDependencyBranch: number[] = [];
   let latestStatusUpdate: string | undefined;
+  let closeoutProductId = config.productId;
+  let closeoutBundleRunId: number | undefined;
 
   // ---------------------------------------------------------------------------
   // Debounced stats emission — emits local event immediately but batches the
@@ -197,11 +199,14 @@ export async function runTestRun(
   try {
     const shouldContinue = await waitForCheckpoint("before_claim");
     if (!shouldContinue) {
-      await api.completeTestRun(config.testRunId, {
+      await api.scanEnd({
+        productId: closeoutProductId,
+        testRunId: config.testRunId,
         status: "stopped",
         totalDurationMs: Date.now() - startTime,
         status_update: "Scan stopped by user",
-      });
+        runDetection: false,
+      } as any);
       return {
         testRunId: config.testRunId,
         pagesFound: 0,
@@ -235,6 +240,7 @@ export async function runTestRun(
       const runner = await api.getRunner(config.runnerId);
       productId = runner?.productId;
     }
+    closeoutProductId = productId;
 
     // Get the test run to find the bundle run
     const testRun = await api.getTestRun(config.testRunId);
@@ -247,6 +253,7 @@ export async function runTestRun(
         `Test run ${config.testRunId} has no test surface bundle run`
       );
     }
+    closeoutBundleRunId = testRun.testSurfaceBundleRunId;
 
     logRunner("test-run:loaded", {
       testRunId: testRun.id,
@@ -687,46 +694,25 @@ export async function runTestRun(
     if (stopped) {
       publishStatusUpdate("Scan stopped by user — cancelling remaining work");
 
-      // Cancel remaining pending interaction runs
-      const remainingState = await api.getRunnerState(
-        testRun.testSurfaceBundleRunId
-      );
-      const pendingRunIds = Object.values(remainingState.pendingInteractionRuns)
-        .flat()
-        .map(r => r.id);
-      if (pendingRunIds.length > 0) {
-        await api.completeTestInteractionRunBatch(pendingRunIds, {
-          status: "cancelled",
-          errorMessage: "Scan stopped by user",
-          status_update: "Cancelled: scan stopped by user",
+      const durationMs = Date.now() - startTime;
+      try {
+        await api.scanEnd({
+          productId,
+          testRunId: config.testRunId,
+          bundleRunId: testRun.testSurfaceBundleRunId,
+          status: "stopped",
+          totalDurationMs: durationMs,
+          pagesFound: pageIdsFound.size,
+          pageStatesFound: pageStateIdsFound.size,
+          testRunsCompleted: completedTestInteractionRunIds.size,
+          status_update: "Scan stopped by user",
+          runDetection: false,
+        } as any);
+      } catch (err) {
+        wrappedEvents.onError({
+          message: `Scan end cleanup failed: ${err instanceof Error ? err.message : String(err)}`,
         });
       }
-
-      // Complete remaining open surface runs
-      const remainingSurfaceRuns = await api.getOpenTestSurfaceRuns(
-        testRun.testSurfaceBundleRunId
-      );
-      if (remainingSurfaceRuns.length > 0) {
-        await api.completeTestSurfaceRunBatch(
-          remainingSurfaceRuns.map(sr => sr.id),
-          { status: "stopped" }
-        );
-      }
-
-      // Complete bundle run and test run
-      await api.completeTestSurfaceBundleRun(testRun.testSurfaceBundleRunId, {
-        status: "stopped",
-      });
-
-      const durationMs = Date.now() - startTime;
-      await api.completeTestRun(config.testRunId, {
-        status: "stopped",
-        totalDurationMs: durationMs,
-        pagesFound: pageIdsFound.size,
-        pageStatesFound: pageStateIdsFound.size,
-        testRunsCompleted: completedTestInteractionRunIds.size,
-        status_update: "Scan stopped by user",
-      });
 
       const result: ScanResult = {
         testRunId: config.testRunId,
@@ -748,16 +734,6 @@ export async function runTestRun(
         passed: findingsFound === 0,
       });
 
-      if (productId) {
-        try {
-          await api.scanEnd({ productId, runDetection: false } as any);
-        } catch (err) {
-          wrappedEvents.onError({
-            message: `Scan end cleanup failed: ${err instanceof Error ? err.message : String(err)}`,
-          });
-        }
-      }
-
       return result;
     }
 
@@ -765,40 +741,17 @@ export async function runTestRun(
 
     await waitForCheckpoint("before_completion"); // ignore result — already finalizing
 
-    // Flush any pending debounced stats before completing
+    // Final closeout writes the authoritative counts through /scan/end.
     if (statsFlushTimer != null) {
       clearTimeout(statsFlushTimer);
       statsFlushTimer = null;
     }
-    await flushStatsToApi();
-
-    const remainingSurfaceRuns = await api.getOpenTestSurfaceRuns(
-      testRun.testSurfaceBundleRunId
-    );
-    if (remainingSurfaceRuns.length > 0) {
-      await api.completeTestSurfaceRunBatch(
-        remainingSurfaceRuns.map(sr => sr.id),
-        { status: "completed" }
-      );
-    }
-
-    // All surfaces done — mark bundle run and test run completed
-    await api.completeTestSurfaceBundleRun(testRun.testSurfaceBundleRunId, {
-      status: "completed",
-    });
+    statsDirty = false;
 
     const durationMs = Date.now() - startTime;
     const pagesFound = pageIdsFound.size;
     const pageStatesFound = pageStateIdsFound.size;
     const testRunsCompleted = completedTestInteractionRunIds.size;
-    await api.completeTestRun(config.testRunId, {
-      status: "completed",
-      totalDurationMs: durationMs,
-      pagesFound,
-      pageStatesFound,
-      testRunsCompleted,
-      status_update: "Scan completed",
-    });
 
     const result: ScanResult = {
       testRunId: config.testRunId,
@@ -820,11 +773,23 @@ export async function runTestRun(
       passed: findingsFound === 0,
     });
 
-    // Post-scan: detect personas and scenarios via /combined/end
-    if (productId) {
-      try {
+    try {
+      if (productId) {
         publishStatusUpdate("Detecting personas and scenarios");
-        const endResult = await api.scanEnd({ productId });
+      }
+      const endResult = await api.scanEnd({
+        productId,
+        testRunId: config.testRunId,
+        bundleRunId: testRun.testSurfaceBundleRunId,
+        status: "completed",
+        totalDurationMs: durationMs,
+        pagesFound,
+        pageStatesFound,
+        testRunsCompleted,
+        status_update: "Scan completed",
+        runDetection: productId != null,
+      } as any);
+      if (productId) {
         result.personas = endResult.personas.map((p: any) => ({
           id: p.id,
           title: p.title,
@@ -838,11 +803,11 @@ export async function runTestRun(
         } else {
           publishStatusUpdate("Detection completed with no results");
         }
-      } catch (err) {
-        wrappedEvents.onError({
-          message: `Post-scan detection failed: ${err instanceof Error ? err.message : String(err)}`,
-        });
       }
+    } catch (err) {
+      wrappedEvents.onError({
+        message: `Post-scan detection failed: ${err instanceof Error ? err.message : String(err)}`,
+      });
     }
 
     return result;
@@ -859,11 +824,15 @@ export async function runTestRun(
 
     // Try to mark the run as failed
     try {
-      await api.completeTestRun(config.testRunId, {
+      await api.scanEnd({
+        productId: closeoutProductId,
+        testRunId: config.testRunId,
+        bundleRunId: closeoutBundleRunId,
         status: "failed",
         totalDurationMs: Date.now() - startTime,
         status_update: `Scan failed: ${message}`,
-      });
+        runDetection: false,
+      } as any);
     } catch (completionErr) {
       logRunner("complete-failed-run:error", {
         testRunId: config.testRunId,
