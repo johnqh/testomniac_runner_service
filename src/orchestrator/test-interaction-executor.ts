@@ -200,6 +200,13 @@ export async function executeTestInteraction(
   discoveryContext?: {
     navigationSurface: TestSurfaceResponse;
     bundleRun: TestSurfaceBundleRunResponse;
+    /**
+     * Scan-scoped set of page-state signatures whose body the server already
+     * holds. When a signature is present, the runner sends a hashes-only
+     * /scan/next; when absent (first sight this scan), it attaches the body up
+     * front so the server can create/decompose without a second round-trip.
+     */
+    sentPageBodies?: Set<string>;
   },
   scanScopePath?: string,
   loginManager?: import("./login-manager").LoginManager,
@@ -986,13 +993,39 @@ export async function executeTestInteraction(
       findings: allFindingItems.length > 0 ? allFindingItems : undefined,
     });
 
+    // Signature identifying this page state's body. If the server is known to
+    // already hold it (sent earlier this scan), we strip the body up front;
+    // otherwise we attach it pre-emptively so a first visit needs only one call.
+    const pageBodyCache = discoveryContext?.sentPageBodies;
+    const bodyKey = pageStatePayload
+      ? [
+          pageStatePayload.hashes.htmlHash,
+          pageStatePayload.hashes.normalizedHtmlHash,
+          pageStatePayload.hashes.textHash,
+          pageStatePayload.hashes.actionableHash,
+        ].join("|")
+      : null;
+    const serverHasBody =
+      bodyKey != null && pageBodyCache?.has(bodyKey) === true;
+
     let scanResult = await api.scanNext(
       buildScanNextRequest(
-        pageStatePayload ? stripBody(pageStatePayload) : undefined
+        !pageStatePayload
+          ? undefined
+          : serverHasBody
+            ? stripBody(pageStatePayload)
+            : pageStatePayload
       )
     );
+    // Safety net: a stripped first attempt the server couldn't resolve (cache
+    // wrong, e.g. server restart) comes back as needHtml — resend with the body.
     if (scanResult.needHtml && pageStatePayload) {
       scanResult = await api.scanNext(buildScanNextRequest(pageStatePayload));
+    }
+    // After a clean response the server holds this body; remember it so the rest
+    // of the scan sends hashes only.
+    if (bodyKey && pageBodyCache && !scanResult.needHtml) {
+      pageBodyCache.add(bodyKey);
     }
 
     events.onTestInteractionRunCompleted({

@@ -364,6 +364,14 @@ export async function runTestRun(
       ? await api.getTestSurfaceBundleRun(testRun.testSurfaceBundleRunId)
       : null;
 
+    // Scan-scoped record of page-state signatures whose body the server already
+    // has (created + decomposed this bundle run). Lets the executor send a
+    // hashes-only /scan/next on revisits AND skip the extra round-trip on first
+    // visits by attaching the body pre-emptively. Lives for this scan only, so
+    // it never goes stale across runs; the server's `needHtml` reply is the
+    // fallback if a guess is wrong (e.g. server restart).
+    const sentPageBodies = new Set<string>();
+
     const INTERACTION_TIMEOUT_MS = 60_000; // 60 seconds max per interaction
 
     // Execute one interaction with a hard timeout. On timeout/uncaught error the
@@ -389,7 +397,7 @@ export async function runTestRun(
           api,
           wrappedEvents,
           navigationSurface && bundleRun
-            ? { navigationSurface, bundleRun }
+            ? { navigationSurface, bundleRun, sentPageBodies }
             : undefined,
           config.scanScopePath,
           loginManager ?? undefined,
