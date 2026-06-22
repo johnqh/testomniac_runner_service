@@ -206,7 +206,7 @@ export async function runTestRun(
         totalDurationMs: Date.now() - startTime,
         status_update: "Scan stopped by user",
         runDetection: false,
-      } as any);
+      });
       return {
         testRunId: config.testRunId,
         pagesFound: 0,
@@ -707,7 +707,7 @@ export async function runTestRun(
           testRunsCompleted: completedTestInteractionRunIds.size,
           status_update: "Scan stopped by user",
           runDetection: false,
-        } as any);
+        });
       } catch (err) {
         wrappedEvents.onError({
           message: `Scan end cleanup failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -788,7 +788,7 @@ export async function runTestRun(
         testRunsCompleted,
         status_update: "Scan completed",
         runDetection: productId != null,
-      } as any);
+      });
       if (productId) {
         result.personas = endResult.personas.map((p: any) => ({
           id: p.id,
@@ -832,7 +832,7 @@ export async function runTestRun(
         totalDurationMs: Date.now() - startTime,
         status_update: `Scan failed: ${message}`,
         runDetection: false,
-      } as any);
+      });
     } catch (completionErr) {
       logRunner("complete-failed-run:error", {
         testRunId: config.testRunId,
