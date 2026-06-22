@@ -535,86 +535,17 @@ export async function runTestRun(
             `Blocked interaction tree detected for bundle run ${testRun.testSurfaceBundleRunId}`
           );
         }
-        // All open surface runs have zero pending interactions — complete them
-        const completableIds = openSurfaceRuns
-          .filter(
-            surfaceRun =>
-              !pendingInteractionRunsBySurface.some(
-                entry =>
-                  entry.surfaceRun.id === surfaceRun.id &&
-                  entry.allPendingRuns.length > 0
-              )
-          )
-          .map(sr => sr.id);
-        if (completableIds.length > 0) {
-          logRunner("surface-runs:auto-completing-batch", {
-            count: completableIds.length,
-            reason: "no pending interaction runs",
-          });
-          await api.completeTestSurfaceRunBatch(completableIds, {
-            status: "completed",
-          });
-        }
-        continue;
+        // No runnable and no blocked work: the bundle is drained. /scan/next
+        // now completes emptied surface runs server-side (and /scan/end closeout
+        // finalizes any stragglers), so there is nothing for the runner to do
+        // here — the scan is done.
+        break;
       }
 
-      // Batch-cancel interactions that the scan mode will skip so we don't
-      // spin through them one-by-one in the main loop (each iteration makes
-      // multiple API round-trips).
-      const effectiveScanMode =
-        config.scanMode ?? (config.quickScan ? "partial" : "full");
-
-      if (effectiveScanMode === "minimum" || effectiveScanMode === "partial") {
-        const skippableRuns: Array<{
-          run: { id: number };
-          reason: string;
-        }> = [];
-
-        for (const entry of runnableSurfaceEntries) {
-          for (const run of entry.eligibleRuns) {
-            const interaction = testInteractions.find(
-              ti => ti.id === run.testInteractionId
-            );
-            if (!interaction) continue;
-
-            if (
-              effectiveScanMode === "minimum" &&
-              interaction.testType !== "navigation"
-            ) {
-              skippableRuns.push({
-                run,
-                reason: "Skipped: minimum scan mode",
-              });
-            } else if (
-              effectiveScanMode === "partial" &&
-              isHoverInteraction(interaction) &&
-              hasNavigationInteractionForSameElement(
-                interaction,
-                testInteractions
-              )
-            ) {
-              skippableRuns.push({
-                run,
-                reason: "Skipped: partial scan mode",
-              });
-            }
-          }
-        }
-
-        if (skippableRuns.length > 0) {
-          logRunner("batch-skip:cancelling", {
-            scanMode: effectiveScanMode,
-            count: skippableRuns.length,
-          });
-          const reason = skippableRuns[0]?.reason ?? "Skipped by scan mode";
-          await api.completeTestInteractionRunBatch(
-            skippableRuns.map(({ run }) => run.id),
-            { status: "cancelled", errorMessage: reason, status_update: reason }
-          );
-          // Re-fetch after batch cancel to get updated state
-          continue;
-        }
-      }
+      // (Scan-mode skip cancellation now happens server-side in /scan/next's
+      // selection, so the runner no longer batch-cancels skippables here. The
+      // selection below is reached only on the bootstrap/safety path where
+      // /scan/next has not already drained the bundle.)
 
       if (!(await waitForCheckpoint("before_test_interaction"))) break;
 
@@ -949,19 +880,6 @@ function isHoverInteraction(
   return (
     testInteraction.surfaceTags.includes("hover") ||
     testInteraction.title.startsWith("Hover over ")
-  );
-}
-
-function hasNavigationInteractionForSameElement(
-  hoverInteraction: TestInteractionResponse,
-  allInteractions: TestInteractionResponse[]
-): boolean {
-  return allInteractions.some(
-    other =>
-      other.id !== hoverInteraction.id &&
-      other.testType === "navigation" &&
-      other.testSurfaceId === hoverInteraction.testSurfaceId &&
-      other.pageId === hoverInteraction.pageId
   );
 }
 
