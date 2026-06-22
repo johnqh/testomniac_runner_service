@@ -232,11 +232,18 @@ export async function executeTestInteraction(
     events.onStatusUpdate?.({ testRunId: testRun.id, message });
   }
 
-  // Listen for console and network events
-  adapter.on("console", (...args: unknown[]) => {
+  // Listen for console and network events. `adapter.on` returns an unsubscribe
+  // function — capture both and detach them in the finally below. Leaving them
+  // attached leaks one console + one response listener per interaction; once
+  // past Node's default 10-listener limit each new interaction emits a
+  // MaxListenersExceededWarning, which (because it fires the moment the listener
+  // is added, before any navigation) lands at the very head of this
+  // interaction's consoleLog — making every interaction "start with the same
+  // thing." Detaching keeps each interaction's logs scoped to itself.
+  const detachConsole = adapter.on("console", (...args: unknown[]) => {
     consoleLogs.push(String(args[0] ?? ""));
   });
-  adapter.on("response", (...args: unknown[]) => {
+  const detachResponse = adapter.on("response", (...args: unknown[]) => {
     const entry = args[0] as {
       method?: string;
       url: string;
@@ -818,7 +825,13 @@ export async function executeTestInteraction(
           description: string;
         }> = [];
         for (const issue of healthIssues) {
-          const healthKey = `page-health:${issue.type}:${currentPath}`;
+          // Key on the query-less path (the same value stored as the finding's
+          // `path`), NOT currentPath which includes ?query. Store sites reach
+          // the same page via many query variants (?pricepoint, ?perpage, sort);
+          // keying on currentPath re-reported identical page-health findings for
+          // every variant. Page-health issues are template/content level, so the
+          // path is the right dedup granularity.
+          const healthKey = `page-health:${issue.type}:${findingPath}`;
           if (await analyzer?.hasReportedFindingByKey(healthKey)) {
             continue;
           }
@@ -1136,6 +1149,11 @@ export async function executeTestInteraction(
     // No scan result on the error path — the loop falls back to a full state
     // read to choose the next interaction.
     return null;
+  } finally {
+    // Detach this interaction's console/response listeners so they don't
+    // accumulate across the scan (see the capture site above).
+    if (typeof detachConsole === "function") detachConsole();
+    if (typeof detachResponse === "function") detachResponse();
   }
 }
 
