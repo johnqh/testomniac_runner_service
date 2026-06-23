@@ -5,7 +5,6 @@ import type {
   TestInteractionResponse,
   TestInteractionRunResponse,
   TestSurfaceResponse,
-  TestSurfaceRunResponse,
   ScanNextResponse,
 } from "@sudobility/testomniac_types";
 import type {
@@ -41,26 +40,6 @@ function summarizeInteraction(
   };
 }
 
-function describeInteractionStatus(
-  testInteraction: TestInteractionResponse,
-  baseUrl: string
-): string {
-  if (
-    testInteraction.testType === "navigation" &&
-    testInteraction.startingPath
-  ) {
-    const origin = baseUrl.startsWith("http")
-      ? new URL(baseUrl).origin
-      : "http://localhost";
-    const url = testInteraction.startingPath.startsWith("http")
-      ? testInteraction.startingPath
-      : new URL(testInteraction.startingPath, origin).toString();
-    return `Navigate to ${url}`;
-  }
-
-  return `Running interaction: ${testInteraction.title}`;
-}
-
 /**
  * Main entry point for the runner execution loop.
  *
@@ -80,7 +59,6 @@ export async function runTestRun(
   const completedTestInteractionRunIds = new Set<number>();
   let findingsFound = 0;
   let totalPausedMs = 0;
-  let activeDependencyBranch: number[] = [];
   let latestStatusUpdate: string | undefined;
   let closeoutProductId = config.productId;
   let closeoutBundleRunId: number | undefined;
@@ -462,7 +440,12 @@ export async function runTestRun(
         continue;
       }
 
-      // Single consolidated call replaces getOpenTestSurfaceRuns + loadPendingInteractionRuns
+      // /scan/next drives the entire execution loop now: it selects the next
+      // runnable interaction server-side and performs the mid-loop transitions
+      // (cancel scan-mode skips, complete drained surfaces) with cascade
+      // re-evaluation. So a null `pendingNext` means /scan/next found no runnable
+      // work — a terminal state. Classify it via runner state and exit; the
+      // legacy client-side fallback scheduler has been removed.
       const runnerState = await api.getRunnerState(
         testRun.testSurfaceBundleRunId
       );
@@ -472,145 +455,39 @@ export async function runTestRun(
         count: openSurfaceRuns.length,
         openSurfaceRunIds: openSurfaceRuns.map(surfaceRun => surfaceRun.id),
       });
-      if (openSurfaceRuns.length === 0) {
-        break;
-      }
+      if (openSurfaceRuns.length === 0) break; // scan complete
 
-      const testSurfaces = await api.getTestSurfacesByRunner(config.runnerId);
-      // Scoped to this bundle run: the API returns only the scan's working set
-      // (+ dependency closure + navigation interactions), not the runner's
-      // entire interaction history.
-      const testInteractions = await api.getTestInteractionsByRunner(
-        config.runnerId,
-        testRun.testSurfaceBundleRunId ?? undefined
+      const pendingRuns = openSurfaceRuns.flatMap(
+        surfaceRun =>
+          runnerState.pendingInteractionRuns[String(surfaceRun.id)] ?? []
       );
+      // Open surface runs but zero pending interaction runs: drained but not yet
+      // marked completed — /scan/end closeout finalizes them. Nothing to do.
+      if (pendingRuns.length === 0) break;
 
-      const pendingInteractionRunsBySurface: PendingInteractionRunsBySurface[] =
-        openSurfaceRuns.map(surfaceRun => {
-          const allPendingRuns =
-            runnerState.pendingInteractionRuns[String(surfaceRun.id)] ?? [];
-          return {
-            surfaceRun,
-            eligibleRuns: allPendingRuns.filter(r => !r.blocked),
-            allPendingRuns,
-          };
+      const runnableRuns = pendingRuns.filter(run => !run.blocked);
+      if (runnableRuns.length > 0) {
+        // /scan/next returns a runnable `next` whenever one exists, so reaching
+        // here with runnable work means the scan was never next-driven (e.g.
+        // scanBegin failed to produce the initial interaction). Fail loudly
+        // rather than silently leaving work unexecuted.
+        logRunner("interaction-runs:no-next-with-runnable", {
+          bundleRunId: testRun.testSurfaceBundleRunId,
+          runnableRunIds: runnableRuns.map(run => run.id),
         });
-
-      const runnableSurfaceEntries = pendingInteractionRunsBySurface.filter(
-        entry => entry.eligibleRuns.length > 0
-      );
-      const blockedSurfaceEntries = pendingInteractionRunsBySurface.filter(
-        entry =>
-          entry.allPendingRuns.length > 0 && entry.eligibleRuns.length === 0
-      );
-
-      logRunner("interaction-runs:bundle-state", {
-        activeDependencyBranch,
-        runnableSurfaceRuns: runnableSurfaceEntries.map(entry => ({
-          surfaceRunId: entry.surfaceRun.id,
-          eligibleRunIds: entry.eligibleRuns.map(run => run.id),
-          allPendingRunIds: entry.allPendingRuns.map(run => run.id),
-        })),
-        blockedSurfaceRuns: blockedSurfaceEntries.map(entry => ({
-          surfaceRunId: entry.surfaceRun.id,
-          allPendingRunIds: entry.allPendingRuns.map(run => run.id),
-        })),
-      });
-
-      if (runnableSurfaceEntries.length === 0) {
-        if (blockedSurfaceEntries.length > 0) {
-          logRunner("interaction-runs:blocked-tree", {
-            bundleRunId: testRun.testSurfaceBundleRunId,
-            blockedSurfaceRunCount: blockedSurfaceEntries.length,
-            blockedDetails: blockedSurfaceEntries.map(entry => ({
-              surfaceRunId: entry.surfaceRun.id,
-              surfaceId: entry.surfaceRun.testSurfaceId,
-              allPendingRunIds: entry.allPendingRuns.map(run => run.id),
-              allPendingInteractionIds: entry.allPendingRuns.map(
-                run => run.testInteractionId
-              ),
-            })),
-          });
-          throw new Error(
-            `Blocked interaction tree detected for bundle run ${testRun.testSurfaceBundleRunId}`
-          );
-        }
-        // No runnable and no blocked work: the bundle is drained. /scan/next
-        // now completes emptied surface runs server-side (and /scan/end closeout
-        // finalizes any stragglers), so there is nothing for the runner to do
-        // here — the scan is done.
-        break;
+        throw new Error(
+          `Scan produced no next interaction but ${runnableRuns.length} runnable run(s) remain for bundle run ${testRun.testSurfaceBundleRunId}`
+        );
       }
 
-      // (Scan-mode skip cancellation now happens server-side in /scan/next's
-      // selection, so the runner no longer batch-cancels skippables here. The
-      // selection below is reached only on the bootstrap/safety path where
-      // /scan/next has not already drained the bundle.)
-
-      if (!(await waitForCheckpoint("before_test_interaction"))) break;
-
-      // Check for session expiry and re-login if needed
-      if (loginManager?.isLoggedIn()) {
-        const expired = await loginManager.detectSessionExpiry();
-        if (expired) {
-          logRunner("session:expired, re-logging in");
-          await loginManager.reLogin();
-        }
-      }
-
-      const selected = selectNextInteractionAcrossBundle(
-        runnableSurfaceEntries,
-        testSurfaces,
-        testInteractions,
-        activeDependencyBranch
-      );
-      const selectedInteraction = testInteractions.find(
-        testInteraction =>
-          testInteraction.id === selected.testInteractionRun.testInteractionId
-      );
-      if (!selectedInteraction) {
-        logRunner("interaction-runs:missing-interaction", {
-          selectedRunId: selected.testInteractionRun.id,
-          selectedSurfaceRunId: selected.surfaceRun.id,
-          testInteractionId: selected.testInteractionRun.testInteractionId,
-          activeDependencyBranch,
-        });
-        await api.completeTestInteractionRun(selected.testInteractionRun.id, {
-          status: "cancelled",
-          errorMessage: "Interaction not active or missing from runner",
-        });
-        continue;
-      }
-      logRunner("interaction-runs:selected", {
-        selectedRunId: selected.testInteractionRun.id,
-        selectedSurfaceRunId: selected.surfaceRun.id,
-        activeDependencyBranch,
-        selectedInteraction: summarizeInteraction(selectedInteraction),
+      // All remaining pending runs are blocked -> deadlocked dependency tree.
+      logRunner("interaction-runs:blocked-tree", {
+        bundleRunId: testRun.testSurfaceBundleRunId,
+        blockedRunIds: pendingRuns.map(run => run.id),
       });
-      publishStatusUpdate(
-        describeInteractionStatus(
-          selectedInteraction,
-          testRun.scanUrl ?? config.baseUrl
-        )
+      throw new Error(
+        `Blocked interaction tree detected for bundle run ${testRun.testSurfaceBundleRunId}`
       );
-
-      const slowResult = await executeOne(
-        selected.testInteractionRun,
-        undefined,
-        testInteractions
-      );
-      pendingNext = slowResult?.next ?? null;
-      activeDependencyBranch = buildDependencyChainIds(
-        selected.testInteractionRun.testInteractionId,
-        testInteractions
-      );
-      logRunner("interaction-runs:completed", {
-        completedRunId: selected.testInteractionRun.id,
-        completedSurfaceRunId: selected.surfaceRun.id,
-        nextActiveDependencyBranch: activeDependencyBranch,
-      });
-
-      if (!(await waitForCheckpoint("after_test_interaction"))) break;
     }
 
     const stopped = config.signal?.aborted === true;
@@ -883,57 +760,6 @@ function isHoverInteraction(
   );
 }
 
-function selectNextOpenTestSurfaceRun(
-  openSurfaceRuns: TestSurfaceRunResponse[],
-  testSurfaces: TestSurfaceResponse[]
-): TestSurfaceRunResponse {
-  if (openSurfaceRuns.length <= 1) {
-    return openSurfaceRuns[0]!;
-  }
-
-  const testSurfaceById = new Map(
-    testSurfaces.map(testSurface => [testSurface.id, testSurface])
-  );
-
-  return [...openSurfaceRuns].sort((left, right) => {
-    const leftSurface = testSurfaceById.get(left.testSurfaceId);
-    const rightSurface = testSurfaceById.get(right.testSurfaceId);
-
-    const groupDiff =
-      getSurfaceExecutionGroup(leftSurface) -
-      getSurfaceExecutionGroup(rightSurface);
-    if (groupDiff !== 0) {
-      return groupDiff;
-    }
-
-    const priorityDiff =
-      (leftSurface?.priority ?? 999) - (rightSurface?.priority ?? 999);
-    if (priorityDiff !== 0) {
-      return priorityDiff;
-    }
-
-    return left.id - right.id;
-  })[0]!;
-}
-
-function getSurfaceExecutionGroup(
-  surface: TestSurfaceResponse | undefined
-): number {
-  const title = surface?.title ?? "";
-
-  // Direct Navigations run first so that follow-up interactions on
-  // discovered pages depend on a simple navigate interaction instead of
-  // a long hover+click chain.
-  if (title === "Direct Navigations") return 0;
-  if (title.startsWith("Page: ")) return 1;
-  if (title.startsWith("Variants: ")) return 2;
-  if (title.startsWith("Keyboard: ")) return 3;
-  if (title.startsWith("Dialogs: ")) return 4;
-  if (title.startsWith("Render: ")) return 5;
-  if (title.startsWith("Journeys: ")) return 6;
-  return 7;
-}
-
 function _summarizeSurface(
   testSurface: TestSurfaceResponse | undefined
 ): Record<string, unknown> | null {
@@ -949,98 +775,6 @@ function _summarizeSurface(
     dependencyTestInteractionId:
       testSurface.dependencyTestInteractionId ?? null,
     surfaceTags: testSurface.surfaceTags,
-  };
-}
-
-type PendingInteractionRunsBySurface = {
-  surfaceRun: TestSurfaceRunResponse;
-  eligibleRuns: TestInteractionRunResponse[];
-  allPendingRuns: TestInteractionRunResponse[];
-};
-
-function selectNextInteractionAcrossBundle(
-  runnableSurfaceEntries: PendingInteractionRunsBySurface[],
-  testSurfaces: TestSurfaceResponse[],
-  testInteractions: TestInteractionResponse[],
-  activeDependencyBranch: number[]
-): {
-  surfaceRun: TestSurfaceRunResponse;
-  testInteractionRun: TestInteractionRunResponse;
-} {
-  if (activeDependencyBranch.length > 0) {
-    // Respect surface execution group ordering even within the dependency
-    // branch.  This ensures Direct Navigations run before hover/content
-    // interactions, so discovered pages get short dependency chains.
-    const testSurfaceById = new Map(testSurfaces.map(s => [s.id, s]));
-    const sortedEntries = [...runnableSurfaceEntries].sort((a, b) => {
-      const aGroup = getSurfaceExecutionGroup(
-        testSurfaceById.get(a.surfaceRun.testSurfaceId)
-      );
-      const bGroup = getSurfaceExecutionGroup(
-        testSurfaceById.get(b.surfaceRun.testSurfaceId)
-      );
-      return aGroup - bGroup;
-    });
-
-    // Try each surface group in order — pick the first one that has
-    // branch candidates.
-    for (const entry of sortedEntries) {
-      if (entry.eligibleRuns.length === 0) continue;
-      const selectedRun = selectNextOpenTestInteractionRun(
-        entry.eligibleRuns,
-        testInteractions,
-        activeDependencyBranch
-      );
-      return {
-        surfaceRun: entry.surfaceRun,
-        testInteractionRun: selectedRun,
-      };
-    }
-
-    // Fallback: no branch candidates found in any surface (shouldn't happen
-    // since runnableSurfaceEntries is pre-filtered, but be safe)
-    const allCandidates = runnableSurfaceEntries.flatMap(
-      entry => entry.eligibleRuns
-    );
-    const selectedRun = selectNextOpenTestInteractionRun(
-      allCandidates,
-      testInteractions,
-      activeDependencyBranch
-    );
-    const selectedSurfaceEntry = runnableSurfaceEntries.find(entry =>
-      entry.eligibleRuns.some(run => run.id === selectedRun.id)
-    );
-    if (!selectedSurfaceEntry) {
-      throw new Error(
-        `Selected interaction run ${selectedRun.id} is not attached to a runnable surface`
-      );
-    }
-    return {
-      surfaceRun: selectedSurfaceEntry.surfaceRun,
-      testInteractionRun: selectedRun,
-    };
-  }
-
-  const selectedSurfaceRun = selectNextOpenTestSurfaceRun(
-    runnableSurfaceEntries.map(entry => entry.surfaceRun),
-    testSurfaces
-  );
-  const selectedSurfaceEntry = runnableSurfaceEntries.find(
-    entry => entry.surfaceRun.id === selectedSurfaceRun.id
-  );
-  if (!selectedSurfaceEntry) {
-    throw new Error(
-      `Selected surface run ${selectedSurfaceRun.id} has no runnable interactions`
-    );
-  }
-
-  return {
-    surfaceRun: selectedSurfaceRun,
-    testInteractionRun: selectNextOpenTestInteractionRun(
-      selectedSurfaceEntry.eligibleRuns,
-      testInteractions,
-      []
-    ),
   };
 }
 
@@ -1069,32 +803,4 @@ function buildRunFromNext(
     observedOutcome: null,
     testEnvironmentId: null,
   } as TestInteractionRunResponse;
-}
-
-function buildDependencyChainIds(
-  testInteractionId: number,
-  testInteractions: TestInteractionResponse[]
-): number[] {
-  const testInteractionById = new Map(
-    testInteractions.map(testInteraction => [
-      testInteraction.id,
-      testInteraction,
-    ])
-  );
-  const chain: number[] = [];
-  const seen = new Set<number>();
-  let current = testInteractionById.get(testInteractionId);
-
-  while (current) {
-    if (seen.has(current.id)) {
-      break;
-    }
-    seen.add(current.id);
-    chain.unshift(current.id);
-    current = current.dependencyTestInteractionId
-      ? testInteractionById.get(current.dependencyTestInteractionId)
-      : undefined;
-  }
-
-  return chain;
 }
