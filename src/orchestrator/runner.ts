@@ -22,24 +22,6 @@ function logRunner(step: string, details?: Record<string, unknown>): void {
   console.info("[Runner]", step, details ?? {});
 }
 
-function summarizeInteraction(
-  testInteraction: TestInteractionResponse | undefined
-): Record<string, unknown> | null {
-  if (!testInteraction) {
-    return null;
-  }
-
-  return {
-    id: testInteraction.id,
-    title: testInteraction.title,
-    priority: testInteraction.priority,
-    dependencyTestInteractionId:
-      testInteraction.dependencyTestInteractionId ?? null,
-    surfaceTags: testInteraction.surfaceTags,
-    startingPath: testInteraction.startingPath ?? null,
-  };
-}
-
 /**
  * Main entry point for the runner execution loop.
  *
@@ -653,111 +635,6 @@ export async function runTestRun(
 
     throw error;
   }
-}
-
-export function selectNextOpenTestInteractionRun(
-  openRuns: TestInteractionRunResponse[],
-  testInteractions: TestInteractionResponse[],
-  activeDependencyBranch: number[]
-): TestInteractionRunResponse {
-  if (openRuns.length <= 1) {
-    return openRuns[0]!;
-  }
-
-  const testInteractionById = new Map(
-    testInteractions.map(testInteraction => [
-      testInteraction.id,
-      testInteraction,
-    ])
-  );
-  const runsByDependency = new Map<
-    number | null,
-    TestInteractionRunResponse[]
-  >();
-
-  for (const openRun of openRuns) {
-    const dependencyTestInteractionId =
-      testInteractionById.get(openRun.testInteractionId)
-        ?.dependencyTestInteractionId ?? null;
-    const bucket = runsByDependency.get(dependencyTestInteractionId) ?? [];
-    bucket.push(openRun);
-    runsByDependency.set(dependencyTestInteractionId, bucket);
-  }
-
-  for (let index = activeDependencyBranch.length - 1; index >= 0; index -= 1) {
-    const parentTestInteractionId = activeDependencyBranch[index]!;
-    const branchChildren = runsByDependency.get(parentTestInteractionId) ?? [];
-    if (branchChildren.length > 0) {
-      const sortedBranchChildren = sortOpenTestInteractionRuns(
-        branchChildren,
-        testInteractionById
-      );
-      logRunner("interaction-runs:branch-candidates", {
-        parentTestInteractionId,
-        activeDependencyBranch,
-        candidates: sortedBranchChildren.map(run => ({
-          runId: run.id,
-          interaction: summarizeInteraction(
-            testInteractionById.get(run.testInteractionId)
-          ),
-        })),
-      });
-      return sortedBranchChildren[0]!;
-    }
-  }
-
-  const sortedOpenRuns = sortOpenTestInteractionRuns(
-    openRuns,
-    testInteractionById
-  );
-  logRunner("interaction-runs:global-candidates", {
-    activeDependencyBranch,
-    candidates: sortedOpenRuns.map(run => ({
-      runId: run.id,
-      interaction: summarizeInteraction(
-        testInteractionById.get(run.testInteractionId)
-      ),
-    })),
-  });
-  return sortedOpenRuns[0]!;
-}
-
-function sortOpenTestInteractionRuns(
-  openRuns: TestInteractionRunResponse[],
-  testInteractionById: Map<number, TestInteractionResponse>
-): TestInteractionRunResponse[] {
-  return [...openRuns].sort((left, right) => {
-    const leftInteraction = testInteractionById.get(left.testInteractionId);
-    const rightInteraction = testInteractionById.get(right.testInteractionId);
-
-    const hoverDiff =
-      Number(isHoverInteraction(rightInteraction)) -
-      Number(isHoverInteraction(leftInteraction));
-    if (hoverDiff !== 0) {
-      return hoverDiff;
-    }
-
-    const priorityDiff =
-      (leftInteraction?.priority ?? 999) - (rightInteraction?.priority ?? 999);
-    if (priorityDiff !== 0) {
-      return priorityDiff;
-    }
-
-    return left.id - right.id;
-  });
-}
-
-function isHoverInteraction(
-  testInteraction: TestInteractionResponse | undefined
-): boolean {
-  if (!testInteraction) {
-    return false;
-  }
-
-  return (
-    testInteraction.surfaceTags.includes("hover") ||
-    testInteraction.title.startsWith("Hover over ")
-  );
 }
 
 function _summarizeSurface(
