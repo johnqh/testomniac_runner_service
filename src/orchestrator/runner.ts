@@ -4,7 +4,6 @@ import type { DedupStore } from "../storage/dedup-store";
 import type {
   TestInteractionResponse,
   TestInteractionRunResponse,
-  TestSurfaceResponse,
   ScanNextResponse,
 } from "@sudobility/testomniac_types";
 import type {
@@ -635,24 +634,6 @@ export async function runTestRun(
 
     throw error;
   }
-}
-
-function _summarizeSurface(
-  testSurface: TestSurfaceResponse | undefined
-): Record<string, unknown> | null {
-  if (!testSurface) {
-    return null;
-  }
-
-  return {
-    id: testSurface.id,
-    title: testSurface.title,
-    priority: testSurface.priority,
-    startingPath: testSurface.startingPath,
-    dependencyTestInteractionId:
-      testSurface.dependencyTestInteractionId ?? null,
-    surfaceTags: testSurface.surfaceTags,
-  };
 }
 
 /**
