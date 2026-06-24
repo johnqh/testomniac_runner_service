@@ -1,4 +1,40 @@
+import { ExpertiseRuleId } from "@sudobility/testomniac_types";
 import type { Expertise, ExpertiseContext, Outcome } from "./types";
+import { outcomesFromPageHealth } from "./page-health-outcomes";
+import { applyRuleIds } from "./rule-id";
+
+const ACCESSIBILITY_PAGE_HEALTH_RULE_IDS = {
+  empty_link: ExpertiseRuleId.AccessibilityPageHealthEmptyLink,
+  broken_anchor: ExpertiseRuleId.AccessibilityPageHealthBrokenAnchor,
+  unlabeled_button: ExpertiseRuleId.AccessibilityPageHealthUnlabeledButton,
+  small_touch_target: ExpertiseRuleId.AccessibilityPageHealthSmallTouchTarget,
+} as const;
+const ACCESSIBILITY_RULE_IDS = {
+  "Document should declare a language":
+    ExpertiseRuleId.AccessibilityDocumentLanguage,
+  "Page should expose a main landmark for screen readers":
+    ExpertiseRuleId.AccessibilityMainLandmark,
+  "Page should expose only one main landmark":
+    ExpertiseRuleId.AccessibilityMainLandmark,
+  "Form controls should have accessible labels":
+    ExpertiseRuleId.AccessibilityFormLabels,
+  "Images should have alt text or be explicitly decorative":
+    ExpertiseRuleId.AccessibilityImageAltCoverage,
+  "Dialogs should be labelled for assistive technologies":
+    ExpertiseRuleId.AccessibilityDialogLabelling,
+  "Elements should not use positive tabindex values (disrupts natural tab order)":
+    ExpertiseRuleId.AccessibilityPositiveTabindex,
+  "Media should not autoplay with sound":
+    ExpertiseRuleId.AccessibilityAutoplayMedia,
+  "Interactive controls should have accessible names":
+    ExpertiseRuleId.AccessibilityInteractiveNames,
+  "ARIA references should point to existing element IDs":
+    ExpertiseRuleId.AccessibilityAriaReferences,
+  "Clickable non-semantic elements should expose role and keyboard focus":
+    ExpertiseRuleId.AccessibilityClickableSemantics,
+  "Links should not be empty for assistive technologies":
+    ExpertiseRuleId.AccessibilityEmptyLinks,
+} as const;
 
 function countMatches(html: string, regex: RegExp): number {
   return html.match(regex)?.length ?? 0;
@@ -17,8 +53,18 @@ export class AccessibilityExpertise implements Expertise {
     outcomes.push(this.checkDialogLabelling(context.html));
     outcomes.push(this.checkPositiveTabindex(context.html));
     outcomes.push(this.checkAutoplayMedia(context.html));
+    outcomes.push(this.checkInteractiveNames(context.html));
+    outcomes.push(this.checkAriaReferences(context.html));
+    outcomes.push(this.checkClickableSemantics(context.html));
+    outcomes.push(this.checkEmptyLinks(context.html));
+    outcomes.push(
+      ...outcomesFromPageHealth(
+        context.pageHealthIssues,
+        ACCESSIBILITY_PAGE_HEALTH_RULE_IDS
+      )
+    );
 
-    return outcomes;
+    return applyRuleIds(outcomes, ACCESSIBILITY_RULE_IDS);
   }
 
   private checkDocumentLanguage(html: string): Outcome {
@@ -227,6 +273,128 @@ export class AccessibilityExpertise implements Expertise {
       observed: "No autoplaying unmuted media detected",
       result: "pass",
       priority: 3,
+    };
+  }
+
+  private checkInteractiveNames(html: string): Outcome {
+    const controls =
+      html.match(/<(button|a)\b[^>]*>[\s\S]*?<\/(button|a)>/gi) ?? [];
+    const unnamed = controls.filter(control => {
+      const visibleText = control
+        .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      return (
+        visibleText.length === 0 &&
+        !/\baria-label=["'][^"']+["']/i.test(control) &&
+        !/\baria-labelledby=["'][^"']+["']/i.test(control) &&
+        !/\btitle=["'][^"']+["']/i.test(control)
+      );
+    });
+    if (unnamed.length > 0) {
+      return {
+        expected: "Interactive controls should have accessible names",
+        observed: `${unnamed.length} button/link control(s) have no visible text or accessible label`,
+        result: "warning",
+        priority: 4,
+      };
+    }
+    return {
+      expected: "Interactive controls should have accessible names",
+      observed: "All detected button/link controls have accessible names",
+      result: "pass",
+      priority: 4,
+    };
+  }
+
+  private checkAriaReferences(html: string): Outcome {
+    const idMatches = html.match(/\bid=["']([^"']+)["']/gi) ?? [];
+    const ids = new Set(idMatches.map(m => m.replace(/^id=["']|["']$/gi, "")));
+    const references =
+      html.match(/\baria-(?:labelledby|describedby)=["']([^"']+)["']/gi) ?? [];
+    const missing: string[] = [];
+    for (const ref of references) {
+      const values =
+        ref
+          .match(/=["']([^"']+)["']/)?.[1]
+          ?.split(/\s+/)
+          .filter(Boolean) ?? [];
+      for (const value of values) {
+        if (!ids.has(value)) missing.push(value);
+      }
+    }
+    if (missing.length > 0) {
+      return {
+        expected: "ARIA references should point to existing element IDs",
+        observed: `${missing.length} missing ARIA reference(s): ${missing.slice(0, 3).join(", ")}`,
+        result: "warning",
+        priority: 4,
+      };
+    }
+    return {
+      expected: "ARIA references should point to existing element IDs",
+      observed: "All ARIA references resolve to existing IDs",
+      result: "pass",
+      priority: 4,
+    };
+  }
+
+  private checkClickableSemantics(html: string): Outcome {
+    const clickable =
+      html.match(
+        /<(div|span)\b[^>]*(onclick=|role=["']button["']|class=["'][^"']*(button|btn|clickable)[^"']*["'])[^>]*>/gi
+      ) ?? [];
+    const inaccessible = clickable.filter(
+      item =>
+        !/\brole=["']button["']/i.test(item) ||
+        !/\btabindex=["']0["']/i.test(item)
+    );
+    if (inaccessible.length > 0) {
+      return {
+        expected:
+          "Clickable non-semantic elements should expose role and keyboard focus",
+        observed: `${inaccessible.length} clickable-looking div/span element(s) lack role="button" or tabindex="0"`,
+        result: "warning",
+        priority: 4,
+      };
+    }
+    return {
+      expected:
+        "Clickable non-semantic elements should expose role and keyboard focus",
+      observed: "No inaccessible clickable div/span elements detected",
+      result: "pass",
+      priority: 4,
+    };
+  }
+
+  private checkEmptyLinks(html: string): Outcome {
+    const links =
+      html.match(/<a\b[^>]*href=["'][^"']*["'][^>]*>[\s\S]*?<\/a>/gi) ?? [];
+    const empty = links.filter(link => {
+      const text = link
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      return (
+        text.length === 0 &&
+        !/\baria-label=["'][^"']+["']/i.test(link) &&
+        !/\baria-labelledby=["'][^"']+["']/i.test(link)
+      );
+    });
+    if (empty.length > 0) {
+      return {
+        expected: "Links should not be empty for assistive technologies",
+        observed: `${empty.length} link(s) have no text or accessible label`,
+        result: "warning",
+        priority: 4,
+      };
+    }
+    return {
+      expected: "Links should not be empty for assistive technologies",
+      observed: "No empty links detected",
+      result: "pass",
+      priority: 4,
     };
   }
 }

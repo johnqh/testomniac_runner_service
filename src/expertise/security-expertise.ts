@@ -1,4 +1,30 @@
+import { ExpertiseRuleId } from "@sudobility/testomniac_types";
 import type { Expertise, ExpertiseContext, Outcome } from "./types";
+import { outcomesFromPageHealth } from "./page-health-outcomes";
+import { applyRuleIds } from "./rule-id";
+
+const SECURITY_PAGE_HEALTH_RULE_IDS = {
+  missing_noopener: ExpertiseRuleId.SecurityPageHealthNoopener,
+} as const;
+const SECURITY_RULE_IDS = {
+  "API keys should not be exposed in URLs":
+    ExpertiseRuleId.SecurityApiKeysInUrls,
+  "Sensitive user data should not be sent in URL parameters":
+    ExpertiseRuleId.SecuritySensitiveDataInUrls,
+  "All requests should use HTTPS": ExpertiseRuleId.SecurityHttpsRequests,
+  "HTTPS pages should not load insecure HTTP subresources":
+    ExpertiseRuleId.SecurityMixedContent,
+  "Forms should not submit over insecure HTTP":
+    ExpertiseRuleId.SecurityInsecureFormActions,
+  "Forms should not submit over insecure HTTP on HTTPS pages":
+    ExpertiseRuleId.SecurityInsecureFormActions,
+  "Password fields should only appear on HTTPS pages":
+    ExpertiseRuleId.SecurityPasswordFieldsHttps,
+  "Input fields should use semantic types (email, tel, url) for better validation":
+    ExpertiseRuleId.SecuritySemanticInputTypes,
+  'Links opening a new tab should use rel="noopener noreferrer"':
+    ExpertiseRuleId.SecurityBlankTargetRel,
+} as const;
 
 const API_KEY_PATTERNS = [
   /[?&](api[_-]?key|apikey|key|token|secret|access[_-]?token)=([^&]+)/i,
@@ -16,11 +42,21 @@ export class SecurityExpertise implements Expertise {
     const outcomes: Outcome[] = [];
 
     outcomes.push(...this.checkApiKeysInUrls(context));
+    outcomes.push(...this.checkSensitiveDataInUrls(context));
     outcomes.push(...this.checkInsecureRequests(context));
+    outcomes.push(this.checkMixedContent(context));
     outcomes.push(this.checkInsecureFormActions(context));
+    outcomes.push(this.checkPasswordFieldsOnHttps(context));
     outcomes.push(this.checkWrongInputTypes(context.html));
+    outcomes.push(this.checkUnsafeBlankTargets(context.html));
+    outcomes.push(
+      ...outcomesFromPageHealth(
+        context.pageHealthIssues,
+        SECURITY_PAGE_HEALTH_RULE_IDS
+      )
+    );
 
-    return outcomes;
+    return applyRuleIds(outcomes, SECURITY_RULE_IDS);
   }
 
   private checkApiKeysInUrls(context: ExpertiseContext): Outcome[] {
@@ -78,6 +114,62 @@ export class SecurityExpertise implements Expertise {
         priority: 3,
       },
     ];
+  }
+
+  private checkSensitiveDataInUrls(context: ExpertiseContext): Outcome[] {
+    const sensitive = context.networkLogs.filter(log =>
+      /[?&](password|pass|pwd|email|session|jwt|id_token)=([^&]+)/i.test(
+        log.url
+      )
+    );
+    if (sensitive.length === 0) {
+      return [
+        {
+          expected: "Sensitive user data should not be sent in URL parameters",
+          observed: "No sensitive query parameters detected in network URLs",
+          result: "pass",
+          priority: 1,
+        },
+      ];
+    }
+    return [
+      {
+        expected: "Sensitive user data should not be sent in URL parameters",
+        observed: `${sensitive.length} request(s) include sensitive-looking query parameters; first: ${sensitive[0]!.url.slice(0, 120)}`,
+        result: "error",
+        priority: 0,
+      },
+    ];
+  }
+
+  private checkMixedContent(context: ExpertiseContext): Outcome {
+    const pageUrl = context.currentUrl || context.initialUrl || "";
+    if (!pageUrl.startsWith("https://")) {
+      return {
+        expected: "HTTPS pages should not load insecure HTTP subresources",
+        observed: "Page is not HTTPS, skipping mixed-content check",
+        result: "pass",
+        priority: 2,
+      };
+    }
+    const insecureSubresources = context.networkLogs.filter(
+      log =>
+        log.url.startsWith("http://") && !log.url.startsWith("http://localhost")
+    );
+    if (insecureSubresources.length > 0) {
+      return {
+        expected: "HTTPS pages should not load insecure HTTP subresources",
+        observed: `${insecureSubresources.length} insecure subresource request(s); first: ${insecureSubresources[0]!.url.slice(0, 120)}`,
+        result: "warning",
+        priority: 2,
+      };
+    }
+    return {
+      expected: "HTTPS pages should not load insecure HTTP subresources",
+      observed: "No mixed-content requests detected",
+      result: "pass",
+      priority: 2,
+    };
   }
 
   private checkInsecureFormActions(context: ExpertiseContext): Outcome {
@@ -156,6 +248,63 @@ export class SecurityExpertise implements Expertise {
       observed: "Input types appear appropriate",
       result: "pass",
       priority: 4,
+    };
+  }
+
+  private checkPasswordFieldsOnHttps(context: ExpertiseContext): Outcome {
+    const hasPasswordField = /<input\b[^>]*type=["']password["'][^>]*>/i.test(
+      context.html
+    );
+    if (!hasPasswordField) {
+      return {
+        expected: "Password fields should only appear on HTTPS pages",
+        observed: "No password fields detected",
+        result: "pass",
+        priority: 0,
+      };
+    }
+    const pageUrl = context.currentUrl || context.initialUrl || "";
+    if (
+      !pageUrl.startsWith("https://") &&
+      !pageUrl.startsWith("http://localhost")
+    ) {
+      return {
+        expected: "Password fields should only appear on HTTPS pages",
+        observed: `Password field detected on non-HTTPS page: ${pageUrl || "unknown URL"}`,
+        result: "error",
+        priority: 0,
+      };
+    }
+    return {
+      expected: "Password fields should only appear on HTTPS pages",
+      observed: "Password fields are on HTTPS or localhost",
+      result: "pass",
+      priority: 0,
+    };
+  }
+
+  private checkUnsafeBlankTargets(html: string): Outcome {
+    const blankLinks =
+      html.match(/<a\b[^>]*target=["']_blank["'][^>]*>/gi) ?? [];
+    const unsafe = blankLinks.filter(
+      link =>
+        !/\brel=["'][^"']*\bnoopener\b/i.test(link) ||
+        !/\brel=["'][^"']*\bnoreferrer\b/i.test(link)
+    );
+    if (unsafe.length > 0) {
+      return {
+        expected:
+          'Links opening a new tab should use rel="noopener noreferrer"',
+        observed: `${unsafe.length} target="_blank" link(s) are missing noopener or noreferrer`,
+        result: "warning",
+        priority: 3,
+      };
+    }
+    return {
+      expected: 'Links opening a new tab should use rel="noopener noreferrer"',
+      observed: "All new-tab links include safe rel attributes",
+      result: "pass",
+      priority: 3,
     };
   }
 }

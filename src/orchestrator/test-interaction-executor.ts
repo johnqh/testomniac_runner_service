@@ -26,6 +26,10 @@ import { extractActionableItems } from "../extractors";
 import { extractForms } from "../extractors/form-extractor";
 import { captureControlStates } from "../browser/control-snapshot";
 import {
+  capturePerformanceSnapshot,
+  type PerformanceSnapshot,
+} from "../browser/performance-snapshot";
+import {
   buildReplaySelectorFromDescription,
   isTransientSnapshotSelector,
   parseReplaySelector,
@@ -575,6 +579,7 @@ export async function executeTestInteraction(
       await captureUiSnapshot(adapter)
     );
     const finalControlStates = ensureArray(await captureControlStates(adapter));
+    const performanceSnapshot = await capturePerformanceSnapshotSafe(adapter);
     const currentUrl = await adapter.getUrl();
     const currentUrlParsed = new URL(currentUrl);
     const currentPath = `${currentUrlParsed.pathname}${currentUrlParsed.search}`;
@@ -715,6 +720,27 @@ export async function executeTestInteraction(
       title: string;
       description: string;
     }> = [];
+    let pageHealthIssues: Awaited<ReturnType<typeof evaluatePageHealth>> = [];
+    if (hasCurrentDocumentNetworkFailure(networkLogs, currentUrl)) {
+      logExecutor("page-health:skipped-document-error", {
+        testRunId: testRun.id,
+        currentPath,
+      });
+    } else {
+      try {
+        pageHealthIssues = await evaluatePageHealth(adapter);
+      } catch (healthError) {
+        logExecutor("page-health:error", {
+          testRunId: testRun.id,
+          currentPath,
+          error:
+            healthError instanceof Error
+              ? healthError.message
+              : String(healthError),
+        });
+      }
+    }
+
     for (const expertise of expertises) {
       for (const group of expectationGroups) {
         const outcomes = expertise.evaluate({
@@ -729,6 +755,8 @@ export async function executeTestInteraction(
           finalUiSnapshot: group.snapshot.uiSnapshot,
           initialControlStates: group.previousSnapshot.controlStates,
           finalControlStates: group.snapshot.controlStates,
+          pageHealthIssues,
+          performanceSnapshot,
         });
         allOutcomes.push(...outcomes);
 
@@ -761,6 +789,7 @@ export async function executeTestInteraction(
             findingItems.push({
               testRunId: testRun.id,
               testInteractionRunId: testInteractionRun.id,
+              ruleId: outcome.ruleId,
               type: findingType,
               priority,
               title: findingTitle,
@@ -796,79 +825,6 @@ export async function executeTestInteraction(
     for (const evt of pendingFindingEvents) {
       events.onFindingCreated(evt);
     }
-
-    // Page health evaluation — browser-side checks for broken images, overlaps, etc.
-    // These are page-scoped: the same broken images and overlaps will be found
-    // by every interaction on the same page.  Deduplicate via the analyzer so
-    // each unique issue is reported only once per page path per run.
-    //
-    // Skip page-health entirely when the page returned a 404 — the checks
-    // would describe the error page layout, not the intended page content.
-    //
-    // Page-health titles include variable counts ("5 broken image(s)") and
-    // descriptions include variable element lists, so text-based dedup is
-    // unreliable.  Use the stable issue.type + page path as the primary key.
-    currentPhase = "evaluating-page-health";
-    if (reported404Path === findingPath) {
-      logExecutor("page-health:skipped-404", {
-        testRunId: testRun.id,
-        currentPath,
-      });
-    } else
-      try {
-        const healthIssues = await evaluatePageHealth(adapter);
-        const healthFindingItems: EnsureTestRunFindingRequest[] = [];
-        const healthFindingEvents: Array<{
-          type: string;
-          priority: number;
-          title: string;
-          description: string;
-        }> = [];
-        for (const issue of healthIssues) {
-          // Key on the query-less path (the same value stored as the finding's
-          // `path`), NOT currentPath which includes ?query. Store sites reach
-          // the same page via many query variants (?pricepoint, ?perpage, sort);
-          // keying on currentPath re-reported identical page-health findings for
-          // every variant. Page-health issues are template/content level, so the
-          // path is the right dedup granularity.
-          const healthKey = `page-health:${issue.type}:${findingPath}`;
-          if (await analyzer?.hasReportedFindingByKey(healthKey)) {
-            continue;
-          }
-          const findingTitle = `[page-health] ${issue.title}`;
-          const findingType = issue.severity === "error" ? "error" : "warning";
-          const priority = derivePageHealthPriority(issue.severity);
-          healthFindingItems.push({
-            testRunId: testRun.id,
-            testInteractionRunId: testInteractionRun.id,
-            type: findingType,
-            priority,
-            title: findingTitle,
-            description: issue.description,
-            path: findingPath,
-          });
-          healthFindingEvents.push({
-            type: findingType,
-            priority,
-            title: findingTitle,
-            description: issue.description,
-          });
-          await analyzer?.markReportedFindingByKey(healthKey);
-        }
-        allFindingItems.push(...healthFindingItems);
-        for (const evt of healthFindingEvents) {
-          events.onFindingCreated(evt);
-        }
-      } catch (healthError) {
-        logExecutor("page-health:error", {
-          testRunId: testRun.id,
-          currentPath,
-          error:
-            healthError instanceof Error
-              ? healthError.message
-              : String(healthError),
-        });
-      }
 
     // Aggregate outcomes
     const expectedOutcome = allOutcomes.map(o => o.expected).join("\n");
@@ -1437,8 +1393,38 @@ function derivePriority(outcome: Outcome): number {
   return FindingPriority.Minor;
 }
 
-function derivePageHealthPriority(severity: "error" | "warning"): number {
-  return severity === "error" ? FindingPriority.Major : FindingPriority.Minor;
+function hasCurrentDocumentNetworkFailure(
+  networkLogs: NetworkLogEntry[],
+  currentUrl: string
+): boolean {
+  const comparableCurrent = normalizeComparableUrl(currentUrl);
+  if (!comparableCurrent) return false;
+
+  return networkLogs.some(log => {
+    if (log.status < 400) return false;
+    const comparableLogUrl = normalizeComparableUrl(log.url);
+    if (comparableLogUrl !== comparableCurrent) return false;
+    return looksDocumentLike(log.url, log.contentType ?? "");
+  });
+}
+
+function normalizeComparableUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const pathname = parsed.pathname.replace(/\/+$/, "") || "/";
+    return `${parsed.origin}${pathname}${parsed.search}`;
+  } catch {
+    return null;
+  }
+}
+
+function looksDocumentLike(url: string, contentType: string): boolean {
+  return (
+    contentType.toLowerCase().includes("text/html") ||
+    !/\.(js|mjs|css|png|jpe?g|gif|webp|svg|ico|woff2?|ttf|otf|map|mp4|mp3|webm)(?:\?|$)/i.test(
+      url
+    )
+  );
 }
 
 function getFindingTypeForOutcome(
@@ -1698,6 +1684,16 @@ async function captureExecutionSnapshotSafe(
     return await captureExecutionSnapshot(adapter);
   } catch {
     return normalizeExecutionSnapshot(fallback);
+  }
+}
+
+async function capturePerformanceSnapshotSafe(
+  adapter: BrowserAdapter
+): Promise<PerformanceSnapshot | null> {
+  try {
+    return await capturePerformanceSnapshot(adapter);
+  } catch {
+    return null;
   }
 }
 
