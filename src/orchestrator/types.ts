@@ -1,4 +1,9 @@
-import type { Credentials, UserData } from "@sudobility/testomniac_types";
+import type {
+  Credentials,
+  ExpertiseId,
+  ExpertiseRuleId,
+  UserData,
+} from "@sudobility/testomniac_types";
 import type { SizeClass } from "../domain/types";
 
 export interface RunConfig {
@@ -49,6 +54,8 @@ export interface ScanEventHandler {
   onFindingCreated(finding: {
     type: string;
     priority: number;
+    expertiseId?: ExpertiseId | null;
+    ruleId?: ExpertiseRuleId;
     title: string;
     description?: string;
   }): void;

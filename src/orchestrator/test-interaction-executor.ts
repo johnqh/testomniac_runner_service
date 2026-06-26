@@ -1,8 +1,10 @@
 import type { BrowserAdapter } from "../adapter";
 import type { ApiClient } from "../api/client";
 import {
+  ExpertiseId,
   ExpectationSeverity,
   FindingPriority,
+  getExpertiseIdForRuleId,
 } from "@sudobility/testomniac_types";
 import type {
   EnsureTestRunFindingRequest,
@@ -713,10 +715,18 @@ export async function executeTestInteraction(
 
     currentPhase = "evaluating-expectations";
     let reported404Path: string | null = null;
+    const ruleOverrides = new Map(
+      (testRun.ruleOverridesJson ?? []).map(override => [
+        override.ruleId,
+        override,
+      ])
+    );
     const findingItems: EnsureTestRunFindingRequest[] = [];
     const pendingFindingEvents: Array<{
       type: string;
       priority: number;
+      expertiseId: ExpertiseId | null;
+      ruleId: EnsureTestRunFindingRequest["ruleId"];
       title: string;
       description: string;
     }> = [];
@@ -761,7 +771,11 @@ export async function executeTestInteraction(
         allOutcomes.push(...outcomes);
 
         for (const outcome of outcomes) {
-          const findingType = getFindingTypeForOutcome(outcome);
+          const ruleOverride = outcome.ruleId
+            ? ruleOverrides.get(outcome.ruleId)
+            : undefined;
+          if (ruleOverride?.enabled === false) continue;
+          const findingType = getFindingTypeForOutcome(outcome, expertise.name);
           if (findingType) {
             const findingTitle = `[${expertise.name}] ${outcome.expected}`;
 
@@ -785,7 +799,7 @@ export async function executeTestInteraction(
             ) {
               continue;
             }
-            const priority = derivePriority(outcome);
+            const priority = ruleOverride?.priority ?? derivePriority(outcome);
             findingItems.push({
               testRunId: testRun.id,
               testInteractionRunId: testInteractionRun.id,
@@ -799,6 +813,10 @@ export async function executeTestInteraction(
             pendingFindingEvents.push({
               type: findingType,
               priority,
+              expertiseId:
+                getExpertiseIdForRuleId(outcome.ruleId) ??
+                (expertise.name as ExpertiseId),
+              ruleId: outcome.ruleId,
               title: findingTitle,
               description: outcome.observed,
             });
@@ -1428,10 +1446,20 @@ function looksDocumentLike(url: string, contentType: string): boolean {
 }
 
 function getFindingTypeForOutcome(
-  outcome: Outcome
+  outcome: Outcome,
+  expertiseName?: string
 ): "warning" | "error" | null {
   if (outcome.result === "pass") {
     return null;
+  }
+
+  const expertiseId = getExpertiseIdForRuleId(outcome.ruleId) ?? expertiseName;
+  if (
+    expertiseId &&
+    expertiseId !== ExpertiseId.Tester &&
+    expertiseId !== ExpertiseId.Security
+  ) {
+    return "warning";
   }
 
   const severity = outcome.severity ?? ExpectationSeverity.MustPass;
