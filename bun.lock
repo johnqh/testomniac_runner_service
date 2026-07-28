@@ -6,7 +6,7 @@
       "name": "testomniac_scanning_service",
       "devDependencies": {
         "@eslint/js": "^9.38.0",
-        "@sudobility/testomniac_types": "0.0.86",
+        "@sudobility/testomniac_types": "^0.0.88",
         "@types/node": "^25.6.0",
         "@typescript-eslint/eslint-plugin": "^8.46.2",
         "@typescript-eslint/parser": "^8.46.2",
@@ -19,7 +19,7 @@
         "vitest": "^4.0.15",
       },
       "peerDependencies": {
-        "@sudobility/testomniac_types": "^0.0.86",
+        "@sudobility/testomniac_types": "^0.0.88",
       },
     },
   },
@@ -100,7 +100,7 @@
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
-    "@sudobility/testomniac_types": ["@sudobility/testomniac_types@0.0.86", "", { "peerDependencies": { "@sudobility/types": "^1.9.62" } }, "sha512-pAw2e+w56OAUk1C9+Z2mOQIoZNGwriUsBDVxeKsxulVfEwMyE6s0bz1vjGP7W9PMsRrOY+wyJ2iySY0FNsDhwA=="],
+    "@sudobility/testomniac_types": ["@sudobility/testomniac_types@0.0.88", "", { "peerDependencies": { "@sudobility/types": "^1.9.62" } }, "sha512-3jRDQDjuo5juwKXhEkUwshbNroAp6CZ521o/lQe+z4ryRoj9cpk8GGmQAeNSj+hvuc3LDcenaFXPIytXW4W43A=="],
 
     "@sudobility/types": ["@sudobility/types@1.9.61", "", {}, "sha512-SODGpstB/iKfK3H/4BvJx/FBcc1h3gutUjGotyxN19VnOfWyzaDoEmW7eyoxOAYhZyXMXagSiii+NIEZvuxKog=="],
 
