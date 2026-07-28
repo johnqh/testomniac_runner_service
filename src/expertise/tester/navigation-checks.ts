@@ -83,3 +83,63 @@ export function checkNavigationOrStateChanged(
 function normalizeHtml(html: string): string {
   return html.replace(/\s+/g, " ").trim();
 }
+
+function normalizeUrlPath(value: string): string | null {
+  if (!value) return null;
+  let pathname: string;
+  try {
+    pathname = new URL(value, "http://placeholder").pathname;
+  } catch {
+    return null;
+  }
+  const trimmed = pathname.replace(/\/+$/, "");
+  return trimmed === "" ? "/" : trimmed;
+}
+
+/**
+ * Assert the browser ended on an expected path.
+ *
+ * Used by route chains materialized from the navigation graph: setup replay
+ * swallows per-step errors, so without an explicit arrival assertion a stale
+ * route would leave the browser somewhere wrong and the scenario would run
+ * from there. This turns that silent drift into a finding.
+ */
+export function checkUrlMatchesTarget(
+  expectation: { description: string; targetPath?: string },
+  context: ExpertiseContext
+): Outcome {
+  const expected = expectation.targetPath
+    ? normalizeUrlPath(expectation.targetPath)
+    : null;
+  const actual = normalizeUrlPath(context.currentUrl ?? "");
+
+  if (!expected) {
+    return {
+      expected: expectation.description,
+      observed: "No target path was supplied for the URL check",
+      result: "warning",
+    };
+  }
+
+  if (!actual) {
+    return {
+      expected: expectation.description,
+      observed: "URL comparison context was unavailable",
+      result: "warning",
+    };
+  }
+
+  if (actual !== expected) {
+    return {
+      expected: expectation.description,
+      observed: `Expected to arrive at ${expected} but landed on ${actual}`,
+      result: "error",
+    };
+  }
+
+  return {
+    expected: expectation.description,
+    observed: `Arrived at ${actual}`,
+    result: "pass",
+  };
+}

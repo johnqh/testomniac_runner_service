@@ -25,6 +25,7 @@ import {
 } from "./tester/commerce-checks";
 import {
   checkNavigationOrStateChanged,
+  checkUrlMatchesTarget,
   checkUrlUnchanged,
 } from "./tester/navigation-checks";
 import {
@@ -192,6 +193,8 @@ export class TesterExpertise implements Expertise {
         return withRuleId(checkEmptyStateVisible(expectation, context));
       case "url_unchanged":
         return withRuleId(checkUrlUnchanged(expectation, context));
+      case "url_equals":
+        return withRuleId(checkUrlMatchesTarget(expectation, context));
       case "navigation_or_state_changed":
         return withRuleId(checkNavigationOrStateChanged(expectation, context));
       case "page_responsive":
@@ -256,6 +259,7 @@ const TESTER_RULE_IDS_BY_EXPECTATION_TYPE: Record<string, ExpertiseRuleId> = {
   variant_state_changed: ExpertiseRuleId.TesterVariantStateChanged,
   empty_state_visible: ExpertiseRuleId.TesterEmptyStateVisible,
   url_unchanged: ExpertiseRuleId.TesterUrlUnchanged,
+  url_equals: ExpertiseRuleId.TesterUrlMatchesTarget,
   navigation_or_state_changed: ExpertiseRuleId.TesterNavigationOrStateChanged,
   page_responsive: ExpertiseRuleId.TesterPageResponsive,
   loading_completes: ExpertiseRuleId.TesterLoadingCompletes,

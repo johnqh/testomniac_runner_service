@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   checkNavigationOrStateChanged,
+  checkUrlMatchesTarget,
   checkUrlUnchanged,
 } from "./navigation-checks";
 import type { ExpertiseContext } from "../types";
@@ -67,5 +68,53 @@ describe("checkUrlUnchanged", () => {
     );
 
     expect(result.result).toBe("pass");
+  });
+});
+
+describe("checkUrlMatchesTarget", () => {
+  it("passes when the current url path matches the target path", () => {
+    const result = checkUrlMatchesTarget(
+      { description: "Arrive at /checkout", targetPath: "/checkout" },
+      createContext("https://example.com/checkout")
+    );
+
+    expect(result.result).toBe("pass");
+  });
+
+  it("ignores query strings and trailing slashes", () => {
+    const result = checkUrlMatchesTarget(
+      { description: "Arrive at /checkout", targetPath: "/checkout/" },
+      createContext("https://example.com/checkout?step=1")
+    );
+
+    expect(result.result).toBe("pass");
+  });
+
+  it("errors when the route landed somewhere else", () => {
+    const result = checkUrlMatchesTarget(
+      { description: "Arrive at /checkout", targetPath: "/checkout" },
+      createContext("https://example.com/login")
+    );
+
+    expect(result.result).toBe("error");
+    expect(result.observed).toContain("/login");
+  });
+
+  it("warns when the url context is unavailable rather than failing", () => {
+    const result = checkUrlMatchesTarget(
+      { description: "Arrive at /checkout", targetPath: "/checkout" },
+      createContext(undefined)
+    );
+
+    expect(result.result).toBe("warning");
+  });
+
+  it("warns when no target path was supplied", () => {
+    const result = checkUrlMatchesTarget(
+      { description: "Arrive somewhere" },
+      createContext("https://example.com/checkout")
+    );
+
+    expect(result.result).toBe("warning");
   });
 });
