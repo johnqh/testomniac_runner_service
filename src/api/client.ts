@@ -548,6 +548,19 @@ export class ApiClient {
     );
   }
 
+  /**
+   * Full environment row. Needed for `base_url`: a sequence test run without a
+   * scanUrl makes the executor resolve relative startingPaths against bare
+   * "http://localhost" (no port).
+   */
+  getTestEnvironment(id: number): Promise<{
+    id: number;
+    baseUrl: string;
+    productId: number;
+  } | null> {
+    return this.get(`/test-environments/${id}`);
+  }
+
   getSequenceRun(id: number): Promise<{
     id: number;
     testScenarioSequenceId: number;
