@@ -921,6 +921,15 @@ export async function executeTestInteraction(
           selector: s.selector,
         })),
         scaffoldSelectorByItemSelector,
+        patterns: patterns.map(p => ({
+          type: p.type,
+          selector: p.selector,
+          count: p.count,
+          instances: p.instances.map(i => ({
+            selector: i.selector,
+            hash: i.hash,
+          })),
+        })),
         forms: ensureArray(forms).map(f => ({ form: f })),
         currentTestInteractionId: testInteraction.id,
         beginningPageStateId,
