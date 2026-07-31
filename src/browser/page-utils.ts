@@ -150,6 +150,26 @@ export async function computeActionableHash(
   return sha256(visibleKeys);
 }
 
+/**
+ * Drop the bytes of a page that no consumer reads.
+ *
+ * Scripts, styles, SVG bodies, comments and inline data URIs typically dominate
+ * a page's size and nothing downstream inspects them — htmlToMarkdown discards
+ * scripts and styles as its first step anyway.
+ *
+ * Apply this BEFORE hashing: computeHashes hashes the HTML string, so slimming
+ * afterwards would store a body that does not match its own hash.
+ */
+export function slimHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<svg[\s\S]*?<\/svg>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/(\s(?:src|href))\s*=\s*"data:[^"]*"/gi, '$1=""')
+    .replace(/(\s(?:src|href))\s*=\s*'data:[^']*'/gi, "$1=''");
+}
+
 export async function computeHashes(
   html: string,
   actionableItems: ActionableItem[]

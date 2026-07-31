@@ -41,7 +41,8 @@ import { detectScaffoldRegions } from "../scanner/component-detector";
 import { detectPatternsWithInstances } from "../scanner/pattern-detector";
 import { settleForRead } from "./settle-for-read";
 import { interpolateAction } from "./interpolate-action";
-import { computeHashes } from "../browser/page-utils";
+import { computeHashes, htmlToMarkdown, slimHtml } from "../browser/page-utils";
+import { capturePageSignals } from "../browser/page-signals";
 
 let _clickWaitMs = 500;
 
@@ -901,17 +902,24 @@ export async function executeTestInteraction(
       // Real content hashes so the server can dedup the page state (and decide
       // whether it needs the body) without ever rehashing — and without us
       // shipping the HTML on every call. See the two-phase scanNext below.
-      const fullHtml = normalizeHtml(html);
+      // Slim BEFORE hashing. computeHashes hashes the HTML string, so hashing
+      // the full document and shipping a slimmed one would store a body that
+      // does not match its own hash. Hashing the slimmed document also stops
+      // inline nonces and cache-busted JSON from changing htmlHash every load.
+      const fullHtml = slimHtml(normalizeHtml(html));
       const pageHashes = await computeHashes(fullHtml, ensureArray(items));
+      const contentMd = htmlToMarkdown(fullHtml);
+      const signals = await capturePageSignals(adapter);
 
       pageStatePayload = {
         pageId: 0,
         relativePath: currentPath,
         screenshotPath,
-        html: fullHtml,
-        // contentText is omitted: it is the markdown projection of `html`, so
-        // shipping both duplicates the page content. The server derives it from
-        // `html` when persisting the page state.
+        // `html` is no longer sent: markdown is a fraction of the size, and
+        // the three server-side reads that needed real markup now arrive as
+        // `signals`.
+        contentMd,
+        signals,
         hashes: pageHashes,
         actionableItems: ensureArray(items),
         scaffolds: scaffolds.map(s => ({
