@@ -175,6 +175,26 @@ function describeStepStatus(
   }
 }
 
+/**
+ * Accessible name of the control whose activation produced the resulting page
+ * state — the LAST interactive step, since that is what the runner was on when
+ * the state settled.
+ *
+ * The graph joins a planned click to the view it leads to by this name. Without
+ * it every click looks terminal and a multi-step plan fails to chain, so the
+ * planner silently degrades to single-hop routes.
+ */
+function triggerLabelFromSteps(steps: StoredStep[]): string | undefined {
+  const interactive = new Set(["click", "fill", "select", "check", "press"]);
+  for (let i = steps.length - 1; i >= 0; i -= 1) {
+    const action = steps[i]?.action;
+    if (!action || !interactive.has(action.actionType)) continue;
+    const name = parseReplaySelector(action.path)?.accessibleName?.trim();
+    if (name) return name;
+  }
+  return undefined;
+}
+
 function describeActionTarget(path?: string): string | null {
   if (!path) return null;
   const replay = parseReplaySelector(path);
@@ -940,6 +960,7 @@ export async function executeTestInteraction(
         })),
         forms: ensureArray(forms).map(f => ({ form: f })),
         currentTestInteractionId: testInteraction.id,
+        triggerLabel: triggerLabelFromSteps(steps),
         beginningPageStateId,
         journeySteps: ensureArray(journeySteps) as any,
         siteOrigin: currentUrlParsed.origin,
