@@ -4,78 +4,34 @@ import type {
 } from "@sudobility/testomniac_types";
 import type { ControlState } from "../expertise/tester/control-state";
 
-const REPLAY_SELECTOR_PREFIX = "tmnc-replay:";
+import {
+  encodeReplaySelector,
+  isReplaySelector,
+  parseReplaySelector,
+  REPLAY_SELECTOR_PREFIX,
+  type ReplaySelectorMetadata,
+} from "@sudobility/testomniac_types";
 
-export type ReplaySelectorMetadata = {
-  css?: string;
-  tagName?: string;
-  role?: string;
-  inputType?: string;
-  accessibleName?: string;
-  textContent?: string;
-  href?: string;
-  testId?: string;
-  id?: string;
-  name?: string;
-  placeholder?: string;
+// Re-exported so existing importers in this package keep working. The grammar
+// itself lives in the shared types package: three packages read or write it,
+// and a copy each would drift silently — an unrecognised key is dropped and
+// the action then targets the wrong element rather than failing.
+export {
+  encodeReplaySelector,
+  isReplaySelector,
+  parseReplaySelector,
+  REPLAY_SELECTOR_PREFIX,
+  type ReplaySelectorMetadata,
 };
 
+/** Local to the helpers below. The grammar's own normalisation lives with the
+ * codec in testomniac_types; this is just a string utility. */
 function normalizeText(value: string | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim();
 }
 
 export function isTransientSnapshotSelector(selector?: string | null): boolean {
   return Boolean(selector && selector.includes("data-tmnc-id"));
-}
-
-export function isReplaySelector(selector?: string | null): boolean {
-  return Boolean(selector && selector.startsWith(REPLAY_SELECTOR_PREFIX));
-}
-
-export function encodeReplaySelector(metadata: ReplaySelectorMetadata): string {
-  const params = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(metadata)) {
-    const normalizedValue = normalizeText(value);
-    if (normalizedValue.length > 0) {
-      params.set(key, normalizedValue);
-    }
-  }
-
-  return `${REPLAY_SELECTOR_PREFIX}${params.toString()}`;
-}
-
-export function parseReplaySelector(
-  selector?: string | null
-): ReplaySelectorMetadata | null {
-  if (!isReplaySelector(selector)) {
-    return null;
-  }
-
-  const raw = (selector ?? "").slice(REPLAY_SELECTOR_PREFIX.length);
-  const params = new URLSearchParams(raw);
-  const metadata: ReplaySelectorMetadata = {};
-
-  for (const key of [
-    "css",
-    "tagName",
-    "role",
-    "inputType",
-    "accessibleName",
-    "textContent",
-    "href",
-    "testId",
-    "id",
-    "name",
-    "placeholder",
-  ] as const) {
-    const value = normalizeText(params.get(key) ?? "");
-    if (value.length > 0) {
-      metadata[key] = value;
-    }
-  }
-
-  return metadata;
 }
 
 export function buildReplaySelectorFromActionableItem(
