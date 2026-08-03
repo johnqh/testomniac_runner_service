@@ -1278,7 +1278,13 @@ async function mapItemsToScaffolds(
   );
 }
 
-function parseStoredSteps(stepsJson: unknown): StoredStep[] {
+/**
+ * Exported for a cross-package guard: this is the seam where a step produced by
+ * testomniac_api becomes something the executor can run. It reads `action.path`
+ * and drops every other key, so a producer that emits `selector` yields an
+ * undefined target and the step is skipped in silence. That shipped once.
+ */
+export function parseStoredSteps(stepsJson: unknown): StoredStep[] {
   if (!Array.isArray(stepsJson)) {
     return [];
   }
