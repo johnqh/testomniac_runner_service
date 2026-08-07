@@ -60,6 +60,7 @@ export async function capturePageSignals(
       hasOpenDialog: hasOpenDialog(),
       collectionCount: collectionCount(),
       visibleText: (document.body?.innerText ?? "").replace(/\s+/g, " ").trim(),
+      title: document.title || undefined,
     };
   });
 }
