@@ -126,6 +126,15 @@ export interface BrowserAdapter {
    */
   drainCapturedRequests?(): CapturedNetworkRequest[];
 
+  /**
+   * Turn request capture on or off.
+   *
+   * Off is the default, and off means the adapter buffers nothing — not that
+   * it buffers and discards. Capture carries API bodies out of the browser, so
+   * paying for it silently is the wrong default even when nobody reads them.
+   */
+  setApiCaptureEnabled?(enabled: boolean): void;
+
   /** Wait for a new tab/window to open. Returns a tab identifier, or null on timeout. */
   waitForNewTab?(timeoutMs?: number): Promise<number | null>;
 

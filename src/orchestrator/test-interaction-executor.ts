@@ -949,8 +949,8 @@ export async function executeTestInteraction(
         contentMd,
         signals,
         // Drained, not read: each page state carries the traffic IT produced.
-        // Absent on adapters that do not capture, which simply means the graph
-        // service learns no API surface.
+        // Empty unless the scan asked for capture — the adapter buffers
+        // nothing when disabled, so this is absent rather than discarded.
         networkRequests: adapter.drainCapturedRequests?.(),
         hashes: pageHashes,
         actionableItems: ensureArray(items),

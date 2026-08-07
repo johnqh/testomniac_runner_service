@@ -207,6 +207,10 @@ export async function runTestRun(
       throw new Error(`Test run ${config.testRunId} not found`);
     }
 
+    // Before any page loads, so a scan that did not ask for capture never
+    // buffers a single body. Absent on old API responses, which reads as off.
+    adapter.setApiCaptureEnabled?.(testRun.captureApi === true);
+
     if (!testRun.testSurfaceBundleRunId) {
       throw new Error(
         `Test run ${config.testRunId} has no test surface bundle run`
