@@ -948,6 +948,10 @@ export async function executeTestInteraction(
         // `signals`.
         contentMd,
         signals,
+        // Drained, not read: each page state carries the traffic IT produced.
+        // Absent on adapters that do not capture, which simply means the graph
+        // service learns no API surface.
+        networkRequests: adapter.drainCapturedRequests?.(),
         hashes: pageHashes,
         actionableItems: ensureArray(items),
         scaffolds: scaffolds.map(s => ({

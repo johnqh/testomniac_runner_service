@@ -1,5 +1,9 @@
 // Browser abstraction
-export type { BrowserAdapter, RuntimeArtifacts } from "./adapter.js";
+export type {
+  BrowserAdapter,
+  RuntimeArtifacts,
+  CapturedNetworkRequest,
+} from "./adapter.js";
 
 // Storage
 export type { DedupStore } from "./storage/dedup-store.js";

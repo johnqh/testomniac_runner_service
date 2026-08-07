@@ -1,6 +1,10 @@
 /**
  * Abstract browser interface that both Puppeteer (server) and Chrome APIs (extension) implement.
  */
+import type { CapturedNetworkRequest } from "@sudobility/testomniac_types";
+
+export type { CapturedNetworkRequest };
+
 export interface RuntimeArtifacts {
   consoleLogs: string[];
   networkLogs: Array<{
@@ -111,6 +115,16 @@ export interface BrowserAdapter {
 
   /** Clear any buffered runtime artifacts, when supported by the adapter. */
   resetRuntimeArtifacts?(): void;
+
+  /**
+   * Drain complete XHR/fetch requests captured since the last drain.
+   *
+   * Separate from `getRuntimeArtifacts` because the shapes serve different
+   * consumers: runtime artifacts are a summary for findings, these are whole
+   * requests for learning the app's API surface. Draining rather than reading
+   * keeps a page's traffic attributed to that page.
+   */
+  drainCapturedRequests?(): CapturedNetworkRequest[];
 
   /** Wait for a new tab/window to open. Returns a tab identifier, or null on timeout. */
   waitForNewTab?(timeoutMs?: number): Promise<number | null>;
