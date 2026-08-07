@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ActionableItem } from "@sudobility/testomniac_types";
-import { PageAnalyzer } from ".";
+import { PageAnalyzer } from "./index.js";
 
 function createItem(
   selector: string,

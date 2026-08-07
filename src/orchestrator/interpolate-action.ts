@@ -1,5 +1,5 @@
 import type { UserData } from "@sudobility/testomniac_types";
-import { resolveVariables } from "./variable-resolver";
+import { resolveVariables } from "./variable-resolver.js";
 
 /**
  * Return a shallow copy of `action` with `value` and `path` resolved against

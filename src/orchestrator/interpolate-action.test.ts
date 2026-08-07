@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { interpolateAction } from "./interpolate-action";
-import { UnresolvedVariableError } from "./variable-resolver";
+import { interpolateAction } from "./interpolate-action.js";
+import { UnresolvedVariableError } from "./variable-resolver.js";
 import type { UserData } from "@sudobility/testomniac_types";
 
 const userData: UserData = {

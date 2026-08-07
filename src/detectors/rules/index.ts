@@ -1,16 +1,16 @@
-import type { DetectionRule } from "../detection-rule";
-import { duplicateHeadingRule } from "./duplicate-heading-rule";
-import { emptyLinkRule } from "./empty-link-rule";
-import { brokenImageRule } from "./broken-image-rule";
-import { duplicateIdRule } from "./duplicate-id-rule";
-import { placeholderTextRule } from "./placeholder-text-rule";
-import { errorPageRule } from "./error-page-rule";
-import { blankPageRule } from "./blank-page-rule";
-import { brokenLinkRule } from "./broken-link-rule";
-import { brokenMediaRule } from "./broken-media-rule";
-import { deadClickRule } from "./dead-click-rule";
-import { consoleErrorRule } from "./console-error-rule";
-import { networkErrorRule } from "./network-error-rule";
+import type { DetectionRule } from "../detection-rule.js";
+import { duplicateHeadingRule } from "./duplicate-heading-rule.js";
+import { emptyLinkRule } from "./empty-link-rule.js";
+import { brokenImageRule } from "./broken-image-rule.js";
+import { duplicateIdRule } from "./duplicate-id-rule.js";
+import { placeholderTextRule } from "./placeholder-text-rule.js";
+import { errorPageRule } from "./error-page-rule.js";
+import { blankPageRule } from "./blank-page-rule.js";
+import { brokenLinkRule } from "./broken-link-rule.js";
+import { brokenMediaRule } from "./broken-media-rule.js";
+import { deadClickRule } from "./dead-click-rule.js";
+import { consoleErrorRule } from "./console-error-rule.js";
+import { networkErrorRule } from "./network-error-rule.js";
 
 export function getAllDetectionRules(): DetectionRule[] {
   return [

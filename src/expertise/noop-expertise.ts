@@ -1,4 +1,4 @@
-import type { Expertise, ExpertiseContext, Outcome } from "./types";
+import type { Expertise, ExpertiseContext, Outcome } from "./types.js";
 
 /**
  * No-op expertise placeholder. Returns an empty outcomes list.

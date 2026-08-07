@@ -5,13 +5,13 @@ import type {
   TestStep,
   Expectation,
   SizeClass,
-} from "../domain/types";
+} from "../domain/types.js";
 import {
   PlaywrightAction,
   ExpectationType,
   ExpectationSeverity,
-} from "../domain/types";
-import { assignSurfaceTags } from "./surface-tagger";
+} from "../domain/types.js";
+import { assignSurfaceTags } from "./surface-tagger.js";
 
 export interface GeneratedTestInteraction {
   testInteraction: TestInteraction;

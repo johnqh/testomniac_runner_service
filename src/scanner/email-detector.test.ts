@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectEmailHint, detectEmailConfirmation } from "./email-detector";
+import { detectEmailHint, detectEmailConfirmation } from "./email-detector.js";
 
 describe("email-detector", () => {
   it("detects email hint when form has email field and hint text", () => {

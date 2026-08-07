@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { checkContentIssues } from "./content-checker";
+import { checkContentIssues } from "./content-checker.js";
 
 describe("content-checker", () => {
   it("detects placeholder text", () => {

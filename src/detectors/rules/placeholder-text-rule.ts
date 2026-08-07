@@ -2,7 +2,7 @@ import type {
   DetectionRule,
   DetectionContext,
   DetectedIssue,
-} from "../detection-rule";
+} from "../detection-rule.js";
 
 const PLACEHOLDER_PATTERNS = [
   /lorem ipsum/i,

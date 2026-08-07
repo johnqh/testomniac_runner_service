@@ -2,8 +2,8 @@ import {
   ERROR_TEXT_PATTERNS,
   ERROR_SELECTORS,
   CONSOLE_NOISE_PATTERNS,
-} from "../config/constants";
-import type { NetworkLogEntry } from "../domain/types";
+} from "../config/constants.js";
+import type { NetworkLogEntry } from "../domain/types.js";
 
 export function detectDeadClick(
   startingPageStateId: number | undefined,

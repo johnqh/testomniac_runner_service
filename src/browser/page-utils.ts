@@ -2,9 +2,9 @@ import type {
   ActionableItem,
   PageHashes,
   DecomposedPageHashes,
-} from "../domain/types";
-import type { DetectedScaffoldRegion } from "../scanner/component-detector";
-import type { DetectedPatternWithInstances } from "../scanner/pattern-detector";
+} from "../domain/types.js";
+import type { DetectedScaffoldRegion } from "../scanner/component-detector.js";
+import type { DetectedPatternWithInstances } from "../scanner/pattern-detector.js";
 import { createHash } from "node:crypto";
 
 export async function sha256(input: string): Promise<string> {

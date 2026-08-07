@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { exportAsPlaywrightScript } from "./playwright-export";
+import { exportAsPlaywrightScript } from "./playwright-export.js";
 import {
   PlaywrightAction,
   ExpectationType,
   ExpectationSeverity,
-} from "../domain/types";
-import type { TestInteraction } from "../domain/types";
+} from "../domain/types.js";
+import type { TestInteraction } from "../domain/types.js";
 
 function makeTestInteraction(
   overrides: Partial<TestInteraction>

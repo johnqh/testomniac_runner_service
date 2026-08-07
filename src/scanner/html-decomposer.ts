@@ -1,4 +1,4 @@
-import type { DetectedScaffoldRegion } from "./component-detector";
+import type { DetectedScaffoldRegion } from "./component-detector.js";
 import type { PatternInstance } from "@sudobility/testomniac_types";
 
 // =============================================================================

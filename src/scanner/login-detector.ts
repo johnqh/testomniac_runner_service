@@ -2,8 +2,8 @@ function logModule(step: string, details?: Record<string, unknown>): void {
   console.info("[LoginDetector]", step, details ?? {});
 }
 
-import type { BrowserAdapter } from "../adapter";
-import type { FormInfo } from "../domain/types";
+import type { BrowserAdapter } from "../adapter.js";
+import type { FormInfo } from "../domain/types.js";
 export type {
   LoginSignal,
   AuthProviderType,

@@ -4,7 +4,7 @@ import {
   detectErrorOnPage,
   detectConsoleErrors,
   detectNetworkErrors,
-} from "./issue-detector";
+} from "./issue-detector.js";
 
 describe("issue-detector", () => {
   it("detectDeadClick returns true when states match", () => {

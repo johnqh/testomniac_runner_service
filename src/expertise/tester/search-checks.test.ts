@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { checkEmptyStateVisible, checkResultsChanged } from "./search-checks";
-import type { ExpertiseContext } from "../types";
-import type { UiSnapshot } from "../../browser/ui-snapshot";
+import {
+  checkEmptyStateVisible,
+  checkResultsChanged,
+} from "./search-checks.js";
+import type { ExpertiseContext } from "../types.js";
+import type { UiSnapshot } from "../../browser/ui-snapshot.js";
 
 function createContext(
   overrides: Partial<ExpertiseContext> = {}

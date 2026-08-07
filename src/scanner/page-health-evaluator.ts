@@ -1,4 +1,4 @@
-import type { BrowserAdapter } from "../adapter";
+import type { BrowserAdapter } from "../adapter.js";
 
 /**
  * A page health issue found during browser-side evaluation.

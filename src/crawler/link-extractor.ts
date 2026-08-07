@@ -1,9 +1,9 @@
-import type { BrowserAdapter } from "../adapter";
+import type { BrowserAdapter } from "../adapter.js";
 import {
   isSameOrigin,
   normalizeNavigableUrl,
   toRelativePath,
-} from "./url-normalizer";
+} from "./url-normalizer.js";
 
 export interface ExtractedLink {
   url: string;

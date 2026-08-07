@@ -5,7 +5,7 @@ export interface UiSnapshot {
   feedbackTexts: string[];
 }
 
-import type { BrowserAdapter } from "../adapter";
+import type { BrowserAdapter } from "../adapter.js";
 
 export async function captureUiSnapshot(
   adapter: BrowserAdapter

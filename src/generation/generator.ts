@@ -1,7 +1,7 @@
-import { generateRenderTest, type GeneratedTestInteraction } from "./render";
-import { assignPriority } from "./surface-tagger";
-import type { SizeClass } from "../domain/types";
-import type { ApiClient } from "../api/client";
+import { generateRenderTest, type GeneratedTestInteraction } from "./render.js";
+import { assignPriority } from "./surface-tagger.js";
+import type { SizeClass } from "../domain/types.js";
+import type { ApiClient } from "../api/client.js";
 import type { ElementIdentityResponse } from "@sudobility/testomniac_types";
 
 export interface GeneratorOptions {

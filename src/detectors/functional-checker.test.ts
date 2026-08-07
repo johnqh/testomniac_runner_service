@@ -3,7 +3,7 @@ import {
   analyzeConsoleErrors,
   analyzeNetworkErrors,
   checkPostClickState,
-} from "./functional-checker";
+} from "./functional-checker.js";
 
 describe("functional-checker", () => {
   it("filters noise from console errors", () => {

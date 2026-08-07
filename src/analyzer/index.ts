@@ -1,1 +1,1 @@
-export { PageAnalyzer, type AnalyzerContext } from "./page-analyzer";
+export { PageAnalyzer, type AnalyzerContext } from "./page-analyzer/index.js";

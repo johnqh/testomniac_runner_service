@@ -2,7 +2,7 @@ import type {
   DetectionRule,
   DetectionContext,
   DetectedIssue,
-} from "../detection-rule";
+} from "../detection-rule.js";
 
 export const emptyLinkRule: DetectionRule = {
   name: "empty_link",

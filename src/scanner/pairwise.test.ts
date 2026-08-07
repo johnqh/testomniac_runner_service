@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generatePairwiseCombinations } from "./pairwise";
+import { generatePairwiseCombinations } from "./pairwise.js";
 
 describe("pairwise", () => {
   it("generates pairwise for 2 binary factors", () => {

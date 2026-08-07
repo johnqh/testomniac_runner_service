@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PATTERN_TYPE_SELECTORS } from "./pattern-detector";
+import { PATTERN_TYPE_SELECTORS } from "./pattern-detector.js";
 
 describe("PATTERN_TYPE_SELECTORS", () => {
   it("has 20 pattern types", () => {

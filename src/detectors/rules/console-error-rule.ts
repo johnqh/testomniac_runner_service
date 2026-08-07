@@ -2,7 +2,7 @@ import type {
   DetectionRule,
   DetectionContext,
   DetectedIssue,
-} from "../detection-rule";
+} from "../detection-rule.js";
 
 export const consoleErrorRule: DetectionRule = {
   name: "console_error",

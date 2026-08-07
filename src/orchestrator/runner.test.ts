@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { runTestRun } from "./runner";
-import type { RunConfig, ScanEventHandler } from "./types";
-import type { ApiClient } from "../api/client";
-import type { BrowserAdapter } from "../adapter";
+import { runTestRun } from "./runner.js";
+import type { RunConfig, ScanEventHandler } from "./types.js";
+import type { ApiClient } from "../api/client.js";
+import type { BrowserAdapter } from "../adapter.js";
 
 function makeStubAdapter(): BrowserAdapter {
   return {

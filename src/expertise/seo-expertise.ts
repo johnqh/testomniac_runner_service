@@ -1,6 +1,6 @@
 import { ExpertiseRuleId } from "@sudobility/testomniac_types";
-import type { Expertise, ExpertiseContext, Outcome } from "./types";
-import { applyRuleIds } from "./rule-id";
+import type { Expertise, ExpertiseContext, Outcome } from "./types.js";
+import { applyRuleIds } from "./rule-id.js";
 
 const SEO_RULE_IDS = {
   "Page should have a <title> tag": ExpertiseRuleId.SeoTitlePresent,

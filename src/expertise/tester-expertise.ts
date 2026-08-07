@@ -2,69 +2,69 @@ import {
   ExpectationSeverity,
   ExpertiseRuleId,
 } from "@sudobility/testomniac_types";
-import type { Expertise, ExpertiseContext, Outcome } from "./types";
+import type { Expertise, ExpertiseContext, Outcome } from "./types.js";
 import {
   checkNoConsoleErrors,
   checkMixedContent,
   checkNoNetworkErrors,
   checkPageLoaded,
   checkSlowResponses,
-} from "./tester/core-checks";
-import { checkInputValue } from "./tester/text-input-checks";
-import { checkSelectionState } from "./tester/selection-control-checks";
+} from "./tester/core-checks.js";
+import { checkInputValue } from "./tester/text-input-checks.js";
+import { checkSelectionState } from "./tester/selection-control-checks.js";
 import {
   checkErrorStateCleared,
   checkErrorStateVisible,
   checkFormSubmittedSuccessfully,
   checkValidationMessageVisible,
-} from "./tester/form-checks";
+} from "./tester/form-checks.js";
 import {
   checkCartSummaryChanged,
   checkCollectionOrderChanged,
   checkCountChanged,
-} from "./tester/commerce-checks";
+} from "./tester/commerce-checks.js";
 import {
   checkNavigationOrStateChanged,
   checkUrlMatchesTarget,
   checkUrlUnchanged,
-} from "./tester/navigation-checks";
+} from "./tester/navigation-checks.js";
 import {
   checkLoadingCompletes,
   checkMediaLoaded,
   checkModalOpened,
   checkPageResponsive,
   checkVideoPlayable,
-} from "./tester/page-behavior-checks";
+} from "./tester/page-behavior-checks.js";
 import {
   checkFieldErrorClearsAfterFix,
   checkRequiredErrorShownForField,
-} from "./tester/validation-checks";
+} from "./tester/validation-checks.js";
 import {
   checkNetworkRequestMade,
   checkNoDuplicateMutationRequests,
-} from "./tester/network-intent-checks";
+} from "./tester/network-intent-checks.js";
 import {
   checkEmptyStateVisible,
   checkResultsChanged,
-} from "./tester/search-checks";
-import { checkResultsRestored } from "./tester/search-restore-checks";
-import { checkVariantStateChanged } from "./tester/variant-checks";
-import { checkRowCountChanged } from "./tester/list-workflow-checks";
+} from "./tester/search-checks.js";
+import { checkResultsRestored } from "./tester/search-restore-checks.js";
+import { checkVariantStateChanged } from "./tester/variant-checks.js";
+import { checkRowCountChanged } from "./tester/list-workflow-checks.js";
 import {
   checkDialogClosed,
   checkFeedbackNotDuplicated,
   checkFeedbackVisible,
   checkFocusReturned,
-} from "./tester/dialog-feedback-checks";
+} from "./tester/dialog-feedback-checks.js";
 import {
   checkBackNavigationRestoresState,
   checkForwardNavigationReappliesState,
   checkStatePersistsAfterReload,
-} from "./tester/persistence-checks";
+} from "./tester/persistence-checks.js";
 import {
   checkElementFocused,
   checkExpandedStateChanged,
-} from "./tester/keyboard-disclosure-checks";
+} from "./tester/keyboard-disclosure-checks.js";
 
 /**
  * Checks each test element expectation is met.

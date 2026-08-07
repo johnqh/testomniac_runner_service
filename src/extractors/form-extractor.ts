@@ -1,5 +1,5 @@
-import type { BrowserAdapter } from "../adapter";
-import type { FormInfo } from "../domain/types";
+import type { BrowserAdapter } from "../adapter.js";
+import type { FormInfo } from "../domain/types.js";
 
 type AnalyzerField = FormInfo["fields"][number] & {
   disabled?: boolean;

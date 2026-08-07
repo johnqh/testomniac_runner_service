@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkNoNetworkErrors, checkPageLoaded } from "./core-checks";
+import { checkNoNetworkErrors, checkPageLoaded } from "./core-checks.js";
 
 describe("checkPageLoaded", () => {
   it("treats null html as a failed page load instead of throwing", () => {

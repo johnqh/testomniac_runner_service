@@ -3,7 +3,7 @@ import {
   resolveVariables,
   findVariablePaths,
   UnresolvedVariableError,
-} from "./variable-resolver";
+} from "./variable-resolver.js";
 import type { UserData } from "@sudobility/testomniac_types";
 
 const data: UserData = {

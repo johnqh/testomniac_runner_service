@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toPlaywrightLocator, buildScopeChain } from "./playwright-locator";
+import { toPlaywrightLocator, buildScopeChain } from "./playwright-locator.js";
 import type { ElementIdentity } from "@sudobility/testomniac_types";
 
 function makeIdentity(overrides: Partial<ElementIdentity>): ElementIdentity {

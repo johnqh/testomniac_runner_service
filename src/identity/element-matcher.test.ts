@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   matchElementIdentity,
   type ElementFingerprint,
-} from "./element-matcher";
+} from "./element-matcher.js";
 import type { ElementIdentityResponse } from "@sudobility/testomniac_types";
 
 function makeResponse(

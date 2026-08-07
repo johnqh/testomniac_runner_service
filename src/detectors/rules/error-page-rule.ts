@@ -2,7 +2,7 @@ import type {
   DetectionRule,
   DetectionContext,
   DetectedIssue,
-} from "../detection-rule";
+} from "../detection-rule.js";
 
 const ERROR_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /404\s*(not found|error|page)/i, label: "404 Not Found" },

@@ -1,5 +1,5 @@
-import type { BrowserAdapter } from "../adapter";
-import type { DomSnapshotEntry } from "../extractors/types";
+import type { BrowserAdapter } from "../adapter.js";
+import type { DomSnapshotEntry } from "../extractors/types.js";
 
 export async function buildDomSnapshot(
   adapter: BrowserAdapter

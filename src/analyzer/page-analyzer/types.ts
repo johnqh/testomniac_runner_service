@@ -6,11 +6,11 @@ import type {
   TestSurfaceBundleRunResponse,
   TestSurfaceResponse,
 } from "@sudobility/testomniac_types";
-import type { ApiClient } from "../../api/client";
-import type { ScanEventHandler } from "../../orchestrator/types";
-import type { DetectedScaffoldRegion } from "../../scanner/component-detector";
-import type { LoginDetectionResult } from "../../scanner/login-detector";
-import type { LoginConfig } from "../../orchestrator/login-manager";
+import type { ApiClient } from "../../api/client.js";
+import type { ScanEventHandler } from "../../orchestrator/types.js";
+import type { DetectedScaffoldRegion } from "../../scanner/component-detector.js";
+import type { LoginDetectionResult } from "../../scanner/login-detector.js";
+import type { LoginConfig } from "../../orchestrator/login-manager.js";
 
 export interface AnalyzerContext {
   runnerId: number;

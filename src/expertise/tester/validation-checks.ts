@@ -1,5 +1,5 @@
-import type { ExpertiseContext, Outcome } from "../types";
-import { findControlBySelector } from "./control-state";
+import type { ExpertiseContext, Outcome } from "../types.js";
+import { findControlBySelector } from "./control-state.js";
 
 export function checkRequiredErrorShownForField(
   expectation: {

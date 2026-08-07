@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseStoredSteps } from "./test-interaction-executor";
+import { parseStoredSteps } from "./test-interaction-executor.js";
 
 /**
  * Guards the seam between testomniac_api's route materializer and this

@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   checkNetworkRequestMade,
   checkNoDuplicateMutationRequests,
-} from "./network-intent-checks";
-import type { ExpertiseContext } from "../types";
-import type { UiSnapshot } from "../../browser/ui-snapshot";
+} from "./network-intent-checks.js";
+import type { ExpertiseContext } from "../types.js";
+import type { UiSnapshot } from "../../browser/ui-snapshot.js";
 
 function createContext(
   overrides: Partial<ExpertiseContext> = {}

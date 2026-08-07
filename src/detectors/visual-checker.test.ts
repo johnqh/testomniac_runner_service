@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { checkVisualIssues } from "./visual-checker";
+import { checkVisualIssues } from "./visual-checker.js";
 
 describe("visual-checker", () => {
   it("detects duplicate IDs", () => {

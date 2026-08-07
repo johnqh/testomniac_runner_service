@@ -3,7 +3,7 @@ import {
   NetworkIdleTracker,
   waitForNetworkIdle,
   NETWORK_IDLE_DEFAULTS,
-} from "./network-idle";
+} from "./network-idle.js";
 
 describe("NetworkIdleTracker.activeCount", () => {
   it("counts normal in-flight requests", () => {

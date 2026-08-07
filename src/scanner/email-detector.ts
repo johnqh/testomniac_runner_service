@@ -1,7 +1,7 @@
 import {
   EMAIL_HINT_PATTERNS,
   EMAIL_CONFIRMATION_PATTERNS,
-} from "../config/constants";
+} from "../config/constants.js";
 
 export function detectEmailHint(
   hasEmailField: boolean,

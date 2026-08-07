@@ -1,4 +1,4 @@
-import type { ExpertiseContext, Outcome } from "../types";
+import type { ExpertiseContext, Outcome } from "../types.js";
 
 export function checkUrlUnchanged(
   expectation: { description: string },

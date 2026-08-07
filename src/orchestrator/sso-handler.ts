@@ -1,5 +1,5 @@
-import type { BrowserAdapter } from "../adapter";
-import type { AuthProviderType } from "../scanner/login-detector";
+import type { BrowserAdapter } from "../adapter.js";
+import type { AuthProviderType } from "../scanner/login-detector.js";
 
 // =============================================================================
 // Types

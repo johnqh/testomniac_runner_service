@@ -4,10 +4,13 @@ import {
   checkFeedbackNotDuplicated,
   checkFeedbackVisible,
   checkFocusReturned,
-} from "./dialog-feedback-checks";
-import { checkErrorStateCleared, checkErrorStateVisible } from "./form-checks";
-import type { ExpertiseContext } from "../types";
-import type { UiSnapshot } from "../../browser/ui-snapshot";
+} from "./dialog-feedback-checks.js";
+import {
+  checkErrorStateCleared,
+  checkErrorStateVisible,
+} from "./form-checks.js";
+import type { ExpertiseContext } from "../types.js";
+import type { UiSnapshot } from "../../browser/ui-snapshot.js";
 
 function createUiSnapshot(overrides: Partial<UiSnapshot> = {}): UiSnapshot {
   return {

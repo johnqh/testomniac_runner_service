@@ -1,9 +1,9 @@
-import type { ExpertiseContext, Outcome } from "../types";
+import type { ExpertiseContext, Outcome } from "../types.js";
 import {
   classifyControlKind,
   findControlBySelector,
   findControlPeers,
-} from "./control-state";
+} from "./control-state.js";
 
 export function checkSelectionState(
   expectation: {

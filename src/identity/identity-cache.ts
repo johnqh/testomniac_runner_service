@@ -1,4 +1,4 @@
-import type { ApiClient } from "../api/client";
+import type { ApiClient } from "../api/client.js";
 import type { ElementIdentityResponse } from "@sudobility/testomniac_types";
 
 export class IdentityCache {

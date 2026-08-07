@@ -2,8 +2,8 @@ import type {
   DomSnapshotEntry,
   ExtractorCandidate,
   ItemExtractor,
-} from "./types";
-import { createCandidate, uniqueBySelector } from "./helpers";
+} from "./types.js";
+import { createCandidate, uniqueBySelector } from "./helpers.js";
 
 function isGenericClickable(entry: DomSnapshotEntry): boolean {
   const tag = entry.tagName.toUpperCase();

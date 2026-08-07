@@ -4,12 +4,12 @@ import type {
   ExpertiseRuleId,
   NetworkLogEntry,
 } from "@sudobility/testomniac_types";
-import type { DetectedScaffoldRegion } from "../scanner/component-detector";
-import type { DetectedPatternWithInstances } from "../scanner/pattern-detector";
-import type { ControlState } from "./tester/control-state";
-import type { UiSnapshot } from "../browser/ui-snapshot";
-import type { PageHealthIssue } from "../scanner/page-health-evaluator";
-import type { PerformanceSnapshot } from "../browser/performance-snapshot";
+import type { DetectedScaffoldRegion } from "../scanner/component-detector.js";
+import type { DetectedPatternWithInstances } from "../scanner/pattern-detector.js";
+import type { ControlState } from "./tester/control-state.js";
+import type { UiSnapshot } from "../browser/ui-snapshot.js";
+import type { PageHealthIssue } from "../scanner/page-health-evaluator.js";
+import type { PerformanceSnapshot } from "../browser/performance-snapshot.js";
 
 export interface Outcome {
   ruleId?: ExpertiseRuleId;

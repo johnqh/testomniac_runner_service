@@ -3,10 +3,10 @@ import {
   checkCartSummaryChanged,
   checkCollectionOrderChanged,
   checkCountChanged,
-} from "./commerce-checks";
-import { checkResultsChanged } from "./search-checks";
-import type { ExpertiseContext } from "../types";
-import type { UiSnapshot } from "../../browser/ui-snapshot";
+} from "./commerce-checks.js";
+import { checkResultsChanged } from "./search-checks.js";
+import type { ExpertiseContext } from "../types.js";
+import type { UiSnapshot } from "../../browser/ui-snapshot.js";
 
 function createContext(initialHtml: string, html: string): ExpertiseContext {
   const uiSnapshot: UiSnapshot = {

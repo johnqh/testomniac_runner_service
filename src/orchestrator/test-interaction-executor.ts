@@ -1,5 +1,5 @@
-import type { BrowserAdapter } from "../adapter";
-import type { ApiClient } from "../api/client";
+import type { BrowserAdapter } from "../adapter.js";
+import type { ApiClient } from "../api/client.js";
 import {
   ExpertiseId,
   ExpectationSeverity,
@@ -18,31 +18,39 @@ import type {
   ScanNextResponse,
   UserData,
 } from "@sudobility/testomniac_types";
-import type { ScanEventHandler } from "./types";
-import type { Expertise, ExpertiseContext, Outcome } from "../expertise/types";
-import type { PageAnalyzer } from "../analyzer";
-import { isWithinScopePath } from "../crawler/scope-checker";
-import { detectLoginPage } from "../scanner/login-detector";
-import { evaluatePageHealth } from "../scanner/page-health-evaluator";
-import { extractActionableItems } from "../extractors";
-import { extractForms } from "../extractors/form-extractor";
-import { captureControlStates } from "../browser/control-snapshot";
+import type { ScanEventHandler } from "./types.js";
+import type {
+  Expertise,
+  ExpertiseContext,
+  Outcome,
+} from "../expertise/types.js";
+import type { PageAnalyzer } from "../analyzer/index.js";
+import { isWithinScopePath } from "../crawler/scope-checker.js";
+import { detectLoginPage } from "../scanner/login-detector.js";
+import { evaluatePageHealth } from "../scanner/page-health-evaluator.js";
+import { extractActionableItems } from "../extractors/index.js";
+import { extractForms } from "../extractors/form-extractor.js";
+import { captureControlStates } from "../browser/control-snapshot.js";
 import {
   capturePerformanceSnapshot,
   type PerformanceSnapshot,
-} from "../browser/performance-snapshot";
+} from "../browser/performance-snapshot.js";
 import {
   buildReplaySelectorFromDescription,
   isTransientSnapshotSelector,
   parseReplaySelector,
-} from "../browser/replay-selector";
-import { captureUiSnapshot, type UiSnapshot } from "../browser/ui-snapshot";
-import { detectScaffoldRegions } from "../scanner/component-detector";
-import { detectPatternsWithInstances } from "../scanner/pattern-detector";
-import { settleForRead } from "./settle-for-read";
-import { interpolateAction } from "./interpolate-action";
-import { computeHashes, htmlToMarkdown, slimHtml } from "../browser/page-utils";
-import { capturePageSignals } from "../browser/page-signals";
+} from "../browser/replay-selector.js";
+import { captureUiSnapshot, type UiSnapshot } from "../browser/ui-snapshot.js";
+import { detectScaffoldRegions } from "../scanner/component-detector.js";
+import { detectPatternsWithInstances } from "../scanner/pattern-detector.js";
+import { settleForRead } from "./settle-for-read.js";
+import { interpolateAction } from "./interpolate-action.js";
+import {
+  computeHashes,
+  htmlToMarkdown,
+  slimHtml,
+} from "../browser/page-utils.js";
+import { capturePageSignals } from "../browser/page-signals.js";
 
 let _clickWaitMs = 500;
 
@@ -236,7 +244,7 @@ export async function executeTestInteraction(
     sentPageBodies?: Set<string>;
   },
   scanScopePath?: string,
-  loginManager?: import("./login-manager").LoginManager,
+  loginManager?: import("./login-manager.js").LoginManager,
   cachedTestInteractions?: TestInteractionResponse[],
   userData?: UserData,
   /**

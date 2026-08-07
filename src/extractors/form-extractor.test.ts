@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { __test__ } from "./form-extractor";
+import { __test__ } from "./form-extractor.js";
 
 describe("form-extractor heuristics", () => {
   it("treats multi-field account widgets as forms", () => {

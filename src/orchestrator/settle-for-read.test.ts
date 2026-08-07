@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { settleForRead } from "./settle-for-read";
+import { settleForRead } from "./settle-for-read.js";
 
 describe("settleForRead", () => {
   it("calls waitForNetworkIdle when the adapter implements it", async () => {

@@ -1,4 +1,4 @@
-import { matchesControlSelector } from "../../browser/replay-selector";
+import { matchesControlSelector } from "../../browser/replay-selector.js";
 
 export interface ControlState {
   selector: string;

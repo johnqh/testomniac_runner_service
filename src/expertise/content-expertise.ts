@@ -1,7 +1,7 @@
 import { ExpertiseRuleId } from "@sudobility/testomniac_types";
-import type { Expertise, ExpertiseContext, Outcome } from "./types";
-import { outcomesFromPageHealth } from "./page-health-outcomes";
-import { applyRuleIds } from "./rule-id";
+import type { Expertise, ExpertiseContext, Outcome } from "./types.js";
+import { outcomesFromPageHealth } from "./page-health-outcomes.js";
+import { applyRuleIds } from "./rule-id.js";
 
 const CONTENT_PAGE_HEALTH_RULE_IDS = {
   broken_image: ExpertiseRuleId.ContentPageHealthBrokenImage,

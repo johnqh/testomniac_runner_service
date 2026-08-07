@@ -2,7 +2,7 @@ function logModule(step: string, details?: Record<string, unknown>): void {
   console.info("[CoreChecks]", step, details ?? {});
 }
 
-import type { ExpertiseContext, Outcome } from "../types";
+import type { ExpertiseContext, Outcome } from "../types.js";
 import type { NetworkLogEntry } from "@sudobility/testomniac_types";
 
 export function checkPageLoaded(

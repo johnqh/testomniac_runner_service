@@ -1,5 +1,5 @@
 import type { ExpertiseRuleId } from "@sudobility/testomniac_types";
-import type { Outcome } from "./types";
+import type { Outcome } from "./types.js";
 
 export function applyRuleIds(
   outcomes: Outcome[],

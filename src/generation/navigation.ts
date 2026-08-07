@@ -1,6 +1,6 @@
-import type { SizeClass } from "../domain/types";
-import type { LegacyGeneratedTestInteraction } from "./render";
-import { assignSurfaceTags } from "./surface-tagger";
+import type { SizeClass } from "../domain/types.js";
+import type { LegacyGeneratedTestInteraction } from "./render.js";
+import { assignSurfaceTags } from "./surface-tagger.js";
 
 interface NavigationInput {
   fromPageName: string;

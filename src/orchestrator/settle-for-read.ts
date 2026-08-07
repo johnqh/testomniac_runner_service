@@ -1,4 +1,4 @@
-import type { BrowserAdapter } from "../adapter";
+import type { BrowserAdapter } from "../adapter.js";
 
 /**
  * Single read-gate: wait for the page network to settle before the scanner

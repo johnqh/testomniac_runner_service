@@ -1,4 +1,4 @@
-import { isSameOrigin, toRelativePath } from "./url-normalizer";
+import { isSameOrigin, toRelativePath } from "./url-normalizer.js";
 
 /**
  * Checks if a URL is within the scan scope path boundary.

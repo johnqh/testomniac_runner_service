@@ -1,14 +1,14 @@
 import type { ActionableItem } from "@sudobility/testomniac_types";
-import type { BrowserAdapter } from "../adapter";
-import { buildDomSnapshot } from "../browser/dom-snapshot";
-import { buttonExtractor } from "./buttons";
-import { clickableExtractor } from "./clickables";
-import { productActionExtractor } from "./product-actions";
-import { resolveSelectors } from "./selectors";
-import { selectExtractor } from "./selects";
-import { textInputExtractor } from "./text-inputs";
-import { toggleExtractor } from "./toggles";
-import type { ItemExtractor } from "./types";
+import type { BrowserAdapter } from "../adapter.js";
+import { buildDomSnapshot } from "../browser/dom-snapshot.js";
+import { buttonExtractor } from "./buttons.js";
+import { clickableExtractor } from "./clickables.js";
+import { productActionExtractor } from "./product-actions.js";
+import { resolveSelectors } from "./selectors.js";
+import { selectExtractor } from "./selects.js";
+import { textInputExtractor } from "./text-inputs.js";
+import { toggleExtractor } from "./toggles.js";
+import type { ItemExtractor } from "./types.js";
 
 const extractorRegistry: ItemExtractor[] = [
   textInputExtractor,

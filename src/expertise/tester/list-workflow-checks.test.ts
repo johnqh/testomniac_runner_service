@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { checkRowCountChanged } from "./list-workflow-checks";
-import type { ExpertiseContext } from "../types";
-import type { UiSnapshot } from "../../browser/ui-snapshot";
+import { checkRowCountChanged } from "./list-workflow-checks.js";
+import type { ExpertiseContext } from "../types.js";
+import type { UiSnapshot } from "../../browser/ui-snapshot.js";
 
 function createContext(initialHtml: string, html: string): ExpertiseContext {
   const uiSnapshot: UiSnapshot = {

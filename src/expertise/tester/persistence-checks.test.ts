@@ -3,9 +3,9 @@ import {
   checkBackNavigationRestoresState,
   checkForwardNavigationReappliesState,
   checkStatePersistsAfterReload,
-} from "./persistence-checks";
-import type { ExpertiseContext } from "../types";
-import type { UiSnapshot } from "../../browser/ui-snapshot";
+} from "./persistence-checks.js";
+import type { ExpertiseContext } from "../types.js";
+import type { UiSnapshot } from "../../browser/ui-snapshot.js";
 
 function createUiSnapshot(): UiSnapshot {
   return {

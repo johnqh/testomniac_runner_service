@@ -1,6 +1,6 @@
-import type { BrowserAdapter } from "../adapter";
-import type { ApiClient } from "../api/client";
-import { StateManager } from "./state-manager";
+import type { BrowserAdapter } from "../adapter.js";
+import type { ApiClient } from "../api/client.js";
+import { StateManager } from "./state-manager.js";
 
 export class Navigator {
   private pagesWithNavAction = new Set<number>();

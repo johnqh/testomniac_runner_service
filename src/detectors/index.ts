@@ -1,12 +1,16 @@
-export { extractLinks, checkLinks, type LinkCheckResult } from "./link-checker";
-export { checkVisualIssues, type VisualIssue } from "./visual-checker";
-export { checkContentIssues, type ContentIssue } from "./content-checker";
+export {
+  extractLinks,
+  checkLinks,
+  type LinkCheckResult,
+} from "./link-checker.js";
+export { checkVisualIssues, type VisualIssue } from "./visual-checker.js";
+export { checkContentIssues, type ContentIssue } from "./content-checker.js";
 export {
   analyzeConsoleErrors,
   analyzeNetworkErrors,
   checkPostClickState,
   type FunctionalIssue,
-} from "./functional-checker";
+} from "./functional-checker.js";
 export {
   detectBrokenLinks,
   detectVisualIssues,
@@ -14,17 +18,17 @@ export {
   detectMediaIssues,
   type BrokenLinkResult,
   type MediaIssue,
-} from "./bug-detector";
-export { detectAndHandleModal, dismissModal } from "./modal-handler";
+} from "./bug-detector.js";
+export { detectAndHandleModal, dismissModal } from "./modal-handler.js";
 
 // Detection rules system
 export type {
   DetectionContext,
   DetectedIssue,
   DetectionRule,
-} from "./detection-rule";
+} from "./detection-rule.js";
 export {
   describeAction,
   buildTestInteractionDescription,
-} from "./action-description";
-export { getAllDetectionRules } from "./rules";
+} from "./action-description.js";
+export { getAllDetectionRules } from "./rules/index.js";

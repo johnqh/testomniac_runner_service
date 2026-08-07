@@ -2,7 +2,7 @@ import type {
   ActionableItem,
   ActionableItemResponse,
 } from "@sudobility/testomniac_types";
-import type { ControlState } from "../expertise/tester/control-state";
+import type { ControlState } from "../expertise/tester/control-state.js";
 
 import {
   encodeReplaySelector,

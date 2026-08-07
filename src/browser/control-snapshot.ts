@@ -1,5 +1,5 @@
-import type { BrowserAdapter } from "../adapter";
-import type { ControlState } from "../expertise/tester/control-state";
+import type { BrowserAdapter } from "../adapter.js";
+import type { ControlState } from "../expertise/tester/control-state.js";
 
 export async function captureControlStates(
   adapter: BrowserAdapter

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { slimHtml } from "./page-utils";
+import { slimHtml } from "./page-utils.js";
 
 describe("slimHtml", () => {
   it("removes script bodies", () => {

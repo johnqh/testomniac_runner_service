@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ActionQueue } from "./action-queue";
+import { ActionQueue } from "./action-queue.js";
 
 describe("ActionQueue", () => {
   it("starts empty", () => {

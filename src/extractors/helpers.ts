@@ -3,7 +3,7 @@ import type {
   DomSnapshotEntry,
   ExtractorCandidate,
   SelectorResolvedCandidate,
-} from "./types";
+} from "./types.js";
 
 export function createCandidate(
   entry: DomSnapshotEntry,

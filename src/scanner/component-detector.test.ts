@@ -3,8 +3,8 @@ import {
   extractCandidateRegions,
   groupByHash,
   COMPONENT_SELECTORS,
-} from "./component-detector";
-import { normalizeHtml } from "../browser/page-utils";
+} from "./component-detector.js";
+import { normalizeHtml } from "../browser/page-utils.js";
 import { createHash } from "node:crypto";
 
 function sha256(s: string) {

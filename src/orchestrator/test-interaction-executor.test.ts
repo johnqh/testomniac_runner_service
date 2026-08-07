@@ -4,7 +4,7 @@ import {
   emitLiveScreenshot,
   interactionNeedsStepSnapshots,
   readPageHtml,
-} from "./test-interaction-executor";
+} from "./test-interaction-executor.js";
 
 describe("emitLiveScreenshot", () => {
   it("reuses pre-captured bytes instead of calling adapter.screenshot", async () => {

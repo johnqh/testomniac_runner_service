@@ -1,4 +1,4 @@
-import type { TestInteraction } from "../domain/types";
+import type { TestInteraction } from "../domain/types.js";
 
 export function exportAsPlaywrightScript(
   testInteraction: TestInteraction

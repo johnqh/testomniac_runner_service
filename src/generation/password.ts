@@ -1,5 +1,5 @@
-import type { LegacyTestAction, SizeClass } from "../domain/types";
-import type { LegacyGeneratedTestInteraction } from "./render";
+import type { LegacyTestAction, SizeClass } from "../domain/types.js";
+import type { LegacyGeneratedTestInteraction } from "./render.js";
 
 export interface PasswordTestInteraction {
   password: string;

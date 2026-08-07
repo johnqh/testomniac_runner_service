@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildLoginSteps } from "./login-manager";
+import { buildLoginSteps } from "./login-manager.js";
 
 describe("buildLoginSteps", () => {
   const form = {

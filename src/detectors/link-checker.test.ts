@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractLinks } from "./link-checker";
+import { extractLinks } from "./link-checker.js";
 
 describe("link-checker", () => {
   it("extracts links from HTML", () => {

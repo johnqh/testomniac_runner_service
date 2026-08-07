@@ -2,8 +2,8 @@ import {
   ExpectationSeverity,
   type ExpertiseRuleId,
 } from "@sudobility/testomniac_types";
-import type { PageHealthIssue } from "../scanner/page-health-evaluator";
-import type { Outcome } from "./types";
+import type { PageHealthIssue } from "../scanner/page-health-evaluator.js";
+import type { Outcome } from "./types.js";
 
 export function outcomesFromPageHealth(
   issues: PageHealthIssue[] | undefined,

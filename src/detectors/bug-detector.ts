@@ -2,7 +2,7 @@ function logModule(step: string, details?: Record<string, unknown>): void {
   console.info("[BugDetector]", step, details ?? {});
 }
 
-import type { BrowserAdapter } from "../adapter";
+import type { BrowserAdapter } from "../adapter.js";
 
 export interface BrokenLinkResult {
   href: string;

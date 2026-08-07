@@ -3,8 +3,8 @@ function _logModule(step: string, details?: Record<string, unknown>): void {
 }
 
 import { createHash } from "node:crypto";
-import { normalizeHtml } from "../browser/page-utils";
-import type { BrowserAdapter } from "../adapter";
+import { normalizeHtml } from "../browser/page-utils.js";
+import type { BrowserAdapter } from "../adapter.js";
 import type { HtmlComponentType } from "@sudobility/testomniac_types";
 
 export const COMPONENT_SELECTORS = [

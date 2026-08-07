@@ -3,13 +3,13 @@
  * Reuses executeTestInteraction() for each step.
  */
 
-import type { BrowserAdapter } from "../adapter";
-import type { ApiClient } from "../api/client";
+import type { BrowserAdapter } from "../adapter.js";
+import type { ApiClient } from "../api/client.js";
 import type { TestInteractionResponse } from "@sudobility/testomniac_types";
-import type { Expertise } from "../expertise";
-import { executeTestInteraction } from "./test-interaction-executor";
-import type { ScanEventHandler } from "./types";
-import { SizeClass } from "../domain/types";
+import type { Expertise } from "../expertise/index.js";
+import { executeTestInteraction } from "./test-interaction-executor.js";
+import type { ScanEventHandler } from "./types.js";
+import { SizeClass } from "../domain/types.js";
 
 function logSequence(step: string, details?: Record<string, unknown>): void {
   console.info("[SequenceRunner]", step, details ?? {});

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PhaseTimer } from "./phase-timer";
+import { PhaseTimer } from "./phase-timer.js";
 
 describe("PhaseTimer", () => {
   it("tracks phase duration", async () => {

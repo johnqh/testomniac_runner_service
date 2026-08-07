@@ -1,4 +1,4 @@
-import type { ApiClient } from "../api/client";
+import type { ApiClient } from "../api/client.js";
 import type { PageResponse } from "@sudobility/testomniac_types";
 
 /**

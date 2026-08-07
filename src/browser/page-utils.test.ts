@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeHashes, normalizeHtml } from "./page-utils";
+import { computeHashes, normalizeHtml } from "./page-utils.js";
 
 describe("page-utils", () => {
   it("computeHashes returns 4 hex strings", async () => {

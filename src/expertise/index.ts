@@ -1,21 +1,21 @@
-export type { Outcome, ExpertiseContext, Expertise } from "./types";
-export { TesterExpertise } from "./tester-expertise";
-export { SeoExpertise } from "./seo-expertise";
-export { SecurityExpertise } from "./security-expertise";
-export { PerformanceExpertise } from "./performance-expertise";
-export { ContentExpertise } from "./content-expertise";
-export { UiExpertise } from "./ui-expertise";
-export { AccessibilityExpertise } from "./accessibility-expertise";
-export { NoopExpertise } from "./noop-expertise";
+export type { Outcome, ExpertiseContext, Expertise } from "./types.js";
+export { TesterExpertise } from "./tester-expertise.js";
+export { SeoExpertise } from "./seo-expertise.js";
+export { SecurityExpertise } from "./security-expertise.js";
+export { PerformanceExpertise } from "./performance-expertise.js";
+export { ContentExpertise } from "./content-expertise.js";
+export { UiExpertise } from "./ui-expertise.js";
+export { AccessibilityExpertise } from "./accessibility-expertise.js";
+export { NoopExpertise } from "./noop-expertise.js";
 
-import type { Expertise } from "./types";
-import { TesterExpertise } from "./tester-expertise";
-import { SeoExpertise } from "./seo-expertise";
-import { SecurityExpertise } from "./security-expertise";
-import { PerformanceExpertise } from "./performance-expertise";
-import { ContentExpertise } from "./content-expertise";
-import { UiExpertise } from "./ui-expertise";
-import { AccessibilityExpertise } from "./accessibility-expertise";
+import type { Expertise } from "./types.js";
+import { TesterExpertise } from "./tester-expertise.js";
+import { SeoExpertise } from "./seo-expertise.js";
+import { SecurityExpertise } from "./security-expertise.js";
+import { PerformanceExpertise } from "./performance-expertise.js";
+import { ContentExpertise } from "./content-expertise.js";
+import { UiExpertise } from "./ui-expertise.js";
+import { AccessibilityExpertise } from "./accessibility-expertise.js";
 
 const REQUIRED_EXPERTISE_SLUG = "tester";
 

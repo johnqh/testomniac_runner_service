@@ -1,5 +1,5 @@
-import type { BrowserAdapter } from "../adapter";
-import type { NetworkLogEntry, FormInfo } from "../domain/types";
+import type { BrowserAdapter } from "../adapter.js";
+import type { NetworkLogEntry, FormInfo } from "../domain/types.js";
 
 export interface PluginContext {
   runnerId: number;

@@ -1,4 +1,4 @@
-import type { Plugin } from "./types";
+import type { Plugin } from "./types.js";
 
 const plugins = new Map<string, { plugin: Plugin; enabled: boolean }>();
 

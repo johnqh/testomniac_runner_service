@@ -5,9 +5,9 @@ import {
   checkModalOpened,
   checkPageResponsive,
   checkVideoPlayable,
-} from "./page-behavior-checks";
-import type { ExpertiseContext } from "../types";
-import type { UiSnapshot } from "../../browser/ui-snapshot";
+} from "./page-behavior-checks.js";
+import type { ExpertiseContext } from "../types.js";
+import type { UiSnapshot } from "../../browser/ui-snapshot.js";
 
 function createContext(
   overrides: Partial<ExpertiseContext> = {}

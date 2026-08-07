@@ -1,6 +1,6 @@
-import type { BrowserAdapter } from "../adapter";
-import type { ApiClient } from "../api/client";
-import type { DedupStore } from "../storage/dedup-store";
+import type { BrowserAdapter } from "../adapter.js";
+import type { ApiClient } from "../api/client.js";
+import type { DedupStore } from "../storage/dedup-store.js";
 import type {
   TestInteractionResponse,
   TestInteractionRunResponse,
@@ -11,11 +11,11 @@ import type {
   RunConfig,
   ScanEventHandler,
   ScanResult,
-} from "./types";
-import type { Expertise } from "../expertise/types";
-import { PageAnalyzer } from "../analyzer";
-import { executeTestInteraction } from "./test-interaction-executor";
-import { LoginManager, type LoginConfig } from "./login-manager";
+} from "./types.js";
+import type { Expertise } from "../expertise/types.js";
+import { PageAnalyzer } from "../analyzer/index.js";
+import { executeTestInteraction } from "./test-interaction-executor.js";
+import { LoginManager, type LoginConfig } from "./login-manager.js";
 
 function logRunner(step: string, details?: Record<string, unknown>): void {
   console.info("[Runner]", step, details ?? {});

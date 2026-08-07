@@ -1,6 +1,6 @@
 import { ExpertiseRuleId } from "@sudobility/testomniac_types";
-import type { Expertise, ExpertiseContext, Outcome } from "./types";
-import { applyRuleIds } from "./rule-id";
+import type { Expertise, ExpertiseContext, Outcome } from "./types.js";
+import { applyRuleIds } from "./rule-id.js";
 
 const RENDER_BLOCKING_TYPES = [
   "text/html",

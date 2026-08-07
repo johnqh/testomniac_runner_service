@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { checkResultsRestored } from "./search-restore-checks";
-import type { ExpertiseContext } from "../types";
-import type { UiSnapshot } from "../../browser/ui-snapshot";
+import { checkResultsRestored } from "./search-restore-checks.js";
+import type { ExpertiseContext } from "../types.js";
+import type { UiSnapshot } from "../../browser/ui-snapshot.js";
 
 function createContext(
   overrides: Partial<ExpertiseContext> = {}

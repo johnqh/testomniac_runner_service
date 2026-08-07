@@ -1,4 +1,4 @@
-import type { BrowserAdapter } from "../adapter";
+import type { BrowserAdapter } from "../adapter.js";
 import type { ScanPageSignals } from "@sudobility/testomniac_types";
 
 /**

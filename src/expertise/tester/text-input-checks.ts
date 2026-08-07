@@ -1,10 +1,10 @@
-import type { ExpertiseContext, Outcome } from "../types";
+import type { ExpertiseContext, Outcome } from "../types.js";
 import {
   classifyControlKind,
   digitsOnly,
   findControlBySelector,
   normalizeWhitespace,
-} from "./control-state";
+} from "./control-state.js";
 
 export function checkInputValue(
   expectation: {

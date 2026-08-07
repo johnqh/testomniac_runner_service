@@ -13,13 +13,13 @@ import {
 import {
   buildReplaySelectorFromActionableItem,
   matchesActionableItemSelector,
-} from "../../browser/replay-selector";
+} from "../../browser/replay-selector.js";
 import { createHash } from "node:crypto";
-import type { AnalyzerContext } from "./types";
-import type { DedupStore } from "../../storage/dedup-store";
-import { InMemoryDedupStore } from "../../storage/dedup-store";
+import type { AnalyzerContext } from "./types.js";
+import type { DedupStore } from "../../storage/dedup-store.js";
+import { InMemoryDedupStore } from "../../storage/dedup-store.js";
 
-export type { AnalyzerContext } from "./types";
+export type { AnalyzerContext } from "./types.js";
 
 type GeneratedTestInteraction = TestInteraction & {
   generatedKey?: string;

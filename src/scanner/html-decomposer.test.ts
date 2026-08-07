@@ -4,8 +4,8 @@ import {
   getContentBody,
   getFixedBody,
   decomposeHtml,
-} from "./html-decomposer";
-import type { DetectedScaffoldRegion } from "./component-detector";
+} from "./html-decomposer.js";
+import type { DetectedScaffoldRegion } from "./component-detector.js";
 import type { PatternInstance } from "@sudobility/testomniac_types";
 
 describe("getBody", () => {

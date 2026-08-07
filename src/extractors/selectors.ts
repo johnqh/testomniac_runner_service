@@ -1,6 +1,6 @@
 import type { ActionableItem } from "@sudobility/testomniac_types";
-import type { ExtractorCandidate, SelectorResolvedCandidate } from "./types";
-import { uniqueBySelector, withResolvedSelector } from "./helpers";
+import type { ExtractorCandidate, SelectorResolvedCandidate } from "./types.js";
+import { uniqueBySelector, withResolvedSelector } from "./helpers.js";
 
 function classifyActionKind(
   candidate: ExtractorCandidate

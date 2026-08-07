@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { checkSelectionState } from "./selection-control-checks";
-import type { ExpertiseContext } from "../types";
-import type { ControlState } from "./control-state";
-import type { UiSnapshot } from "../../browser/ui-snapshot";
+import { checkSelectionState } from "./selection-control-checks.js";
+import type { ExpertiseContext } from "../types.js";
+import type { ControlState } from "./control-state.js";
+import type { UiSnapshot } from "../../browser/ui-snapshot.js";
 
 function createControlState(
   overrides: Partial<ControlState> = {}

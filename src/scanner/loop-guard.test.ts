@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { LoopGuard } from "./loop-guard";
+import { LoopGuard } from "./loop-guard.js";
 
 describe("LoopGuard", () => {
   it("allows new action signatures", () => {

@@ -3,9 +3,9 @@ import {
   checkNavigationOrStateChanged,
   checkUrlMatchesTarget,
   checkUrlUnchanged,
-} from "./navigation-checks";
-import type { ExpertiseContext } from "../types";
-import type { UiSnapshot } from "../../browser/ui-snapshot";
+} from "./navigation-checks.js";
+import type { ExpertiseContext } from "../types.js";
+import type { UiSnapshot } from "../../browser/ui-snapshot.js";
 
 function createContext(currentUrl?: string): ExpertiseContext {
   const uiSnapshot: UiSnapshot = {
