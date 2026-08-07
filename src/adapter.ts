@@ -13,6 +13,20 @@ export interface RuntimeArtifacts {
 }
 
 export interface BrowserAdapter {
+  /**
+   * Selector features this adapter's resolver implements, e.g. ["withinText"].
+   *
+   * Declared HERE rather than as a constant in this package, because this
+   * package does not know which adapter it is running against — the adapter is
+   * injected by the host. A hardcoded list would claim a capability the paired
+   * implementation may not have, which is exactly the version skew the
+   * capability exists to prevent.
+   *
+   * Optional, and absence means none: an adapter that has not declared support
+   * must never be sent a key it would silently drop.
+   */
+  readonly capabilities?: readonly string[];
+
   /** Navigate to a URL */
   goto(
     url: string,

@@ -374,6 +374,11 @@ export async function runTestRun(
           sizeClass: testRun.sizeClass as any,
           testEnvironmentId: testRun.testEnvironmentId ?? undefined,
           url: testRun.scanUrl ?? config.baseUrl,
+          // Read from the injected adapter, not declared here: only the
+          // adapter knows what its resolver actually implements.
+          capabilities: adapter.capabilities
+            ? [...adapter.capabilities]
+            : undefined,
         });
         pendingNext = beginResult.next;
         logRunner("scan-begin:result", {
