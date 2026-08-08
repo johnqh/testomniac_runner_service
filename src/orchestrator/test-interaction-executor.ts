@@ -69,6 +69,24 @@ import { capturePageSignals } from "../browser/page-signals.js";
  */
 const POST_CLICK_SETTLE_FLOOR_MS = 150;
 
+/**
+ * How long a setup-replay step waits for its control.
+ *
+ * Setup replay is best-effort by construction: a step that fails is caught,
+ * logged as skipped, and the interaction proceeds. It was still using the
+ * adapter's five-second default, so learning that a control is absent cost
+ * five seconds — and it is absent often, because setup is replayed against a
+ * page that has moved on. Measured on a live scan: 107 of 293 setup steps
+ * failed, 5.6s of the 5.6s between an interaction starting and its own first
+ * step went to replay, and interactions carrying a chain ran 5.6x slower than
+ * those without.
+ *
+ * A control that is going to appear has appeared by now; the page was settled
+ * before this step began. Waiting longer only delays a conclusion already
+ * reached.
+ */
+const SETUP_REPLAY_TIMEOUT_MS = 1000;
+
 let _clickWaitMs = 500;
 
 export function setClickWaitMs(ms: number): void {
@@ -465,7 +483,8 @@ export async function executeTestInteraction(
           await executeAction(
             adapter,
             interpolateAction(replayAction, userData),
-            testRun
+            testRun,
+            SETUP_REPLAY_TIMEOUT_MS
           );
           if (adapter.closeOtherTabs) {
             await adapter.closeOtherTabs();
@@ -1681,7 +1700,14 @@ async function executeAction(
     value?: string;
     playwrightCode: string;
   },
-  testRun: TestRunResponse
+  testRun: TestRunResponse,
+  /**
+   * How long to wait for a control before giving up.
+   *
+   * Defaults to the adapter's own budget. Setup replay passes a much shorter
+   * one — see SETUP_REPLAY_TIMEOUT_MS.
+   */
+  timeoutMs?: number
 ): Promise<void> {
   const baseUrl = testRun.scanUrl
     ? new URL(testRun.scanUrl).origin
@@ -1731,13 +1757,13 @@ async function executeAction(
           });
           break;
         }
-        await adapter.click(action.path);
+        await adapter.click(action.path, { timeout: timeoutMs });
         await settleForRead(adapter, { floorMs: POST_CLICK_SETTLE_FLOOR_MS });
       }
       break;
     case "dblclick":
       if (action.path) {
-        await adapter.click(action.path);
+        await adapter.click(action.path, { timeout: timeoutMs });
         await settleForRead(adapter, { floorMs: POST_CLICK_SETTLE_FLOOR_MS });
       }
       break;
@@ -1760,7 +1786,7 @@ async function executeAction(
       if (action.path) await adapter.click(action.path);
       break;
     case "hover":
-      if (action.path) await adapter.hover(action.path);
+      if (action.path) await adapter.hover(action.path, { timeout: timeoutMs });
       break;
     case "focus":
       if (action.path) await adapter.click(action.path);
