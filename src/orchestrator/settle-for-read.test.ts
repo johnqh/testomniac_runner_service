@@ -32,4 +32,19 @@ describe("settleForRead", () => {
     await settleForRead({ evaluate });
     expect(evaluate.mock.calls.length).toBeGreaterThanOrEqual(4);
   });
+
+  // The page is ready when its network goes quiet, not after a fixed delay.
+  // The floor exists only because a click's request may not have left the
+  // browser yet, so a tracker asked immediately would call that idle.
+  it("passes a floor through to the network gate", async () => {
+    const waitForNetworkIdle = vi.fn().mockResolvedValue(undefined);
+    await settleForRead({ waitForNetworkIdle }, { floorMs: 150 });
+    expect(waitForNetworkIdle).toHaveBeenCalledWith({ floorMs: 150 });
+  });
+
+  it("leaves the gate's own defaults alone when no floor is given", async () => {
+    const waitForNetworkIdle = vi.fn().mockResolvedValue(undefined);
+    await settleForRead({ waitForNetworkIdle });
+    expect(waitForNetworkIdle).toHaveBeenCalledWith(undefined);
+  });
 });

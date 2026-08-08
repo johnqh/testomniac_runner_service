@@ -14,6 +14,13 @@ import {
  * its chunk resolves, with nothing in flight while it does, so a network-only
  * gate returns while the page still reads "Loading...".
  *
+ * `floorMs` raises the minimum the network gate waits before it may declare
+ * idle. It exists for the moment just after a click: the request a click
+ * triggers has not necessarily left the browser yet, and a tracker asked
+ * immediately sees nothing in flight and calls that idle. A small floor lets
+ * the request appear, after which the wait ends when the network is ACTUALLY
+ * quiet — not after a fixed delay.
+ *
  * Both no-op safely. Network idle is skipped by adapters that cannot observe
  * traffic; DOM stability is skipped when the very first sample fails, which
  * means the adapter cannot evaluate at all. Only a LATER failure counts as
@@ -22,9 +29,12 @@ import {
  * spend the full cap on every read.
  */
 export async function settleForRead(
-  adapter: Partial<Pick<BrowserAdapter, "waitForNetworkIdle" | "evaluate">>
+  adapter: Partial<Pick<BrowserAdapter, "waitForNetworkIdle" | "evaluate">>,
+  options: { floorMs?: number } = {}
 ): Promise<void> {
-  await adapter.waitForNetworkIdle?.();
+  await adapter.waitForNetworkIdle?.(
+    options.floorMs === undefined ? undefined : { floorMs: options.floorMs }
+  );
 
   const evaluate = adapter.evaluate;
   if (!evaluate) return;

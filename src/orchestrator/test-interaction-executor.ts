@@ -52,6 +52,23 @@ import {
 } from "../browser/page-utils.js";
 import { capturePageSignals } from "../browser/page-signals.js";
 
+/**
+ * Minimum the network gate waits after a click before it may declare idle.
+ *
+ * A click used to be followed by `waitForNavigation({ timeout: 5000 })`, whose
+ * timeout the adapter swallows with a log reading "navigation timeout — may
+ * not occur". It usually does not occur: most clicks toggle a menu, apply a
+ * filter or add to a cart. Measured on a live scan, 40 of 76 interactions sat
+ * at ~5.0s — the timeout, not work.
+ *
+ * Waiting a fixed period is the wrong shape whatever the number. The page is
+ * ready when its network has gone quiet, so `settleForRead` decides, and this
+ * floor exists only because the request a click triggers may not have left the
+ * browser yet: asked immediately, the tracker sees nothing in flight and calls
+ * that idle. After the floor the wait ends when the network is actually quiet.
+ */
+const POST_CLICK_SETTLE_FLOOR_MS = 150;
+
 let _clickWaitMs = 500;
 
 export function setClickWaitMs(ms: number): void {
@@ -1715,15 +1732,13 @@ async function executeAction(
           break;
         }
         await adapter.click(action.path);
-        await settleForRead(adapter);
-        await adapter.waitForNavigation({ timeout: 5000 });
+        await settleForRead(adapter, { floorMs: POST_CLICK_SETTLE_FLOOR_MS });
       }
       break;
     case "dblclick":
       if (action.path) {
         await adapter.click(action.path);
-        await settleForRead(adapter);
-        await adapter.waitForNavigation({ timeout: 5000 });
+        await settleForRead(adapter, { floorMs: POST_CLICK_SETTLE_FLOOR_MS });
       }
       break;
     case "fill":
