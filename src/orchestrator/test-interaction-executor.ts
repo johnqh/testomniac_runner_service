@@ -460,6 +460,17 @@ export async function executeTestInteraction(
 
     currentPhase = "replaying-setup-interactions";
 
+    // A hover leaves no state that survives the next hover: moving the pointer
+    // to another element stops hovering the first, and anything the first
+    // revealed collapses with it. So replaying a hover before an interaction
+    // that itself begins by hovering cannot affect the outcome — it can only
+    // fail to find a control that is no longer showing, and wait to do so.
+    //
+    // Measured on a live scan: every one of 114 failed setup steps was exactly
+    // this, chains like "Hover over Menu" set up by "Hover over Home".
+    const ownFirstAction = steps[0]?.action?.actionType;
+    const skipHoverSetup = ownFirstAction === "hover";
+
     // Recreate the dependent target state before running this case itself.
     for (const setupCase of setupCases) {
       logExecutor("interaction:replay-setup-case", {
@@ -470,6 +481,14 @@ export async function executeTestInteraction(
       const setupSteps = parseStoredSteps(setupCase.stepsJson);
       for (const step of setupSteps) {
         const replayAction = prepareActionForReplay(step.action);
+        if (skipHoverSetup && replayAction.actionType === "hover") {
+          logExecutor("interaction:replay-setup-step-superseded", {
+            testInteractionRunId: testInteractionRun.id,
+            setupTestInteractionId: setupCase.id,
+            reason: "a later hover cancels this one",
+          });
+          continue;
+        }
         currentPhase = `replaying-setup:${replayAction.actionType}`;
         logExecutor("interaction:replay-setup-step", {
           testInteractionRunId: testInteractionRun.id,
