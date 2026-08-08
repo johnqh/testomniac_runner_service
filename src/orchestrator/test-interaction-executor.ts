@@ -300,6 +300,10 @@ export async function executeTestInteraction(
     }
   });
 
+  // Needed by the catch block to report the failure, where the try's own
+  // `testInteraction` is out of scope.
+  let failedTestSurfaceId = prefetched?.interaction.testSurfaceId ?? 0;
+
   try {
     currentPhase = "loading-test-interactions";
     let testInteraction: TestInteractionResponse;
@@ -312,6 +316,7 @@ export async function executeTestInteraction(
       // Fast path: interaction + chain delivered by /scan/next.
       testInteraction = prefetched.interaction;
       dependencyChain = prefetched.chain;
+      failedTestSurfaceId = testInteraction.testSurfaceId;
     } else {
       const allTestInteractions =
         cachedTestInteractions ??
@@ -328,6 +333,7 @@ export async function executeTestInteraction(
         );
       }
       testInteraction = loadedTestInteraction;
+      failedTestSurfaceId = testInteraction.testSurfaceId;
       dependencyChain = buildDependencyChain(
         testInteraction,
         testInteractionById
@@ -1172,9 +1178,49 @@ export async function executeTestInteraction(
       passed: isReplayError ? true : false,
     });
 
-    // No scan result on the error path — the loop falls back to a full state
-    // read to choose the next interaction.
-    return null;
+    // Report the failure and take the next interaction, exactly as the success
+    // path does.
+    //
+    // This used to return null, on the stated grounds that "the loop falls back
+    // to a full state read to choose the next interaction". That fallback no
+    // longer exists — /scan/next drives the whole loop and the client-side
+    // scheduler was removed — so a null here reads as "no work left". One
+    // failing interaction therefore ended the entire scan: observed live as
+    // "no next interaction but 867 runnable run(s) remain", after a single
+    // selector timeout.
+    //
+    // A scan is expected to contain failures; that is what it is for.
+    try {
+      return await api.scanNext({
+        runnerId: testRun.runnerId,
+        testRunId: testRun.id,
+        bundleRunId: testRun.testSurfaceBundleRunId ?? 0,
+        testSurfaceBundleId:
+          discoveryContext?.bundleRun.testSurfaceBundleId ?? 0,
+        sizeClass: testRun.sizeClass as any,
+        testEnvironmentId: testRun.testEnvironmentId ?? undefined,
+        completion: {
+          testInteractionRunId: testInteractionRun.id,
+          testInteractionId: testInteractionRun.testInteractionId,
+          testSurfaceId: failedTestSurfaceId,
+          surfaceRunId: testInteractionRun.testSurfaceRunId,
+          // A replay error means the control was not there to interact with,
+          // which the scan treats as a skip rather than a defect.
+          status: isReplayError ? "skipped" : "failed",
+          durationMs,
+          errorMessage,
+        },
+      });
+    } catch (reportErr) {
+      // Reporting the failure must not itself end the scan. Returning null
+      // leaves the loop to its terminal check, which is where we were before.
+      logExecutor("interaction:failure-report-failed", {
+        testInteractionRunId: testInteractionRun.id,
+        error:
+          reportErr instanceof Error ? reportErr.message : String(reportErr),
+      });
+      return null;
+    }
   } finally {
     // Detach this interaction's console/response listeners so they don't
     // accumulate across the scan (see the capture site above).
