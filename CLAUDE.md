@@ -62,6 +62,31 @@ Run records:
    generator execution (server-side), and finding persistence in a single call.
 7. The runner completes surface runs, bundle runs, and the root test run.
 
+## Replaying dependency setup
+
+Step 5 above — "recreates dependency setup" — replays every interaction in the
+chain before running the interaction's own steps. Two rules govern what may be
+skipped, and both were learned by breaking them:
+
+**Replay hover chains in full.** A hover that opens a popup menu is the setup
+for the hover that moves onto an item inside that menu; moving from the trigger
+into the menu is what keeps it open. Skipping the first removes the step that
+opens the menu the second needs. The full model lives in `testomniac_api`'s
+CLAUDE.md under "How a hover becomes interactions" — read it before optimising
+anything here, because the step counts alone are consistent with a wrong
+reading of it.
+
+**A setup step that fails is expected, so it should fail fast.** Setup is
+replayed against a page that has moved on, and a missing control is caught,
+logged as skipped, and stepped over. `SETUP_REPLAY_TIMEOUT_MS` is one second
+rather than the adapter's five: a control the page already has is either there
+or it is not. Measured on a live scan, that timeout was 5.6s of the 5.6s
+between an interaction starting and its own first step.
+
+Beware of measuring a skip as a saving. Removing steps that were already
+failing looks free and is not: the work they were meant to do simply stops
+happening.
+
 ## Discovery Rules
 
 - Every actionable element starts with a hover test element.
