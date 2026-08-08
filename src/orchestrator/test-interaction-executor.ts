@@ -460,16 +460,15 @@ export async function executeTestInteraction(
 
     currentPhase = "replaying-setup-interactions";
 
-    // A hover leaves no state that survives the next hover: moving the pointer
-    // to another element stops hovering the first, and anything the first
-    // revealed collapses with it. So replaying a hover before an interaction
-    // that itself begins by hovering cannot affect the outcome — it can only
-    // fail to find a control that is no longer showing, and wait to do so.
+    // A hover that opens a popup menu is a SETUP step for the hover that moves
+    // onto an item inside that menu — moving from the trigger into the menu is
+    // what keeps it open. An earlier version of this skipped a hover setup
+    // whenever the interaction itself began with a hover, on the reasoning
+    // that a later hover cancels an earlier one. That is true for unrelated
+    // elements and exactly wrong here: it removed the step that opens the menu
+    // the next hover needs, guaranteeing the failure it was meant to avoid.
     //
-    // Measured on a live scan: every one of 114 failed setup steps was exactly
-    // this, chains like "Hover over Menu" set up by "Hover over Home".
-    const ownFirstAction = steps[0]?.action?.actionType;
-    const skipHoverSetup = ownFirstAction === "hover";
+    // Hover chains are replayed in full.
 
     // Recreate the dependent target state before running this case itself.
     for (const setupCase of setupCases) {
@@ -481,14 +480,6 @@ export async function executeTestInteraction(
       const setupSteps = parseStoredSteps(setupCase.stepsJson);
       for (const step of setupSteps) {
         const replayAction = prepareActionForReplay(step.action);
-        if (skipHoverSetup && replayAction.actionType === "hover") {
-          logExecutor("interaction:replay-setup-step-superseded", {
-            testInteractionRunId: testInteractionRun.id,
-            setupTestInteractionId: setupCase.id,
-            reason: "a later hover cancels this one",
-          });
-          continue;
-        }
         currentPhase = `replaying-setup:${replayAction.actionType}`;
         logExecutor("interaction:replay-setup-step", {
           testInteractionRunId: testInteractionRun.id,
@@ -1805,7 +1796,15 @@ async function executeAction(
       if (action.path) await adapter.click(action.path);
       break;
     case "hover":
-      if (action.path) await adapter.hover(action.path, { timeout: timeoutMs });
+      if (action.path) {
+        await adapter.hover(action.path, { timeout: timeoutMs });
+        // A hover's whole purpose may be to open a popup menu, and the next
+        // action is often a hover onto an item INSIDE that menu. Without
+        // waiting, the menu may still be rendering when its items are looked
+        // for, and the step fails for a control that was about to exist.
+        // Clicks already settle here; hovers did not.
+        await settleForRead(adapter, { floorMs: POST_CLICK_SETTLE_FLOOR_MS });
+      }
       break;
     case "focus":
       if (action.path) await adapter.click(action.path);
