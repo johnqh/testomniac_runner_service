@@ -5,19 +5,20 @@ export type {
   CapturedNetworkRequest,
 } from "@sudobility/webgraph_parser";
 
+// Shared domain types, re-exported for consumers of this package.
+export * from "./domain/types.js";
+
 // Storage
 export type { DedupStore } from "./storage/dedup-store.js";
 export { InMemoryDedupStore } from "./storage/dedup-store.js";
 
 // Scanner modules (existing)
+// Page parsing: regions, patterns, controls, identity.
 export * from "@sudobility/webgraph_parser";
 // action-queue is deprecated, no longer exported
 export * from "./scanner/pairwise.js";
 export * from "./scanner/loop-guard.js";
 export * from "./scanner/phase-timer.js";
-export * from "@sudobility/webgraph_parser";
-export * from "@sudobility/webgraph_parser";
-export * from "@sudobility/webgraph_parser";
 export * from "./scanner/state-manager.js";
 export * from "./scanner/scroll-scanner.js";
 
@@ -59,14 +60,11 @@ export {
 } from "./browser/network-idle.js";
 
 // Detectors (existing + new)
-export * from "@sudobility/webgraph_parser";
 
 // Domain types
-export * from "@sudobility/webgraph_parser";
 export * from "./domain/url-ownership.js";
 
 // Constants
-export * from "@sudobility/webgraph_parser";
 
 // API client
 export { ApiClient, getApiClient } from "./api/client.js";
