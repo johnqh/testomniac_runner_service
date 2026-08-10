@@ -5,11 +5,11 @@
     "": {
       "name": "testomniac_scanning_service",
       "dependencies": {
-        "@sudobility/webgraph_parser": "0.0.4",
+        "@sudobility/webgraph_parser": "^0.0.8",
       },
       "devDependencies": {
         "@eslint/js": "^9.38.0",
-        "@sudobility/testomniac_types": "0.0.105",
+        "@sudobility/testomniac_types": "^0.0.106",
         "@types/node": "^25.6.0",
         "@typescript-eslint/eslint-plugin": "^8.46.2",
         "@typescript-eslint/parser": "^8.46.2",
@@ -22,7 +22,7 @@
         "vitest": "^4.0.15",
       },
       "peerDependencies": {
-        "@sudobility/testomniac_types": "^0.0.103",
+        "@sudobility/testomniac_types": "^0.0.106",
       },
     },
   },
@@ -103,11 +103,11 @@
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
-    "@sudobility/testomniac_types": ["@sudobility/testomniac_types@0.0.105", "", { "peerDependencies": { "@sudobility/types": "^1.9.64" } }, "sha512-svim+6Oyox/MHBH1nsXpNWdYIzDjVVPqgtDVnROdBaeuM/0aFk21aOoeZWhbF0rDXyUIfyjH7+bnxpBRPbvtuQ=="],
+    "@sudobility/testomniac_types": ["@sudobility/testomniac_types@0.0.106", "", { "peerDependencies": { "@sudobility/types": "^1.9.64" } }, "sha512-RZ1DJzhkWtldC0OMvCGGupLGCIK2Fkd0xqOwHvlgck4Y0JBjckIhSOez5u34E/EJHYQpOBhz0ghpe9y0ZGvGTQ=="],
 
     "@sudobility/types": ["@sudobility/types@1.9.61", "", {}, "sha512-SODGpstB/iKfK3H/4BvJx/FBcc1h3gutUjGotyxN19VnOfWyzaDoEmW7eyoxOAYhZyXMXagSiii+NIEZvuxKog=="],
 
-    "@sudobility/webgraph_parser": ["@sudobility/webgraph_parser@0.0.4", "", { "peerDependencies": { "@sudobility/testomniac_types": ">=0.0.100" } }, "sha512-sLEpHsPf4w2neQDkh5VhHHGYUprkYRqgIohjahW3KeEJI/N49J0+7Zo4tY7K1+LwjziFyn7Ee/S7gSsFZsUyWA=="],
+    "@sudobility/webgraph_parser": ["@sudobility/webgraph_parser@0.0.8", "", { "peerDependencies": { "@sudobility/testomniac_types": "^0.0.106" } }, "sha512-wrxfslM1QPsaIskNXJinjmxjclzGiwEk0vHokZauWURQuJODeMHULI+vvsOFn8R20C6WycbsAUmWm9vGuzd9xQ=="],
 
     "@tybys/wasm-util": ["@tybys/wasm-util@0.10.1", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg=="],
 
