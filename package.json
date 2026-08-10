@@ -41,7 +41,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.38.0",
-    "@sudobility/testomniac_types": "^0.0.103",
+    "@sudobility/testomniac_types": "0.0.105",
     "@types/node": "^25.6.0",
     "@typescript-eslint/eslint-plugin": "^8.46.2",
     "@typescript-eslint/parser": "^8.46.2",

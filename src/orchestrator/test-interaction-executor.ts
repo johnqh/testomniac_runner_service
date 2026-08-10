@@ -704,11 +704,11 @@ export async function executeTestInteraction(
       sharedScreenshot = undefined;
     }
     await emitLiveScreenshot(adapter, events, currentUrl, sharedScreenshot);
-    const scaffoldSelectorByItemSelector = await mapItemsToScaffolds(
-      adapter,
-      scaffolds,
-      items
-    );
+    const [scaffoldSelectorByItemSelector, patternInstanceByItemSelector] =
+      await Promise.all([
+        mapItemsToScaffolds(adapter, scaffolds, items),
+        mapItemsToPatternInstances(adapter, patterns, items),
+      ]);
     logExecutor("interaction:decomposed", {
       testInteractionRunId: testInteractionRun.id,
       testInteractionId: testInteraction.id,
@@ -1016,6 +1016,7 @@ export async function executeTestInteraction(
           selector: s.selector,
         })),
         scaffoldSelectorByItemSelector,
+        patternInstanceByItemSelector,
         patterns: patterns.map(p => ({
           type: p.type,
           selector: p.selector,
@@ -1310,6 +1311,86 @@ export async function emitLiveScreenshot(
       error: err instanceof Error ? err.message : String(err),
     });
   }
+}
+
+/**
+ * Item selector -> `type:index` of the pattern instance containing it.
+ *
+ * Every instance of a pattern carries the SAME selector — the pattern's own —
+ * because that is what the detector matched on. So the server cannot tell one
+ * instance from another by comparing selectors: every per-item control ties on
+ * the first, and thirty cards arrive as one region holding thirty items'
+ * controls with twenty-nine empty siblings. Item count then reaches view
+ * identity, which is the exact churn the nesting exists to prevent.
+ *
+ * Containment is a fact here and a guess anywhere else, so the assignment is
+ * made in the page, the same way scaffolds already are.
+ */
+async function mapItemsToPatternInstances(
+  adapter: BrowserAdapter,
+  patterns: Array<{ type: string; selector: string }>,
+  items: Array<{ selector: string }>
+): Promise<Record<string, string>> {
+  const patternDescriptors = patterns.map(pattern => ({
+    type: String(pattern.type),
+    selector: pattern.selector,
+  }));
+  const itemSelectors = items.map(item => item.selector).filter(Boolean);
+
+  if (patternDescriptors.length === 0 || itemSelectors.length === 0) {
+    return {};
+  }
+
+  return adapter.evaluate(
+    (...args: unknown[]) => {
+      const rawPatterns = args[0] as Array<{ type: string; selector: string }>;
+      const rawItemSelectors = args[1] as string[];
+      const assignments: Record<string, string> = {};
+
+      // Element -> instance key, so the item loop is a walk UP rather than a
+      // test against every instance. Indexes come from the same selector the
+      // detector used, so they line up with the instances it reported.
+      const keyByElement = new Map<Element, string>();
+      for (const pattern of rawPatterns) {
+        let elements: NodeListOf<Element>;
+        try {
+          elements = document.querySelectorAll(pattern.selector);
+        } catch {
+          continue;
+        }
+        elements.forEach((element, index) => {
+          // Two patterns can match one element. First wins, deterministically.
+          if (!keyByElement.has(element)) {
+            keyByElement.set(element, `${pattern.type}:${index}`);
+          }
+        });
+      }
+      if (keyByElement.size === 0) return assignments;
+
+      for (const itemSelector of rawItemSelectors) {
+        let element: Element | null;
+        try {
+          element = document.querySelector(itemSelector);
+        } catch {
+          continue;
+        }
+        // The first owner found walking up is by definition the innermost one,
+        // so a card inside a list beats the list without comparing depths.
+        while (element) {
+          const key = keyByElement.get(element);
+          if (key) {
+            assignments[itemSelector] = key;
+            break;
+          }
+          element = element.parentElement;
+        }
+      }
+
+      return assignments;
+    },
+    patternDescriptors,
+    itemSelectors
+  );
 }
 
 async function mapItemsToScaffolds(
