@@ -1,4 +1,4 @@
-import type { BrowserAdapter } from "../adapter.js";
+import type { BrowserAdapter } from "@sudobility/webgraph_parser";
 import {
   isSameOrigin,
   normalizeNavigableUrl,

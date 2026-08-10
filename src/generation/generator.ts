@@ -1,6 +1,6 @@
 import { generateRenderTest, type GeneratedTestInteraction } from "./render.js";
 import { assignPriority } from "./surface-tagger.js";
-import type { SizeClass } from "../domain/types.js";
+import type { SizeClass } from "@sudobility/testomniac_types";
 import type { ApiClient } from "../api/client.js";
 import type { ElementIdentityResponse } from "@sudobility/testomniac_types";
 

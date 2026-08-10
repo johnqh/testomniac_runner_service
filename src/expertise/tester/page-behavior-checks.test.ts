@@ -7,7 +7,7 @@ import {
   checkVideoPlayable,
 } from "./page-behavior-checks.js";
 import type { ExpertiseContext } from "../types.js";
-import type { UiSnapshot } from "../../browser/ui-snapshot.js";
+import type { UiSnapshot } from "@sudobility/webgraph_parser";
 
 function createContext(
   overrides: Partial<ExpertiseContext> = {}

@@ -59,5 +59,8 @@
   "repository": {
     "type": "git",
     "url": "git@github.com:johnqh/testomniac_runner_service.git"
+  },
+  "dependencies": {
+    "@sudobility/webgraph_parser": "0.0.3"
   }
 }

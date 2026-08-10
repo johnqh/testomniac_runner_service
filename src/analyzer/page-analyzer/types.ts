@@ -8,8 +8,8 @@ import type {
 } from "@sudobility/testomniac_types";
 import type { ApiClient } from "../../api/client.js";
 import type { ScanEventHandler } from "../../orchestrator/types.js";
-import type { DetectedScaffoldRegion } from "../../scanner/component-detector.js";
-import type { LoginDetectionResult } from "../../scanner/login-detector.js";
+import type { DetectedScaffoldRegion } from "@sudobility/webgraph_parser";
+import type { LoginDetectionResult } from "@sudobility/webgraph_parser";
 import type { LoginConfig } from "../../orchestrator/login-manager.js";
 
 export interface AnalyzerContext {

@@ -1,5 +1,5 @@
 import type { ExpertiseContext, Outcome } from "../types.js";
-import { findControlBySelector } from "./control-state.js";
+import { findControlBySelector } from "@sudobility/webgraph_parser";
 
 export function checkElementFocused(
   expectation: {

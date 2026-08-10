@@ -4,7 +4,7 @@ import {
   digitsOnly,
   findControlBySelector,
   normalizeWhitespace,
-} from "./control-state.js";
+} from "@sudobility/webgraph_parser";
 
 export function checkInputValue(
   expectation: {

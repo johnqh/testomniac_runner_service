@@ -5,12 +5,12 @@ import type {
   TestStep,
   Expectation,
   SizeClass,
-} from "../domain/types.js";
+} from "@sudobility/testomniac_types";
 import {
   PlaywrightAction,
   ExpectationType,
   ExpectationSeverity,
-} from "../domain/types.js";
+} from "@sudobility/testomniac_types";
 import { assignSurfaceTags } from "./surface-tagger.js";
 
 export interface GeneratedTestInteraction {

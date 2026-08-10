@@ -3,7 +3,7 @@ import {
   classifyControlKind,
   findControlBySelector,
   findControlPeers,
-} from "./control-state.js";
+} from "@sudobility/webgraph_parser";
 
 export function checkSelectionState(
   expectation: {

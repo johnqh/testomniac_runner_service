@@ -1,4 +1,4 @@
-import type { BrowserAdapter } from "../adapter.js";
+import type { BrowserAdapter } from "@sudobility/webgraph_parser";
 import type { ApiClient } from "../api/client.js";
 import type { DedupStore } from "../storage/dedup-store.js";
 import type {

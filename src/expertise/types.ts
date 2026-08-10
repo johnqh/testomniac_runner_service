@@ -4,10 +4,10 @@ import type {
   ExpertiseRuleId,
   NetworkLogEntry,
 } from "@sudobility/testomniac_types";
-import type { DetectedScaffoldRegion } from "../scanner/component-detector.js";
-import type { DetectedPatternWithInstances } from "../scanner/pattern-detector.js";
-import type { ControlState } from "./tester/control-state.js";
-import type { UiSnapshot } from "../browser/ui-snapshot.js";
+import type { DetectedScaffoldRegion } from "@sudobility/webgraph_parser";
+import type { DetectedPatternWithInstances } from "@sudobility/webgraph_parser";
+import type { ControlState } from "@sudobility/webgraph_parser";
+import type { UiSnapshot } from "@sudobility/webgraph_parser";
 import type { PageHealthIssue } from "../scanner/page-health-evaluator.js";
 import type { PerformanceSnapshot } from "../browser/performance-snapshot.js";
 

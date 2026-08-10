@@ -1,4 +1,4 @@
-import type { LegacyTestAction, SizeClass } from "../domain/types.js";
+import type { LegacyTestAction, SizeClass } from "@sudobility/testomniac_types";
 import type { LegacyGeneratedTestInteraction } from "./render.js";
 import { assignSurfaceTags } from "./surface-tagger.js";
 

@@ -1,5 +1,5 @@
-import type { BrowserAdapter } from "../adapter.js";
-import type { AuthProviderType } from "../scanner/login-detector.js";
+import type { BrowserAdapter } from "@sudobility/webgraph_parser";
+import type { AuthProviderType } from "@sudobility/webgraph_parser";
 
 // =============================================================================
 // Types

@@ -1,5 +1,5 @@
-import type { BrowserAdapter } from "../adapter.js";
-import type { NetworkLogEntry, FormInfo } from "../domain/types.js";
+import type { BrowserAdapter } from "@sudobility/webgraph_parser";
+import type { NetworkLogEntry, FormInfo } from "@sudobility/testomniac_types";
 
 export interface PluginContext {
   runnerId: number;

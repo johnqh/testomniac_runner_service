@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ExpertiseRuleId } from "@sudobility/testomniac_types";
 import { TesterExpertise } from "./tester-expertise.js";
 import type { ExpertiseContext } from "./types.js";
-import type { UiSnapshot } from "../browser/ui-snapshot.js";
+import type { UiSnapshot } from "@sudobility/webgraph_parser";
 
 function createContext(
   currentUrl: string,

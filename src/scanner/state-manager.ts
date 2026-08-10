@@ -1,4 +1,4 @@
-import type { BrowserAdapter } from "../adapter.js";
+import type { BrowserAdapter } from "@sudobility/webgraph_parser";
 
 export class StateManager {
   private currentPageStateId: number | undefined;

@@ -3,21 +3,21 @@ export type {
   BrowserAdapter,
   RuntimeArtifacts,
   CapturedNetworkRequest,
-} from "./adapter.js";
+} from "@sudobility/webgraph_parser";
 
 // Storage
 export type { DedupStore } from "./storage/dedup-store.js";
 export { InMemoryDedupStore } from "./storage/dedup-store.js";
 
 // Scanner modules (existing)
-export * from "./scanner/issue-detector.js";
+export * from "@sudobility/webgraph_parser";
 // action-queue is deprecated, no longer exported
 export * from "./scanner/pairwise.js";
 export * from "./scanner/loop-guard.js";
 export * from "./scanner/phase-timer.js";
-export * from "./scanner/email-detector.js";
-export * from "./scanner/component-detector.js";
-export * from "./scanner/pattern-detector.js";
+export * from "@sudobility/webgraph_parser";
+export * from "@sudobility/webgraph_parser";
+export * from "@sudobility/webgraph_parser";
 export * from "./scanner/state-manager.js";
 export * from "./scanner/scroll-scanner.js";
 
@@ -28,19 +28,19 @@ export {
   looksLikeSubmitAction,
   looksLikeEnterCommitField,
   getActionPriority,
-} from "./scanner/action-classifier.js";
+} from "@sudobility/webgraph_parser";
 export { Navigator } from "./scanner/navigator.js";
 export { ScaffoldCache } from "./scanner/scaffold-cache.js";
 export { PageCache } from "./scanner/page-cache.js";
 export {
   decomposeHtml,
   type DecomposedHtml,
-} from "./scanner/html-decomposer.js";
+} from "@sudobility/webgraph_parser";
 export {
   detectScaffoldRegions,
   COMPONENT_TYPE_SELECTORS,
   type DetectedScaffoldRegion,
-} from "./scanner/component-detector.js";
+} from "@sudobility/webgraph_parser";
 
 // Page utilities
 export {
@@ -48,8 +48,8 @@ export {
   normalizeHtml,
   extractVisibleText,
   computeHashes,
-} from "./browser/page-utils.js";
-export { buildDomSnapshot } from "./browser/dom-snapshot.js";
+} from "@sudobility/webgraph_parser";
+export { buildDomSnapshot } from "@sudobility/webgraph_parser";
 export {
   NetworkIdleTracker,
   waitForNetworkIdle,
@@ -59,14 +59,14 @@ export {
 } from "./browser/network-idle.js";
 
 // Detectors (existing + new)
-export * from "./detectors/index.js";
+export * from "@sudobility/webgraph_parser";
 
 // Domain types
-export * from "./domain/types.js";
+export * from "@sudobility/webgraph_parser";
 export * from "./domain/url-ownership.js";
 
 // Constants
-export * from "./config/constants.js";
+export * from "@sudobility/webgraph_parser";
 
 // API client
 export { ApiClient, getApiClient } from "./api/client.js";
@@ -75,15 +75,15 @@ export { ApiClient, getApiClient } from "./api/client.js";
 export {
   extractActionableItems,
   getRegisteredExtractorNames,
-} from "./extractors/index.js";
-export { extractForms } from "./extractors/form-extractor.js";
+} from "@sudobility/webgraph_parser";
+export { extractForms } from "@sudobility/webgraph_parser";
 export type {
   ItemExtractor,
   DomSnapshotEntry,
   ExtractorCandidate,
   SelectorResolvedCandidate,
   ActionKind,
-} from "./extractors/types.js";
+} from "@sudobility/webgraph_parser";
 
 // Planners (new)
 export {
@@ -144,11 +144,11 @@ export {
   evaluatePageHealth,
   type PageHealthIssue,
 } from "./scanner/page-health-evaluator.js";
-export { detectLoginPage, isLoginUrl } from "./scanner/login-detector.js";
+export { detectLoginPage, isLoginUrl } from "@sudobility/webgraph_parser";
 export type {
   LoginDetectionResult,
   SSOButtonInfo,
-} from "./scanner/login-detector.js";
+} from "@sudobility/webgraph_parser";
 
 // Analyzer
 export { PageAnalyzer, type AnalyzerContext } from "./analyzer/index.js";

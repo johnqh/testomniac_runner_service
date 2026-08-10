@@ -1,4 +1,4 @@
-import type { TestInteraction } from "../domain/types.js";
+import type { TestInteraction } from "@sudobility/testomniac_types";
 
 export function exportAsPlaywrightScript(
   testInteraction: TestInteraction

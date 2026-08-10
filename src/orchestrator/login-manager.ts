@@ -1,13 +1,13 @@
-import type { BrowserAdapter } from "../adapter.js";
-import type { FormInfo } from "../domain/types.js";
+import type { BrowserAdapter } from "@sudobility/webgraph_parser";
+import type { FormInfo } from "@sudobility/testomniac_types";
 import {
   detectLoginPage,
   isLoginUrl,
   type LoginDetectionResult,
   type SSOButtonInfo,
   type AuthProviderType,
-} from "../scanner/login-detector.js";
-import { extractForms } from "../extractors/form-extractor.js";
+} from "@sudobility/webgraph_parser";
+import { extractForms } from "@sudobility/webgraph_parser";
 import { executeSSOFlow } from "./sso-handler.js";
 import { resolveVariables } from "./variable-resolver.js";
 

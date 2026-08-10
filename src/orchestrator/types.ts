@@ -4,7 +4,7 @@ import type {
   ExpertiseRuleId,
   UserData,
 } from "@sudobility/testomniac_types";
-import type { SizeClass } from "../domain/types.js";
+import type { SizeClass } from "@sudobility/testomniac_types";
 
 export interface RunConfig {
   testRunId: number;

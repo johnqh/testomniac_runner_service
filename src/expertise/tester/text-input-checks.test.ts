@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { checkInputValue } from "./text-input-checks.js";
 import type { ExpertiseContext } from "../types.js";
-import type { ControlState } from "./control-state.js";
-import type { UiSnapshot } from "../../browser/ui-snapshot.js";
+import type { ControlState } from "@sudobility/webgraph_parser";
+import type { UiSnapshot } from "@sudobility/webgraph_parser";
 
 function createControlState(
   overrides: Partial<ControlState> = {}

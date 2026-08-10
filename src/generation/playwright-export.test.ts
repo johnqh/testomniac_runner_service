@@ -4,8 +4,8 @@ import {
   PlaywrightAction,
   ExpectationType,
   ExpectationSeverity,
-} from "../domain/types.js";
-import type { TestInteraction } from "../domain/types.js";
+} from "@sudobility/testomniac_types";
+import type { TestInteraction } from "@sudobility/testomniac_types";
 
 function makeTestInteraction(
   overrides: Partial<TestInteraction>

@@ -1,4 +1,4 @@
-import { HIGH_PRIORITY_KEYWORDS } from "../config/constants.js";
+import { HIGH_PRIORITY_KEYWORDS } from "@sudobility/webgraph_parser";
 
 /** Priority levels: 1 = high, 2 = normal */
 export function assignPriority(route: string, title: string): number {

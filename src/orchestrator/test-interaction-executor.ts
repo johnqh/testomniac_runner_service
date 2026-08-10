@@ -1,4 +1,4 @@
-import type { BrowserAdapter } from "../adapter.js";
+import type { BrowserAdapter } from "@sudobility/webgraph_parser";
 import type { ApiClient } from "../api/client.js";
 import {
   ExpertiseId,
@@ -26,11 +26,11 @@ import type {
 } from "../expertise/types.js";
 import type { PageAnalyzer } from "../analyzer/index.js";
 import { isWithinScopePath } from "../crawler/scope-checker.js";
-import { detectLoginPage } from "../scanner/login-detector.js";
+import { detectLoginPage } from "@sudobility/webgraph_parser";
 import { evaluatePageHealth } from "../scanner/page-health-evaluator.js";
-import { extractActionableItems } from "../extractors/index.js";
-import { extractForms } from "../extractors/form-extractor.js";
-import { captureControlStates } from "../browser/control-snapshot.js";
+import { extractActionableItems } from "@sudobility/webgraph_parser";
+import { extractForms } from "@sudobility/webgraph_parser";
+import { captureControlStates } from "@sudobility/webgraph_parser";
 import {
   capturePerformanceSnapshot,
   type PerformanceSnapshot,
@@ -39,17 +39,20 @@ import {
   buildReplaySelectorFromDescription,
   isTransientSnapshotSelector,
   parseReplaySelector,
-} from "../browser/replay-selector.js";
-import { captureUiSnapshot, type UiSnapshot } from "../browser/ui-snapshot.js";
-import { detectScaffoldRegions } from "../scanner/component-detector.js";
-import { detectPatternsWithInstances } from "../scanner/pattern-detector.js";
+} from "@sudobility/webgraph_parser";
+import {
+  captureUiSnapshot,
+  type UiSnapshot,
+} from "@sudobility/webgraph_parser";
+import { detectScaffoldRegions } from "@sudobility/webgraph_parser";
+import { detectPatternsWithInstances } from "@sudobility/webgraph_parser";
 import { settleForRead } from "./settle-for-read.js";
 import { interpolateAction } from "./interpolate-action.js";
 import {
   computeHashes,
   htmlToMarkdown,
   slimHtml,
-} from "../browser/page-utils.js";
+} from "@sudobility/webgraph_parser";
 import { capturePageSignals } from "../browser/page-signals.js";
 
 /**

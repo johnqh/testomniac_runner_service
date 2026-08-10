@@ -2,7 +2,7 @@ import type {
   LegacyTestAction,
   SizeClass,
   FormField,
-} from "../domain/types.js";
+} from "@sudobility/testomniac_types";
 import type { LegacyGeneratedTestInteraction } from "./render.js";
 import { assignSurfaceTags } from "./surface-tagger.js";
 

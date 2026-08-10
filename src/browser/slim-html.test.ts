@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { slimHtml } from "./page-utils.js";
+import { slimHtml } from "@sudobility/webgraph_parser";
 
 describe("slimHtml", () => {
   it("removes script bodies", () => {

@@ -13,7 +13,7 @@ import {
 import {
   buildReplaySelectorFromActionableItem,
   matchesActionableItemSelector,
-} from "../../browser/replay-selector.js";
+} from "@sudobility/webgraph_parser";
 import { createHash } from "node:crypto";
 import type { AnalyzerContext } from "./types.js";
 import type { DedupStore } from "../../storage/dedup-store.js";
