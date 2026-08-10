@@ -5,7 +5,7 @@
     "": {
       "name": "testomniac_scanning_service",
       "dependencies": {
-        "@sudobility/webgraph_parser": "0.0.3",
+        "@sudobility/webgraph_parser": "0.0.4",
       },
       "devDependencies": {
         "@eslint/js": "^9.38.0",
@@ -107,7 +107,7 @@
 
     "@sudobility/types": ["@sudobility/types@1.9.61", "", {}, "sha512-SODGpstB/iKfK3H/4BvJx/FBcc1h3gutUjGotyxN19VnOfWyzaDoEmW7eyoxOAYhZyXMXagSiii+NIEZvuxKog=="],
 
-    "@sudobility/webgraph_parser": ["@sudobility/webgraph_parser@0.0.3", "", { "peerDependencies": { "@sudobility/testomniac_types": ">=0.0.100" } }, "sha512-xYGhiAsUibTRVq8EHYX2QpxpDq4He/oGZsm6lvp/vTsi81o25+cOwhMGyPbU3PPEqxK1QlREWWMHxj9bV9u8pA=="],
+    "@sudobility/webgraph_parser": ["@sudobility/webgraph_parser@0.0.4", "", { "peerDependencies": { "@sudobility/testomniac_types": ">=0.0.100" } }, "sha512-sLEpHsPf4w2neQDkh5VhHHGYUprkYRqgIohjahW3KeEJI/N49J0+7Zo4tY7K1+LwjziFyn7Ee/S7gSsFZsUyWA=="],
 
     "@tybys/wasm-util": ["@tybys/wasm-util@0.10.1", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg=="],
 
