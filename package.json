@@ -1,6 +1,6 @@
 {
   "name": "@sudobility/testomniac_runner_service",
-  "version": "0.1.212",
+  "version": "0.1.213",
   "description": "Shared scanning logic for Testomniac scanner and Chrome extension",
   "type": "module",
   "main": "./dist/index.js",
@@ -61,6 +61,6 @@
     "url": "https://github.com/Sudobility/testomniac_runner_service.git"
   },
   "dependencies": {
-    "@sudobility/webgraph_parser": "^0.0.10"
+    "@sudobility/webgraph_parser": "^0.0.11"
   }
 }

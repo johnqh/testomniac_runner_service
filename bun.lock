@@ -5,7 +5,7 @@
     "": {
       "name": "@sudobility/testomniac_runner_service",
       "dependencies": {
-        "@sudobility/webgraph_parser": "^0.0.10",
+        "@sudobility/webgraph_parser": "^0.0.11",
       },
       "devDependencies": {
         "@eslint/js": "~9.39.5",
@@ -101,7 +101,7 @@
 
     "@sudobility/types": ["@sudobility/types@1.9.76", "https://npm.pkg.github.com/download/@sudobility/types/1.9.76/71635156f72fd9461107d5f147b3dc1c49f863d0", {}, "sha512-b7maZHR5wM84VlQ+l9R+2guzSOrExog6OUNy1oCe7h0abW13syycmnLQL0g+qql0aQ84qTB4A0mJelhY3Vef4Q=="],
 
-    "@sudobility/webgraph_parser": ["@sudobility/webgraph_parser@0.0.10", "https://npm.pkg.github.com/download/@sudobility/webgraph_parser/0.0.10/18ad338beb19e724e5be1efabb9042edcde2fccb", { "peerDependencies": { "@sudobility/testomniac_types": "^0.0.110" } }, "sha512-0lg7gwnNex24NEaaWhHcYln1X98BYW4Wjty1FL1wuLZdddxFELgTcIwVER97Mhq9EZoec4rLbot4aSOtvnpusg=="],
+    "@sudobility/webgraph_parser": ["@sudobility/webgraph_parser@0.0.11", "https://npm.pkg.github.com/download/@sudobility/webgraph_parser/0.0.11/f396768562eaa6449c8ebb755199707bae00fd64", { "peerDependencies": { "@sudobility/testomniac_types": "^0.0.115" } }, "sha512-sTsUZY5Q9SQoksNpP4NlZthnyzs0xq9XSYiGPjiqouAStsYBoY5QkXeHdIxQgUSfcGGlTB9Cs+g+KIbW5ZERrg=="],
 
     "@types/chai": ["@types/chai@5.2.3", "", { "dependencies": { "@types/deep-eql": "*", "assertion-error": "^2.0.1" } }, "sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA=="],
 
